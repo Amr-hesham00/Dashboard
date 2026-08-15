@@ -1,0 +1,159 @@
+[
+  {
+    "route": "/",
+    "title": "Dasher Free - Responsive Bootstrap 5 Admin Dashboard",
+    "layout": "dashboard",
+    "scripts": [
+      "sidebarnav",
+      "jsvectormap",
+      "apexcharts",
+      "chart",
+      "choices",
+      "swiper"
+    ],
+    "relativePath": "index.html",
+    "contentImport": "./content/index.html",
+    "componentName": "Index",
+    "externalScripts": [
+      "/vendor/bootstrap/dist/js/bootstrap.bundle.min.js",
+      "/vendor/simplebar/dist/simplebar.min.js",
+      "/assets/js/main.js",
+      "/assets/js/vendors/sidebarnav.js",
+      "/vendor/jsvectormap/dist/js/jsvectormap.min.js",
+      "/vendor/jsvectormap/dist/maps/world.js",
+      "/vendor/jsvectormap/dist/maps/world-merc.js",
+      "/vendor/apexcharts/dist/apexcharts.min.js",
+      "/assets/js/vendors/chart.js",
+      "/vendor/choices.js/public/assets/scripts/choices.min.js",
+      "/assets/js/vendors/choice.js",
+      "/vendor/swiper/swiper-bundle.min.js",
+      "/assets/js/vendors/swiper.js"
+    ]
+  },
+  {
+    "route": "/pages/blank",
+    "title": "Blank | Dasher - Responsive Bootstrap 5 Admin Dashboard",
+    "layout": "dashboard",
+    "scripts": [
+      "sidebarnav"
+    ],
+    "relativePath": "pages/blank.html",
+    "contentImport": "./content/pages/blank.html",
+    "componentName": "PagesBlank",
+    "externalScripts": [
+      "../node_modules/bootstrap/dist/js/bootstrap.bundle.min.js",
+      "../node_modules/simplebar/dist/simplebar.min.js",
+      "../assets/js/main.js"
+    ]
+  },
+  {
+    "route": "/pages/error/404-error",
+    "title": "404 error | Dasher - Responsive Bootstrap 5 Admin Dashboard",
+    "layout": "standalone",
+    "scripts": [],
+    "relativePath": "pages/error/404-error.html",
+    "contentImport": "./content/pages/error/404-error.html",
+    "componentName": "PagesError404Error",
+    "externalScripts": [
+      "/vendor/bootstrap/dist/js/bootstrap.bundle.min.js",
+      "/vendor/simplebar/dist/simplebar.min.js",
+      "/assets/js/main.js"
+    ]
+  },
+  {
+    "route": "/pages/error/maintenance",
+    "title": "Maintenance | Dasher - Responsive Bootstrap 5 Admin Dashboard",
+    "layout": "standalone",
+    "scripts": [],
+    "relativePath": "pages/error/maintenance.html",
+    "contentImport": "./content/pages/error/maintenance.html",
+    "componentName": "PagesErrorMaintenance",
+    "externalScripts": [
+      "/vendor/bootstrap/dist/js/bootstrap.bundle.min.js",
+      "/vendor/simplebar/dist/simplebar.min.js",
+      "/assets/js/main.js"
+    ]
+  },
+  {
+    "route": "/pages/authentication/sign-in",
+    "title": "Sign In | Dasher - Responsive Bootstrap 5 Admin Dashboard",
+    "layout": "standalone",
+    "scripts": [
+      "password"
+    ],
+    "relativePath": "pages/authentication/sign-in.html",
+    "contentImport": "./content/pages/authentication/sign-in.html",
+    "componentName": "PagesAuthenticationSignIn",
+    "externalScripts": [
+      "/vendor/bootstrap/dist/js/bootstrap.bundle.min.js",
+      "/vendor/simplebar/dist/simplebar.min.js",
+      "/assets/js/main.js",
+      "/assets/js/vendors/password.js"
+    ]
+  },
+  {
+    "route": "/pages/authentication/sign-up",
+    "title": "Sign Up | Dasher - Responsive Bootstrap 5 Admin Dashboard",
+    "layout": "standalone",
+    "scripts": [
+      "password"
+    ],
+    "relativePath": "pages/authentication/sign-up.html",
+    "contentImport": "./content/pages/authentication/sign-up.html",
+    "componentName": "PagesAuthenticationSignUp",
+    "externalScripts": [
+      "/vendor/bootstrap/dist/js/bootstrap.bundle.min.js",
+      "/vendor/simplebar/dist/simplebar.min.js",
+      "/assets/js/main.js",
+      "/assets/js/vendors/password.js"
+    ]
+  },
+  {
+    "route": "/pages/authentication/forget-password",
+    "title": "Forget Password | Dasher - Responsive Bootstrap 5 Admin Dashboard",
+    "layout": "standalone",
+    "scripts": [],
+    "relativePath": "pages/authentication/forget-password.html",
+    "contentImport": "./content/pages/authentication/forget-password.html",
+    "componentName": "PagesAuthenticationForgetPassword",
+    "externalScripts": [
+      "/vendor/bootstrap/dist/js/bootstrap.bundle.min.js",
+      "/vendor/simplebar/dist/simplebar.min.js",
+      "/assets/js/main.js"
+    ]
+  },
+  {
+    "route": "/pages/authentication/reset-password",
+    "title": "Otp varification | Dasher - Responsive Bootstrap 5 Admin Dashboard",
+    "layout": "standalone",
+    "scripts": [
+      "password"
+    ],
+    "relativePath": "pages/authentication/reset-password.html",
+    "contentImport": "./content/pages/authentication/reset-password.html",
+    "componentName": "PagesAuthenticationResetPassword",
+    "externalScripts": [
+      "/vendor/bootstrap/dist/js/bootstrap.bundle.min.js",
+      "/vendor/simplebar/dist/simplebar.min.js",
+      "/assets/js/main.js",
+      "/assets/js/vendors/password.js"
+    ]
+  },
+  {
+    "route": "/pages/authentication/otp-varification",
+    "title": "Otp varification | Dasher - Responsive Bootstrap 5 Admin Dashboard",
+    "layout": "standalone",
+    "scripts": [
+      "password"
+    ],
+    "relativePath": "pages/authentication/otp-varification.html",
+    "contentImport": "./content/pages/authentication/otp-varification.html",
+    "componentName": "PagesAuthenticationOtpVarification",
+    "externalScripts": [
+      "/vendor/bootstrap/dist/js/bootstrap.bundle.min.js",
+      "/vendor/simplebar/dist/simplebar.min.js",
+      "/assets/js/main.js",
+      "/assets/js/vendors/password.js"
+    ]
+  }
+]

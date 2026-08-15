@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta content="Codescandy" name="author" />
+    <link rel="apple-touch-icon" sizes="57x57" href="/assets/images/favicon/apple-icon-57x57.png" />
+    <link rel="apple-touch-icon" sizes="60x60" href="/assets/images/favicon/apple-icon-60x60.png" />
+    <link rel="apple-touch-icon" sizes="72x72" href="/assets/images/favicon/apple-icon-72x72.png" />
+    <link rel="apple-touch-icon" sizes="76x76" href="/assets/images/favicon/apple-icon-76x76.png" />
+    <link rel="apple-touch-icon" sizes="114x114" href="/assets/images/favicon/apple-icon-114x114.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/assets/images/favicon/apple-icon-120x120.png" />
+    <link rel="apple-touch-icon" sizes="144x144" href="/assets/images/favicon/apple-icon-144x144.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/assets/images/favicon/apple-icon-152x152.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/favicon/apple-icon-180x180.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/favicon/android-icon-192x192.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/images/favicon/favicon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon/favicon-16x16.png" />
+    <meta name="msapplication-TileColor" content="#ffffff" />
+    <meta name="msapplication-TileImage" content="/assets/images/favicon/ms-icon-144x144.png" />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800&display=swap" />
+    <link rel="stylesheet" href="/vendor/simplebar/dist/simplebar.min.css" />
+    <link rel="stylesheet" href="/vendor/tabler-icons/tabler-icons.min.css" />
+    <link rel="stylesheet" href="/vendor/swiper/swiper-bundle.min.css" />
+    <link rel="stylesheet" href="/vendor/jsvectormap/dist/css/jsvectormap.min.css" />
+    <link rel="stylesheet" href="/assets/css/theme.css" />
+    <style>
+      /* Sidebar Account Section - Fixed position, Hover Flyout to Right */
+      .sidebar-account-footer {
+        position: relative !important;
+      }
+      .sidebar-account-card-wrapper {
+        position: relative !important;
+      }
+      .sidebar-account-card {
+        transition: background-color 0.2s ease, border-color 0.2s ease;
+        transform: none !important;
+        margin: 0 !important;
+        cursor: pointer;
+      }
+      .sidebar-account-card:hover {
+        background: rgba(30, 41, 59, 0.9) !important;
+        border-color: rgba(16, 185, 129, 0.4) !important;
+      }
+      .sidebar-account-flyout {
+        position: absolute;
+        left: 100%;
+        bottom: 0;
+        margin-left: 12px;
+        min-width: 210px;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+        transform: translateX(-10px);
+        z-index: 99999 !important;
+        background: #0f172a !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+        border-radius: 14px !important;
+        padding: 8px !important;
+      }
+      /* Invisible hover bridge between card and flyout to prevent accidental closing */
+      .sidebar-account-card-wrapper::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 100%;
+        width: 16px;
+      }
+      /* Hover Trigger */
+      .sidebar-account-card-wrapper:hover .sidebar-account-flyout,
+      .sidebar-account-flyout:hover {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateX(0);
+      }
+      .sidebar-account-flyout .dropdown-item:hover {
+        background-color: rgba(255, 255, 255, 0.08) !important;
+      }
+    </style>
+    <script src="/assets/js/vendors/color-modes.js"></script>
+    <script src="/vendor/simplebar/dist/simplebar.min.css"></script>
+    <title>Dasher Free - Responsive Bootstrap 5 Admin Dashboard</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="/assets/js/main.js"></script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
