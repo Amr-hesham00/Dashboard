@@ -1,307 +1,3518 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
+import ApexCharts from 'apexcharts';
 import DashboardLayout from './DashboardLayout';
-import { getClientByIdApi, getUsersApi } from '../api/clients';
-import { getAuthHeaders } from '../api/auth';
+import {
+  getClientByIdApi,
+  getUsersApi,
+  updateClientApi,
+  getClientStatusesApi,
+  getClientCurrenciesApi,
+  getClientTargetsApi,
+  updateClientTargetsApi,
+} from '../api/clients';
+import {
+  availableKPIs,
+  defaultPinnedKPIs,
+  mockClientKPIs,
+  mockPlatformPerformance,
+  mockClientPlatformPerformance,
+  getClientPlatformPerformance,
+  mockClientTrends,
+  mockClientInsights,
+  mockClientNotes,
+  defaultClientTargets,
+} from '../mock/mockData';
+import metaIcon from '../assets/meta-icon.webp';
+
+// ─── ApexCharts React Wrapper ───────────────────────────────────────
+function ApexChart({ options, series, type, height = 310 }) {
+  const chartRef = useRef(null);
+  const chartInstance = useRef(null);
+
+  useEffect(() => {
+    if (!chartRef.current) return;
+
+    if (chartInstance.current) {
+      chartInstance.current.destroy();
+      chartInstance.current = null;
+    }
+
+    const mergedOptions = {
+      ...options,
+      chart: {
+        ...(options.chart || {}),
+        type,
+        height,
+        toolbar: { show: false },
+        fontFamily: 'inherit',
+      },
+      series,
+    };
+
+    chartInstance.current = new ApexCharts(chartRef.current, mergedOptions);
+    chartInstance.current.render();
+
+    return () => {
+      if (chartInstance.current) {
+        chartInstance.current.destroy();
+        chartInstance.current = null;
+      }
+    };
+  }, [options, series, type, height]);
+
+  return <div ref={chartRef} />;
+}
+
+// ─── SVG Icon Helpers ───────────────────────────────────────────────
+const IconCalendar = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><rect x="4" y="5" width="16" height="16" rx="2" /><line x1="16" y1="3" x2="16" y2="7" /><line x1="8" y1="3" x2="8" y2="7" /><line x1="4" y1="11" x2="20" y2="11" /></svg>
+);
+const IconShare = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="6" r="3" /><circle cx="18" cy="18" r="3" /><line x1="8.7" y1="10.7" x2="15.3" y2="7.3" /><line x1="8.7" y1="13.3" x2="15.3" y2="16.7" /></svg>
+);
+const IconPdf = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M9 15l2 -2l2 2l2 -2" /></svg>
+);
+const IconRefresh = ({ spinning }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={spinning ? 'spin-icon' : ''}><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" /></svg>
+);
+const IconGear = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.066 2.573c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.573 1.066c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.066 -2.573c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.573 -1.066z" /><circle cx="12" cy="12" r="3" /></svg>
+);
+const IconBack = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+);
+const IconUp = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l6 -6l4 4l8 -8" /><path d="M14 7l7 0l0 7" /></svg>
+);
+const IconDown = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l6 6l4 -4l8 8" /><path d="M21 10l0 7l-7 0" /></svg>
+);
+const IconPin = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M15 4.5l-4 4l-4 1.5l-1.5 1.5l7 7l1.5 -1.5l1.5 -4l4 -4" /><line x1="9" y1="15" x2="4.5" y2="19.5" /><line x1="14.5" y1="4" x2="20" y2="9.5" /></svg>
+);
+const IconCheck = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+);
+const IconSend = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><line x1="10" y1="14" x2="21" y2="3" /><path d="M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5" /></svg>
+);
+const IconEdit = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" /><path d="M13.5 6.5l4 4" /></svg>
+);
+
+function getPlatformLogo(platformKey, size = 20) {
+  switch (platformKey?.toLowerCase()) {
+    case 'meta':
+      return (
+        <img
+          src={metaIcon}
+          alt="Meta Ads"
+          width={size}
+          height={size}
+          style={{ objectFit: 'contain', display: 'inline-block' }}
+          title="Meta Ads"
+        />
+      );
+    case 'google':
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" title="Google Ads">
+          <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
+          <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z" />
+          <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.97 0 12s.45 3.82 1.25 5.42l4.03-3.15z" />
+          <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
+        </svg>
+      );
+    case 'snapchat':
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" title="Snapchat Ads">
+          <rect width="24" height="24" rx="5.5" fill="#FFFC00" />
+          <path
+            fill="#FFFFFF"
+            stroke="#000000"
+            strokeWidth="1.1"
+            strokeLinejoin="round"
+            d="M12 4.3c-2.9 0-4.7 2.1-4.7 4.5 0 .6.1 1.2.2 1.7.1.3-.1.4-.2.5-.5.2-1.2.4-1.2 1.2 0 .5.4.8 1 .9.3 0 .4.2.3.4-.1.6-.5 1.6-1.3 1.9-.3.1-.4.4-.4.6 0 .3.3.5.8.7 1.1.3 2.3-.1 2.8-.3.3-.1.5 0 .5.2.3.9 1.2 1 2.1 1s1.8-.1 2.1-1c.1-.2.3-.3.5-.2.5.2 1.7.6 2.8.3.5-.2.8-.4.8-.7 0-.2-.1-.5-.4-.6-.8-.3-1.2-1.3-1.3-1.9-.1-.2.1-.3.3-.4.6-.1 1-.4 1-.9 0-.8-.7-1-1.2-1.2-.2-.1-.3-.2-.2-.5.1-.5.2-1.1.2-1.7C16.7 6.4 14.9 4.3 12 4.3z"
+          />
+        </svg>
+      );
+    case 'tiktok':
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" title="TikTok Ads">
+          <rect width="24" height="24" rx="5.5" fill="#010101" />
+          <g transform="translate(1.5, 1.5) scale(0.88)">
+            <path fill="#25F4EE" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-2.09v12.2a2.91 2.91 0 1 1-2.91-2.91c.36 0 .7.07 1.02.19V10.3a5.05 5.05 0 0 0-1.02-.1 5.08 5.08 0 1 0 5.08 5.08V8.71a6.37 6.37 0 0 0 3.73 1.2V7.74a4.28 4.28 0 0 1-2.75-1.92z" />
+            <path fill="#FE2C55" d="M17.84 5.82A4.28 4.28 0 0 0 15.09 3.9v-.9h-.55v12.2a2.91 2.91 0 0 1-2.91 2.91 2.89 2.89 0 0 1-2.05-.85 2.9 2.9 0 0 0 2.96 2.05 2.91 2.91 0 0 0 2.91-2.91V7.81a6.37 6.37 0 0 0 3.73 1.2V6.84a4.28 4.28 0 0 1-1.34-1.02z" />
+            <path fill="#FFFFFF" d="M17.24 5.82A4.28 4.28 0 0 0 14.54 3h-1.09v12.2a2.91 2.91 0 1 1-2.91-2.91c.36 0 .7.07 1.02.19V10.3a5.05 5.05 0 0 0-1.02-.1 5.08 5.08 0 1 0 5.08 5.08V8.71a6.37 6.37 0 0 0 3.73 1.2V7.74a4.28 4.28 0 0 1-2.1-1.92z" />
+          </g>
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+// ─── KPI Formatter ──────────────────────────────────────────────────
+function formatKPIValue(value, format) {
+  if (value == null) return '—';
+  switch (format) {
+    case 'currency': return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: value >= 100 ? 0 : 2 });
+    case 'percent': return `${value.toFixed(2)}%`;
+    case 'multiplier': return `${value.toFixed(2)}x`;
+    case 'number': return value >= 1000000 ? `${(value / 1000000).toFixed(2)}M` : value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toLocaleString();
+    case 'decimal': return value.toFixed(2);
+    default: return String(value);
+  }
+}
+
+// ─── Currency Helpers ──────────────────────────────────────────────
+function getCurrencySymbol(currency) {
+  if (!currency) return '$';
+  const c = String(currency).toUpperCase();
+  switch (c) {
+    case 'USD': return '$';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'AED': return 'AED ';
+    case 'SAR': return 'SAR ';
+    case 'CAD': return 'C$';
+    case 'AUD': return 'A$';
+    case 'EGP': return 'EGP ';
+    default: return '$';
+  }
+}
+
+function getCurrencyName(currency) {
+  if (!currency && currency !== 0) return 'USD';
+  if (typeof currency === 'string') return currency;
+  const list = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'AED', 'SAR', 'EGP'];
+  return list[currency] || 'USD';
+}
+
+// ─── Tab Definitions (Descriptive Icons & Clean Titles) ─────────────
+const TABS = [
+  {
+    key: 'overview',
+    label: 'Overview',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="6" height="8" rx="1" /><rect x="4" y="16" width="6" height="4" rx="1" /><rect x="14" y="12" width="6" height="8" rx="1" /><rect x="14" y="4" width="6" height="4" rx="1" /></svg>
+    ),
+  },
+  {
+    key: 'meta',
+    label: 'Meta Ads',
+    icon: (
+      <img
+        src={metaIcon}
+        alt="Meta Ads"
+        width={20}
+        height={20}
+        style={{ objectFit: 'contain', display: 'inline-block' }}
+      />
+    ),
+  },
+  {
+    key: 'google',
+    label: 'Google Ads',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
+        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z" />
+        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.97 0 12s.45 3.82 1.25 5.42l4.03-3.15z" />
+        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
+      </svg>
+    ),
+  },
+  {
+    key: 'snapchat',
+    label: 'Snapchat Ads',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+        <rect width="24" height="24" rx="5.5" fill="#FFFC00" />
+        <path
+          fill="#FFFFFF"
+          stroke="#000000"
+          strokeWidth="1.1"
+          strokeLinejoin="round"
+          d="M12 4.3c-2.9 0-4.7 2.1-4.7 4.5 0 .6.1 1.2.2 1.7.1.3-.1.4-.2.5-.5.2-1.2.4-1.2 1.2 0 .5.4.8 1 .9.3 0 .4.2.3.4-.1.6-.5 1.6-1.3 1.9-.3.1-.4.4-.4.6 0 .3.3.5.8.7 1.1.3 2.3-.1 2.8-.3.3-.1.5 0 .5.2.3.9 1.2 1 2.1 1s1.8-.1 2.1-1c.1-.2.3-.3.5-.2.5.2 1.7.6 2.8.3.5-.2.8-.4.8-.7 0-.2-.1-.5-.4-.6-.8-.3-1.2-1.3-1.3-1.9-.1-.2.1-.3.3-.4.6-.1 1-.4 1-.9 0-.8-.7-1-1.2-1.2-.2-.1-.3-.2-.2-.5.1-.5.2-1.1.2-1.7C16.7 6.4 14.9 4.3 12 4.3z"
+        />
+      </svg>
+    ),
+  },
+  {
+    key: 'tiktok',
+    label: 'TikTok Ads',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+        <rect width="24" height="24" rx="5.5" fill="#010101" />
+        <g transform="translate(1.5, 1.5) scale(0.88)">
+          <path fill="#25F4EE" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-2.09v12.2a2.91 2.91 0 1 1-2.91-2.91c.36 0 .7.07 1.02.19V10.3a5.05 5.05 0 0 0-1.02-.1 5.08 5.08 0 1 0 5.08 5.08V8.71a6.37 6.37 0 0 0 3.73 1.2V7.74a4.28 4.28 0 0 1-2.75-1.92z" />
+          <path fill="#FE2C55" d="M17.84 5.82A4.28 4.28 0 0 0 15.09 3.9v-.9h-.55v12.2a2.91 2.91 0 0 1-2.91 2.91 2.89 2.89 0 0 1-2.05-.85 2.9 2.9 0 0 0 2.96 2.05 2.91 2.91 0 0 0 2.91-2.91V7.81a6.37 6.37 0 0 0 3.73 1.2V6.84a4.28 4.28 0 0 1-1.34-1.02z" />
+          <path fill="#FFFFFF" d="M17.24 5.82A4.28 4.28 0 0 0 14.54 3h-1.09v12.2a2.91 2.91 0 1 1-2.91-2.91c.36 0 .7.07 1.02.19V10.3a5.05 5.05 0 0 0-1.02-.1 5.08 5.08 0 1 0 5.08 5.08V8.71a6.37 6.37 0 0 0 3.73 1.2V7.74a4.28 4.28 0 0 1-2.1-1.92z" />
+        </g>
+      </svg>
+    ),
+  },
+  {
+    key: 'insights',
+    label: 'Insights & Recommendations',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+        <path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7" />
+        <path d="M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3" />
+        <path d="M9.7 17l4.6 0" />
+      </svg>
+    ),
+  },
+  {
+    key: 'notes',
+    label: 'Notes',
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="2" /><path d="M9 14h6" /><path d="M9 17h4" /></svg>
+    ),
+  },
+];
+
+const DATE_RANGES = ['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'This Month', 'This Quarter', 'Year to Date'];
+
+// ════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ════════════════════════════════════════════════════════════════════
 
 export default function ClientDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
+  // ─── Core Data ──────────────────────────────────────────────────
   const [client, setClient] = useState(null);
   const [manager, setManager] = useState(null);
-  const [platforms, setPlatforms] = useState([]);
-  const [campaigns, setCampaigns] = useState([]);
-  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // ─── Edit Client Modal State ─────────────────────────────────────
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [users, setUsers] = useState([]);
+  const [statuses, setStatuses] = useState(['Active', 'Inactive', 'Lead', 'Archived']);
+  const [currencies, setCurrencies] = useState(['USD', 'EUR', 'GBP']);
+  const [formData, setFormData] = useState({
+    companyName: '',
+    website: '',
+    email: '',
+    phone: '',
+    country: '',
+    currency: 0,
+    status: 0,
+    notes: '',
+    managerId: '',
+    logo: '',
+    countryCode: '+1',
+  });
+
+  // ─── UI State ───────────────────────────────────────────────────
+  const searchTab = new URLSearchParams(location.search).get('tab');
+  const [activeTab, setActiveTab] = useState(() => searchTab || 'overview');
+
   useEffect(() => {
-    async function loadClientDetails() {
-      try {
-        setLoading(true);
-        setError('');
-        
-        // Fetch client details
-        const clientData = await getClientByIdApi(id);
-        setClient(clientData);
-
-        // Fetch users to locate assigned manager
-        const usersList = await getUsersApi();
-        const foundManager = usersList.find((u) => u.id === clientData.managerId);
-        setManager(foundManager || { id: clientData.managerId, userName: 'System Admin', email: 'admin@dashboard.com' });
-
-        // Fetch platforms and campaigns to perform client-side relational joining
-        const headers = getAuthHeaders();
-        const [platformsRes, campaignsRes] = await Promise.all([
-          fetch('/api/Platform', { headers }),
-          fetch('/api/Campaign', { headers }),
-        ]);
-
-        const platformList = platformsRes.ok ? await platformsRes.json() : [];
-        const campaignList = campaignsRes.ok ? await campaignsRes.json() : [];
-
-        // Filter platforms for this client
-        const clientPlatforms = platformList.filter((p) => p.clientId === Number(id));
-        setPlatforms(clientPlatforms);
-
-        // Filter campaigns belonging to this client's platforms
-        const clientPlatformIds = clientPlatforms.map((p) => p.id);
-        const clientCampaigns = campaignList.filter((c) => clientPlatformIds.includes(c.platformId));
-        setCampaigns(clientCampaigns);
-
-      } catch (err) {
-        setError(err.message || 'Failed to load client details.');
-      } finally {
-        setLoading(false);
-      }
+    const qTab = new URLSearchParams(location.search).get('tab');
+    if (qTab) {
+      setActiveTab(qTab);
     }
-    loadClientDetails();
+  }, [location.search]);
+  const [dateRange, setDateRange] = useState('Last 30 Days');
+  const [showDateDropdown, setShowDateDropdown] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+
+  // ─── Spend vs Revenue Chart Selectable Metrics State ──────────────
+  const [selectedMetrics, setSelectedMetrics] = useState(['spend', 'revenue']);
+
+  const CHART_METRICS = {
+    spend: { label: 'Spend', color: '#e11d48', type: 'currency' },
+    revenue: { label: 'Revenue', color: '#00a76f', type: 'currency' },
+    conversions: { label: 'Conversions', color: '#8b5cf6', type: 'number' },
+    impressions: { label: 'Impressions', color: '#06b6d4', type: 'number' },
+    clicks: { label: 'Clicks', color: '#f59e0b', type: 'number' },
+    roas: { label: 'ROAS', color: '#0d9488', type: 'ratio' },
+  };
+
+  const handleMetricToggle = (key) => {
+    const isFinancial = key === 'spend' || key === 'revenue';
+    setSelectedMetrics((prev) => {
+      const hasNonFinancial = prev.some((m) => m !== 'spend' && m !== 'revenue');
+      if (isFinancial) {
+        if (hasNonFinancial) {
+          return key === 'spend' ? ['spend', 'revenue'] : ['revenue', 'spend'];
+        }
+        if (prev.includes(key)) {
+          if (prev.length === 1) return prev;
+          return prev.filter((m) => m !== key);
+        } else {
+          return ['spend', 'revenue'];
+        }
+      } else {
+        return [key];
+      }
+    });
+  };
+
+  // ─── KPI State ──────────────────────────────────────────────────
+  const storageKey = `pinnedKPIs_${id}`;
+  const [pinnedKPIs, setPinnedKPIs] = useState(() => {
+    try { const saved = localStorage.getItem(storageKey); return saved ? JSON.parse(saved) : defaultPinnedKPIs; } catch { return defaultPinnedKPIs; }
+  });
+  const [showKPISelector, setShowKPISelector] = useState(false);
+
+  // ─── Target Settings State ─────────────────────────────────────
+  const [showTargetModal, setShowTargetModal] = useState(false);
+  const [targetSettings, setTargetSettings] = useState(() => defaultClientTargets[id] || defaultClientTargets['cli-101'] || {
+    businessModel: 'ecommerce',
+    mainConversionEvent: 'Purchases',
+    monthlyBudget: 50000,
+    targetRoas: 4.0,
+    targetCpa: 5.5,
+    currency: 'USD',
+    targetRevenue: 200000,
+    targetConversions: 9000,
+  });
+  const [targetFormData, setTargetFormData] = useState(targetSettings);
+  const [targetSaving, setTargetSaving] = useState(false);
+  const [targetError, setTargetError] = useState('');
+
+  // ─── Platform Connection State ──────────────────────────────────
+  const getDefaultPlatforms = () => ({
+    meta: { connected: true, accountId: 'act_948291048', lastSync: '10m ago', lastSyncDate: 'Aug 18, 2026, 04:30 PM' },
+    google: { connected: true, accountId: '839-201-9482', lastSync: '25m ago', lastSyncDate: 'Aug 18, 2026, 04:15 PM' },
+    snapchat: { connected: true, accountId: 'org_snap_88291', lastSync: '1h ago', lastSyncDate: 'Aug 18, 2026, 03:40 PM' },
+    tiktok: { connected: true, accountId: 'tt_adv_7194819', lastSync: '40m ago', lastSyncDate: 'Aug 18, 2026, 04:00 PM' },
+  });
+
+  const overviewSyncStorageKey = `client_overview_sync_${id}`;
+  const [overviewLastSync, setOverviewLastSync] = useState(() => {
+    try {
+      const saved = localStorage.getItem(overviewSyncStorageKey);
+      return saved ? JSON.parse(saved) : { lastSync: '10m ago', lastSyncDate: 'Aug 18, 2026, 04:30 PM' };
+    } catch {
+      return { lastSync: '10m ago', lastSyncDate: 'Aug 18, 2026, 04:30 PM' };
+    }
+  });
+
+  const platformsStorageKey = `client_platforms_${id}`;
+  const [platformsState, setPlatformsState] = useState(() => {
+    try {
+      const saved = localStorage.getItem(platformsStorageKey);
+      return saved ? JSON.parse(saved) : getDefaultPlatforms();
+    } catch {
+      return getDefaultPlatforms();
+    }
+  });
+  const [platformRefreshing, setPlatformRefreshing] = useState({});
+
+  const handleRefreshPlatform = (platformKey) => {
+    setPlatformRefreshing((prev) => ({ ...prev, [platformKey]: true }));
+    setTimeout(() => {
+      setPlatformsState((prev) => {
+        const current = prev[platformKey] || {};
+        const updated = {
+          ...prev,
+          [platformKey]: {
+            ...current,
+            connected: true,
+            lastSync: 'Just now',
+            lastSyncDate: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          },
+        };
+        try {
+          localStorage.setItem(platformsStorageKey, JSON.stringify(updated));
+        } catch { }
+        return updated;
+      });
+      setPlatformRefreshing((prev) => ({ ...prev, [platformKey]: false }));
+      const platformLabel = TABS.find((t) => t.key === platformKey)?.label || platformKey;
+      setToastMsg(`${platformLabel} data refreshed successfully!`);
+      setTimeout(() => setToastMsg(''), 3000);
+    }, 600);
+  };
+
+  const handleReconnectPlatform = (platformKey) => {
+    setPlatformsState((prev) => {
+      const current = prev[platformKey] || {};
+      const updated = {
+        ...prev,
+        [platformKey]: {
+          ...current,
+          connected: true,
+          lastSync: 'Just now',
+          lastSyncDate: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        },
+      };
+      try {
+        localStorage.setItem(platformsStorageKey, JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
+    const platformLabel = TABS.find((t) => t.key === platformKey)?.label || platformKey;
+    setToastMsg(`${platformLabel} reconnected successfully!`);
+    setTimeout(() => setToastMsg(''), 3500);
+  };
+
+  // ─── Notes & Overview Campaigns State ───────────────────────────
+  const [notes, setNotes] = useState([]);
+  const [newNote, setNewNote] = useState('');
+  const [overviewSearchQuery, setOverviewSearchQuery] = useState('');
+  const [overviewStatusFilter, setOverviewStatusFilter] = useState('all');
+
+  // ─── Overview Campaigns Table Filter Menu State ──────────────────
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const filterMenuRef = useRef(null);
+
+  const [overviewFilters, setOverviewFilters] = useState({
+    platform: 'ALL',
+    status: 'ALL',
+    objective: 'ALL',
+  });
+
+  const [draftOverviewFilters, setDraftOverviewFilters] = useState({
+    platform: 'ALL',
+    status: 'ALL',
+    objective: 'ALL',
+  });
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
+        setShowFilterMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleToggleFilterMenu = () => {
+    if (!showFilterMenu) {
+      setDraftOverviewFilters({
+        platform: overviewFilters.platform,
+        status: overviewFilters.status !== 'ALL' ? overviewFilters.status : overviewStatusFilter !== 'all' ? overviewStatusFilter : 'ALL',
+        objective: overviewFilters.objective,
+      });
+    }
+    setShowFilterMenu((prev) => !prev);
+  };
+
+  const handleApplyFilterMenu = (e) => {
+    if (e) e.preventDefault();
+    setOverviewFilters({ ...draftOverviewFilters });
+    if (draftOverviewFilters.status !== undefined) setOverviewStatusFilter(draftOverviewFilters.status.toLowerCase());
+    setShowFilterMenu(false);
+  };
+
+  const handleResetFilterMenu = () => {
+    const reset = { platform: 'ALL', status: 'ALL', objective: 'ALL' };
+    setDraftOverviewFilters(reset);
+    setOverviewFilters(reset);
+    setOverviewSearchQuery('');
+    setOverviewStatusFilter('all');
+    setShowFilterMenu(false);
+  };
+
+  const activeOverviewFiltersCount = [
+    overviewFilters.platform !== 'ALL' ? 1 : 0,
+    (overviewFilters.status !== 'ALL' || overviewStatusFilter !== 'all') ? 1 : 0,
+    overviewFilters.objective !== 'ALL' ? 1 : 0,
+    overviewSearchQuery ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
+
+  // ─── Overview Campaigns Table Sorting State ─────────────────────
+  const [overviewSortField, setOverviewSortField] = useState('spend'); // 'spend' | 'revenue' | 'roas' | 'startDate'
+  const [overviewSortOrder, setOverviewSortOrder] = useState('desc'); // 'asc' | 'desc'
+
+  const handleOverviewSort = (field) => {
+    if (overviewSortField === field) {
+      setOverviewSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setOverviewSortField(field);
+      setOverviewSortOrder('desc');
+    }
+  };
+
+  const renderSortIndicator = (field) => {
+    const isActive = overviewSortField === field;
+    if (!isActive) return null;
+
+    return (
+      <span className="d-inline-flex align-items-center ms-1 text-primary">
+        {overviewSortOrder === 'asc' ? (
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="19" x2="12" y2="5" />
+            <polyline points="5 12 12 5 19 12" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <polyline points="19 12 12 19 5 12" />
+          </svg>
+        )}
+      </span>
+    );
+  };
+
+  // ─── Tabs Navigation Drag, Wheel & Scroll Handlers ──────────────
+  const tabsContainerRef = useRef(null);
+  const [isDraggingTabs, setIsDraggingTabs] = useState(false);
+  const dragStartXRef = useRef(0);
+  const dragScrollLeftRef = useRef(0);
+  const isMouseDownRef = useRef(false);
+  const hasMovedDragRef = useRef(false);
+
+  const handleTabScroll = (direction) => {
+    if (tabsContainerRef.current) {
+      const amount = direction === 'left' ? -240 : 240;
+      tabsContainerRef.current.scrollBy({ left: amount, behavior: 'smooth' });
+    }
+  };
+
+  const handleTabsMouseDown = (e) => {
+    if (!tabsContainerRef.current || e.button !== 0) return;
+    isMouseDownRef.current = true;
+    hasMovedDragRef.current = false;
+    dragStartXRef.current = e.pageX - tabsContainerRef.current.offsetLeft;
+    dragScrollLeftRef.current = tabsContainerRef.current.scrollLeft;
+  };
+
+  const handleTabsMouseMove = (e) => {
+    if (!isMouseDownRef.current || !tabsContainerRef.current) return;
+    const x = e.pageX - tabsContainerRef.current.offsetLeft;
+    const walk = (x - dragStartXRef.current) * 1.3;
+    if (Math.abs(walk) > 4) {
+      hasMovedDragRef.current = true;
+      if (!isDraggingTabs) setIsDraggingTabs(true);
+      e.preventDefault();
+      tabsContainerRef.current.scrollLeft = dragScrollLeftRef.current - walk;
+    }
+  };
+
+  const handleTabsMouseUpOrLeave = () => {
+    isMouseDownRef.current = false;
+    if (isDraggingTabs) {
+      setTimeout(() => {
+        setIsDraggingTabs(false);
+        hasMovedDragRef.current = false;
+      }, 50);
+    }
+  };
+
+  const handleTabsWheel = (e) => {
+    if (!tabsContainerRef.current) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && e.deltaY !== 0) {
+      e.preventDefault();
+      tabsContainerRef.current.scrollLeft += e.deltaY;
+    }
+  };
+
+  // ─── Data Loading ───────────────────────────────────────────────
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const [clientData, usersList, statusList, currList, targetsData] = await Promise.all([
+        getClientByIdApi(id),
+        getUsersApi(),
+        getClientStatusesApi(),
+        getClientCurrenciesApi(),
+        getClientTargetsApi(id),
+      ]);
+      setClient(clientData);
+      setUsers(usersList || []);
+      if (Array.isArray(statusList) && statusList.length) setStatuses(statusList);
+      if (Array.isArray(currList) && currList.length) setCurrencies(currList);
+      if (targetsData) {
+        setTargetSettings(targetsData);
+        setTargetFormData(targetsData);
+      }
+
+      const found = usersList?.find((u) => String(u.id) === String(clientData?.managerId));
+      setManager(found || { id: clientData?.managerId || 'usr-001', userName: 'System Admin', email: 'admin@dashboard.com', firstName: 'System', lastName: 'Admin' });
+
+      // Load notes from mock
+      const clientNotes = mockClientNotes.filter((n) => n.clientId === String(id));
+      setNotes(clientNotes.length > 0 ? clientNotes : mockClientNotes.filter((n) => n.clientId === 'cli-101'));
+    } catch (err) {
+      setError(err.message || 'Failed to load client details.');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
+  useEffect(() => {
+    loadData();
+  }, [id, loadData]);
+
+  // Open targets modal if redirected with openTargets parameter
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('openTargets') === 'true' || location.state?.openTargets) {
+      handleOpenTargetModal();
+    }
+  }, [location.search, location.state, targetSettings]);
+
+  // Click outside handlers for main page dropdowns
+  useEffect(() => {
+    const handleDocumentClick = (e) => {
+      // Check Date dropdown
+      if (showDateDropdown) {
+        const dateBtn = e.target.closest('.date-dropdown-container');
+        if (!dateBtn) setShowDateDropdown(false);
+      }
+      // Check KPI selector
+      if (showKPISelector) {
+        const kpiBtn = e.target.closest('.kpi-selector-container');
+        if (!kpiBtn) setShowKPISelector(false);
+      }
+    };
+    document.addEventListener('click', handleDocumentClick);
+    return () => document.removeEventListener('click', handleDocumentClick);
+  }, [showDateDropdown, showKPISelector]);
+
+  // ─── Persist pinned KPIs ────────────────────────────────────────
+  useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(pinnedKPIs)); }, [pinnedKPIs, storageKey]);
+
+  // ─── Get KPI values & Trend Data for this client ─────────────────
+  const clientKPIs = mockClientKPIs[id] || mockClientKPIs['cli-101'];
+  const trendData = mockClientTrends[id] || mockClientTrends['cli-101'];
+
+  // ─── Spend vs Revenue Chart Config ──────────────────────────────
+  const getTrendMetricData = (metricKey) => {
+    if (trendData[metricKey] && Array.isArray(trendData[metricKey])) {
+      return trendData[metricKey];
+    }
+    const spendArr = trendData.spend || [];
+    const revArr = trendData.revenue || [];
+    if (metricKey === 'roas') {
+      return spendArr.map((s, idx) => (s > 0 ? Number(((revArr[idx] || 0) / s).toFixed(2)) : 0));
+    }
+    if (metricKey === 'conversions') return spendArr.map((s) => Math.round(s / 5.2));
+    if (metricKey === 'impressions') return spendArr.map((s) => Math.round(s * 140));
+    if (metricKey === 'clicks') return spendArr.map((s) => Math.round(s * 5.4));
+    return spendArr;
+  };
+
+  const spendVsRevenueSeries = selectedMetrics.map((key) => ({
+    name: CHART_METRICS[key]?.label || key,
+    data: getTrendMetricData(key),
+  }));
+
+  const activeColors = selectedMetrics.map((key) => CHART_METRICS[key]?.color || '#00a76f');
+  const primaryMetric = selectedMetrics[0] || 'revenue';
+  const metricType = CHART_METRICS[primaryMetric]?.type || 'currency';
+
+  const getFullMonthText = (dates) => {
+    if (!dates || !dates.length) return 'August 2026';
+    const match = dates[0].match(/^([A-Za-z]+)/);
+    if (!match) return 'August 2026';
+    const m = match[1];
+    const months = {
+      Jan: 'January', Feb: 'February', Mar: 'March', Apr: 'April',
+      May: 'May', Jun: 'June', Jul: 'July', Aug: 'August',
+      Sep: 'September', Oct: 'October', Nov: 'November', Dec: 'December'
+    };
+    return `${months[m] || m} 2026`;
+  };
+  const fullMonthText = getFullMonthText(trendData.dates);
+
+  const spendVsRevenueOptions = {
+    chart: {
+      type: 'area',
+      height: 310,
+      toolbar: { show: false },
+      zoom: { enabled: false },
+      fontFamily: 'inherit',
+    },
+    dataLabels: { enabled: false },
+    stroke: { curve: 'smooth', width: spendVsRevenueSeries.map(() => 2.5) },
+    colors: activeColors,
+    fill: {
+      type: 'gradient',
+      gradient: {
+        shadeIntensity: 1,
+        opacityFrom: 0.3,
+        opacityTo: 0.05,
+        stops: [0, 90, 100],
+      },
+    },
+    xaxis: {
+      categories: trendData.dates.map((d) => d.replace(/^[A-Za-z]+\s*/, '')),
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+      labels: { style: { colors: '#64748b', fontSize: '11px' } },
+    },
+    yaxis: {
+      labels: {
+        formatter: (val) => {
+          if (metricType === 'currency') return `$${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`;
+          if (metricType === 'ratio') return `${val}x`;
+          if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+          if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+          return val;
+        },
+        style: { colors: '#64748b', fontSize: '11px' },
+      },
+    },
+    tooltip: {
+      x: {
+        formatter: (val, opts) => {
+          const idx = opts?.dataPointIndex;
+          const orig = trendData.dates[idx];
+          return orig ? `${orig}, 2026` : val;
+        },
+      },
+      y: {
+        formatter: (val) => {
+          if (metricType === 'currency') return `$${val.toLocaleString()}`;
+          if (metricType === 'ratio') return `${Number(val).toFixed(2)}x`;
+          return val.toLocaleString();
+        },
+      },
+    },
+    legend: { show: false },
+    grid: {
+      borderColor: 'rgba(0,0,0,0.06)',
+      strokeDashArray: 3,
+    },
+  };
+
+  // ─── Platform Performance & Campaigns for this specific client ───
+  const clientMultiplier = (clientKPIs?.totalSpend?.value || 45200) / 45200;
+  const clientPlatformPerformance = getClientPlatformPerformance(
+    id,
+    client?.companyName || client?.name,
+    client?.category,
+    clientMultiplier
+  );
+
+  // ─── ROAS by Platform Chart Config ──────────────────────────────
+  const platformKeys = Object.keys(clientPlatformPerformance);
+  const roasCategories = platformKeys.map((k) => clientPlatformPerformance[k].label);
+  const roasValues = platformKeys.map((k) => clientPlatformPerformance[k].kpis.roas);
+
+  const roasChartOptions = {
+    chart: {
+      type: 'bar',
+      height: 310,
+      toolbar: { show: false },
+      fontFamily: 'inherit',
+    },
+    plotOptions: {
+      bar: {
+        horizontal: false,
+        columnWidth: '42%',
+        borderRadius: 6,
+        borderRadiusApplication: 'end',
+        distributed: true,
+        dataLabels: {
+          position: 'top',
+        },
+      },
+    },
+    dataLabels: {
+      enabled: true,
+      formatter: (val) => `${val.toFixed(2)}x`,
+      offsetY: -20,
+      style: {
+        fontSize: '11px',
+        fontWeight: 'bold',
+        colors: ['#334155'],
+      },
+    },
+    colors: ['#1877f2', '#ea4335', '#f59e0b', '#000000'],
+    xaxis: {
+      categories: roasCategories,
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+      labels: { style: { colors: '#64748b', fontSize: '11px' } },
+    },
+    yaxis: {
+      title: { text: 'ROAS', style: { color: '#64748b', fontSize: '11px' } },
+      labels: {
+        formatter: (val) => `${val.toFixed(1)}x`,
+        style: { colors: '#64748b', fontSize: '11px' },
+      },
+    },
+    annotations: {
+      yaxis: [
+        {
+          y: 3.0,
+          borderColor: '#10b981',
+          strokeDashArray: 4,
+          label: {
+            borderColor: '#10b981',
+            style: { color: '#fff', background: '#10b981', fontSize: '10px' },
+            text: 'Target 3.0x',
+          },
+        },
+      ],
+    },
+    tooltip: {
+      y: {
+        formatter: (val) => `${val.toFixed(2)}x ROAS`,
+      },
+    },
+    legend: { show: false },
+    grid: {
+      borderColor: 'rgba(0,0,0,0.06)',
+      strokeDashArray: 3,
+    },
+  };
+
+  const roasChartSeries = [
+    { name: 'ROAS', data: roasValues },
+  ];
+
+  // ─── Platform Comparison Totals ─────────────────────────────────
+  const platformEntries = Object.entries(clientPlatformPerformance);
+  const connectedPlatformsCount = platformEntries.filter(([k]) => platformsState[k]?.connected !== false).length;
+  const disconnectedPlatformsCount = platformEntries.length - connectedPlatformsCount;
+
+  const totalSpend = platformEntries.reduce((sum, [, p]) => sum + (p.kpis.spend || 0), 0);
+  const totalRevenue = platformEntries.reduce((sum, [, p]) => sum + (p.kpis.revenue || 0), 0);
+  const totalImpressions = platformEntries.reduce((sum, [, p]) => sum + (p.kpis.impressions || 0), 0);
+  const totalClicks = platformEntries.reduce((sum, [, p]) => sum + (p.kpis.clicks || 0), 0);
+  const totalConversions = platformEntries.reduce((sum, [, p]) => sum + (p.kpis.conversions || 0), 0);
+
+  const totalRoas = totalSpend > 0 ? (totalRevenue / totalSpend) : 0;
+  const totalCtr = totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100) : 0;
+  const totalCpa = totalConversions > 0 ? (totalSpend / totalConversions) : 0;
+
+  // ─── Client's All Campaigns for Overview ────────────────────────────
+  const allOverviewCampaigns = Object.entries(clientPlatformPerformance)
+    .flatMap(([platformKey, platformData]) =>
+      (platformData.campaigns || []).map((camp, idx) => {
+        const defaultObjectives = ['Sales', 'Traffic', 'Awareness', 'Leads', 'Conversions'];
+        const defaultDates = ['01/07/26', '10/07/26', '15/06/26', '22/05/26', '04/04/26', '18/03/26'];
+        const objective = camp.objective || defaultObjectives[idx % defaultObjectives.length];
+        const startDate = camp.startDate || defaultDates[idx % defaultDates.length];
+
+        return {
+          ...camp,
+          platformKey,
+          platformLabel: platformData.label,
+          objective,
+          startDate,
+        };
+      })
+    );
+
+  const filteredOverviewCampaigns = allOverviewCampaigns.filter((c) => {
+    const matchPlatform = overviewFilters.platform === 'ALL' || c.platformKey === overviewFilters.platform.toLowerCase();
+    const effectiveStatus = overviewFilters.status !== 'ALL' ? overviewFilters.status : overviewStatusFilter;
+    const matchStatus = effectiveStatus === 'ALL' || effectiveStatus === 'all' || String(c.status).toLowerCase() === effectiveStatus.toLowerCase();
+    const matchObjective = overviewFilters.objective === 'ALL' || String(c.objective).toLowerCase() === overviewFilters.objective.toLowerCase();
+    const matchSearch = !overviewSearchQuery || c.name.toLowerCase().includes(overviewSearchQuery.toLowerCase());
+    return matchPlatform && matchStatus && matchObjective && matchSearch;
+  });
+
+  const sortedOverviewCampaigns = [...filteredOverviewCampaigns].sort((a, b) => {
+    let valA = a[overviewSortField];
+    let valB = b[overviewSortField];
+
+    if (overviewSortField === 'startDate') {
+      const parseDate = (dStr) => {
+        if (!dStr) return 0;
+        if (dStr.includes('/')) {
+          const parts = dStr.split('/');
+          if (parts.length === 3) {
+            const yr = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+            return new Date(`${yr}-${parts[1]}-${parts[0]}`).getTime();
+          }
+        }
+        return new Date(dStr).getTime();
+      };
+      valA = parseDate(valA);
+      valB = parseDate(valB);
+    } else {
+      valA = Number(valA) || 0;
+      valB = Number(valB) || 0;
+    }
+
+    if (overviewSortOrder === 'asc') {
+      return valA > valB ? 1 : valA < valB ? -1 : 0;
+    } else {
+      return valA < valB ? 1 : valA > valB ? -1 : 0;
+    }
+  });
+
+  const visibleCampaigns = sortedOverviewCampaigns;
+
+  // ─── Client Goals & Targets Calculations ─────────────────────────
+  const currentRevenue = Number(clientKPIs?.totalRevenue?.value) || 186400;
+  const targetRevenue = Number(targetSettings?.targetRevenue) || 200000;
+  const revenuePct = Math.round((currentRevenue / Math.max(1, targetRevenue)) * 100);
+
+  const currentSpend = Number(clientKPIs?.totalSpend?.value) || Number(totalSpend) || 45200;
+  const targetMonthlyBudget = Number(targetSettings?.monthlyBudget) || 50000;
+  const budgetPct = Math.round((currentSpend / Math.max(1, targetMonthlyBudget)) * 100);
+
+  const currentRoas = Number(clientKPIs?.roas?.value) || 3.78;
+  const targetRoas = Number(targetSettings?.targetRoas) || 4.0;
+  const roasPct = Math.round((currentRoas / Math.max(0.1, targetRoas)) * 100);
+
+  const currentConversions = Number(clientKPIs?.conversions?.value) || 8420;
+  const targetConversions = Number(targetSettings?.targetConversions) || 9000;
+  const conversionsPct = Math.round((currentConversions / Math.max(1, targetConversions)) * 100);
+
+  const currentCpa = Number(clientKPIs?.cpa?.value) || 4.80;
+  const targetCpa = Number(targetSettings?.targetCpa) || 5.50;
+  const cpaPct = Math.round((currentCpa / Math.max(0.01, targetCpa)) * 100);
+
+  // ─── Action Handlers ────────────────────────────────────────────
+  const handleOpenTargetModal = () => {
+    const budget = Number(targetSettings?.monthlyBudget) || 50000;
+    const roas = Number(targetSettings?.targetRoas) || 4.0;
+    const cpa = Number(targetSettings?.targetCpa) || 5.5;
+    const revenue = targetSettings?.targetRevenue != null ? Number(targetSettings.targetRevenue) : Math.round(budget * roas);
+    const conversions = targetSettings?.targetConversions != null ? Number(targetSettings.targetConversions) : Math.round(budget / Math.max(0.1, cpa));
+
+    setTargetFormData({
+      businessModel: targetSettings?.businessModel || 'ecommerce',
+      mainConversionEvent: targetSettings?.mainConversionEvent || 'Purchases',
+      monthlyBudget: budget,
+      targetRoas: roas,
+      targetCpa: cpa,
+      currency: targetSettings?.currency || (typeof client?.currency === 'string' ? client.currency : 'USD'),
+      targetRevenue: revenue,
+      targetConversions: conversions,
+    });
+    setTargetError('');
+    setShowTargetModal(true);
+  };
+
+  const handleSaveTargets = async (e) => {
+    e.preventDefault();
+    try {
+      setTargetSaving(true);
+      setTargetError('');
+      const sanitizedTargets = {
+        businessModel: targetFormData.businessModel || 'ecommerce',
+        mainConversionEvent: targetFormData.mainConversionEvent || 'Purchases',
+        monthlyBudget: Number(targetFormData.monthlyBudget) || 50000,
+        currency: targetFormData.currency || 'USD',
+        targetRoas: Number(targetFormData.targetRoas) || 4.0,
+        targetCpa: Number(targetFormData.targetCpa) || 5.5,
+        targetRevenue: Number(targetFormData.targetRevenue) || Math.round((Number(targetFormData.monthlyBudget) || 50000) * (Number(targetFormData.targetRoas) || 4.0)),
+        targetConversions: Number(targetFormData.targetConversions) || Math.round((Number(targetFormData.monthlyBudget) || 50000) / Math.max(0.1, Number(targetFormData.targetCpa) || 5.5)),
+      };
+      const updated = await updateClientTargetsApi(id, sanitizedTargets);
+      setTargetSettings(updated || sanitizedTargets);
+      setShowTargetModal(false);
+      setToastMsg('Client targets updated successfully!');
+      setTimeout(() => setToastMsg(''), 3500);
+    } catch (err) {
+      setTargetError(err.message || 'Failed to save targets.');
+    } finally {
+      setTargetSaving(false);
+    }
+  };
+
+  const openEditModal = () => {
+    if (!client) return;
+    setFormData({
+      companyName: client.companyName || '',
+      website: client.website || '',
+      email: client.email || '',
+      phone: client.phone || '',
+      country: client.country || '',
+      currency: typeof client.currency === 'number' ? client.currency : currencies.indexOf(client.currency) >= 0 ? currencies.indexOf(client.currency) : 0,
+      status: typeof client.status === 'number' ? client.status : statuses.indexOf(client.status) >= 0 ? statuses.indexOf(client.status) : 0,
+      notes: client.notes || '',
+      managerId: client.managerId || users[0]?.id || '',
+      logo: client.logo || '',
+      countryCode: '+1',
+    });
+    setEditError('');
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    setEditError('');
+
+    if (!formData.companyName || !formData.email || !formData.phone || !formData.website) {
+      setEditError('Please fill in all required fields (Company Name, Website, Email, Phone).');
+      return;
+    }
+
+    try {
+      setEditLoading(true);
+      const updated = await updateClientApi(client.id, formData);
+      setClient(updated || { ...client, ...formData });
+      setShowEditModal(false);
+      setToastMsg('Client details updated successfully!');
+      setTimeout(() => setToastMsg(''), 3000);
+      await loadData();
+    } catch (err) {
+      setEditError(err.message || 'Failed to update client.');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    const now = 'Just now';
+    const nowDate = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const updatedOverview = { lastSync: now, lastSyncDate: nowDate };
+    setOverviewLastSync(updatedOverview);
+    try { localStorage.setItem(overviewSyncStorageKey, JSON.stringify(updatedOverview)); } catch {}
+
+    setPlatformsState((prev) => {
+      const updated = {};
+      Object.keys(prev).forEach((k) => {
+        updated[k] = { ...prev[k], lastSync: now, lastSyncDate: nowDate };
+      });
+      try { localStorage.setItem(platformsStorageKey, JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    setTimeout(() => {
+      setRefreshing(false);
+      setToastMsg('All client & platform data refreshed!');
+      setTimeout(() => setToastMsg(''), 3000);
+    }, 600);
+  };
+
+  const handleShareReport = () => {
+    const url = window.location.href;
+    navigator.clipboard?.writeText(url).then(() => {
+      setToastMsg('Report link copied to clipboard!');
+      setTimeout(() => setToastMsg(''), 3000);
+    }).catch(() => {
+      setToastMsg('Could not copy link.');
+      setTimeout(() => setToastMsg(''), 3000);
+    });
+  };
+
+  const handleExportPDF = () => { window.print(); };
+
+  const toggleKPI = (key) => {
+    setPinnedKPIs((prev) => {
+      if (prev.includes(key)) return prev.filter((k) => k !== key);
+      if (prev.length >= 6) return prev;
+      return [...prev, key];
+    });
+  };
+
+  const handleAddNote = () => {
+    if (!newNote.trim()) return;
+    const note = {
+      id: `note-${Date.now()}`,
+      clientId: id,
+      author: 'You',
+      authorAvatar: 'Y',
+      timestamp: new Date().toISOString(),
+      content: newNote.trim(),
+    };
+    setNotes((prev) => [note, ...prev]);
+    setNewNote('');
+  };
+
+  // ─── Client Avatar Helpers ─────────────────────────────────────
+  const getClientInitials = (name) => {
+    if (!name) return 'CL';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const getClientGradient = (name) => {
+    const gradients = [
+      'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)', // Indigo -> Violet
+      'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', // Sky -> Blue
+      'linear-gradient(135deg, #059669 0%, #047857 100%)', // Emerald -> Green
+      'linear-gradient(135deg, #d97706 0%, #b45309 100%)', // Amber -> Warm
+      'linear-gradient(135deg, #db2777 0%, #be185d 100%)', // Pink -> Rose
+      'linear-gradient(135deg, #7c3aed 0%, #581c87 100%)', // Violet -> Deep Purple
+    ];
+    let hash = 0;
+    for (let i = 0; i < (name || '').length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % gradients.length;
+    return gradients[index];
+  };
+
+  // ─── Status Badge ───────────────────────────────────────────────
   const getStatusBadge = (status) => {
     const statuses = ['Active', 'Inactive', 'Lead', 'Archived'];
-    const statusName = typeof status === 'number' ? statuses[status] || 'Active' : String(status);
-    
-    const badgeClass =
-      statusName === 'Active' || statusName === '0'
-        ? 'badge text-success-emphasis bg-success-subtle'
-        : statusName === 'Inactive' || statusName === '1'
-        ? 'badge text-secondary-emphasis bg-secondary-subtle'
-        : 'badge text-info-emphasis bg-info-subtle';
+    const name = typeof status === 'number' ? statuses[status] || 'Active' : String(status || 'Active');
+    let badgeClass = 'bg-success-subtle text-success-emphasis border-success-subtle';
 
-    return <span className={`${badgeClass} fs-6`}>{statusName}</span>;
+    if (name === 'Inactive') {
+      badgeClass = 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle';
+    } else if (name === 'Lead') {
+      badgeClass = 'bg-info-subtle text-info-emphasis border-info-subtle';
+    } else if (name === 'Archived') {
+      badgeClass = 'bg-dark-subtle text-dark-emphasis border-dark-subtle';
+    }
+
+    return (
+      <span className={`badge rounded-pill border px-2.5 py-1 fw-semibold ${badgeClass}`} style={{ fontSize: '0.78rem' }}>
+        {name}
+      </span>
+    );
   };
 
-  const getCurrencyName = (curr) => {
-    const currencies = ['USD', 'EUR', 'GBP'];
-    return typeof curr === 'number' ? currencies[curr] || 'USD' : String(curr);
-  };
+  const getCurrencyName = (c) => { const cs = ['USD', 'EUR', 'GBP']; return typeof c === 'number' ? cs[c] || 'USD' : String(c || 'USD'); };
 
+  // ─── Loading / Error ────────────────────────────────────────────
   if (loading) {
     return (
-      <DashboardLayout title="Loading Client Details... | Dasher">
+      <DashboardLayout title="Loading... | Dasher">
         <div className="d-flex align-items-center justify-content-center py-10 w-100">
-          <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
-            <span className="visually-hidden">Loading...</span>
-          </div>
+          <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}><span className="visually-hidden">Loading...</span></div>
         </div>
       </DashboardLayout>
     );
   }
-
   if (error || !client) {
     return (
       <DashboardLayout title="Error | Dasher">
         <div className="p-4">
-          <div className="alert alert-danger" role="alert">
-            {error || 'Client details not found.'}
-          </div>
-          <button className="btn btn-outline-primary" onClick={() => navigate('/clients')}>
-            Back to Clients List
-          </button>
+          <div className="alert alert-danger" role="alert">{error || 'Client details not found.'}</div>
+          <button className="btn btn-outline-primary" onClick={() => navigate('/clients')}>Back to Clients</button>
         </div>
       </DashboardLayout>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════
   return (
-    <DashboardLayout title={`${client.companyName} Details | Dasher`}>
-      <div id="content" className="position-relative h-100 p-4">
-        {/* Breadcrumb Navigation */}
-        <nav aria-label="breadcrumb" className="mb-4">
-          <ol className="breadcrumb">
-            <li className="breadcrumb-item">
-              <Link to="/">Dashboard</Link>
-            </li>
-            <li className="breadcrumb-item">
-              <Link to="/clients">Clients</Link>
-            </li>
-            <li className="breadcrumb-item active" aria-current="page">
-              {client.companyName} Details
-            </li>
-          </ol>
-        </nav>
+    <DashboardLayout title={`${client.companyName || 'Client'} | Dasher`}>
+      {/* Micro-animations & custom styling */}
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin-icon { animation: spin 0.8s linear infinite; }
+        .kpi-card { 
+          transition: transform 0.18s ease, box-shadow 0.18s ease; 
+        }
+        .kpi-card:hover { 
+          transform: translateY(-3px); 
+          box-shadow: 0 8px 24px rgba(0,0,0,0.1) !important; 
+        }
+        .kpi-grid-5 {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          gap: 1rem;
+        }
+        @media (max-width: 1200px) {
+          .kpi-grid-5 {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 768px) {
+          .kpi-grid-5 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 480px) {
+          .kpi-grid-5 {
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+          }
+        }
+        @media (min-width: 1200px) {
+          .border-end-xl {
+            border-right: 1px solid var(--bs-border-color-translucent, rgba(0, 0, 0, 0.08)) !important;
+          }
+        }
+        .tab-btn { 
+          border-bottom: 3px solid transparent; 
+          transition: all 0.18s ease; 
+          font-size: 0.975rem !important; 
+          font-weight: 600 !important; 
+          padding: 0.85rem 1.35rem !important; 
+        }
+        .tab-btn.active { 
+          border-bottom: 3px solid var(--bs-primary) !important; 
+          color: var(--bs-primary) !important; 
+          font-weight: 700 !important; 
+        }
+        .tab-btn:hover { 
+          color: var(--bs-primary) !important; 
+        }
+        .tab-scroll-btn {
+          width: 34px;
+          height: 34px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: var(--bs-body-bg);
+          border: 1px solid var(--bs-border-color);
+          color: var(--bs-body-color);
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+          transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+          flex-shrink: 0;
+          cursor: pointer;
+          z-index: 2;
+        }
+        .tab-scroll-btn:hover {
+          background: var(--bs-primary-subtle);
+          color: var(--bs-primary);
+          border-color: var(--bs-primary-subtle);
+          transform: scale(1.1);
+          box-shadow: 0 4px 12px rgba(var(--bs-primary-rgb), 0.22);
+        }
+        .tab-scroll-btn:active {
+          transform: scale(0.92);
+        }
+        .insight-card { border-left: 4px solid transparent; transition: all 0.15s ease; }
+        .insight-card:hover { transform: translateX(4px); }
+        .insight-card.priority-high { border-left-color: var(--bs-danger); }
+        .insight-card.priority-medium { border-left-color: var(--bs-warning); }
+        .insight-card.priority-low { border-left-color: var(--bs-info); }
+        .platform-row { transition: background-color 0.15s ease; }
+        .platform-row:hover { background-color: rgba(var(--bs-primary-rgb), 0.04) !important; }
+        @media print { .no-print { display: none !important; } }
+      `}</style>
 
-        {/* Action Header */}
-        <div className="d-flex justify-content-between align-items-center mb-6">
-          <div className="d-flex align-items-center gap-3">
-            <div className="avatar avatar-lg bg-primary-subtle text-primary rounded-3 d-flex align-items-center justify-content-center fw-bold fs-4">
-              {client.companyName ? client.companyName.charAt(0).toUpperCase() : 'C'}
+      <div className="container-fluid px-0">
+
+        {/* ─── Top Bar: Breadcrumb + Action Buttons (In Parallel) ─── */}
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-2 no-print">
+          {/* Left: Breadcrumb */}
+          <nav aria-label="breadcrumb">
+            <ol className="breadcrumb small mb-0">
+              <li className="breadcrumb-item"><Link to="/">Dashboard</Link></li>
+              <li className="breadcrumb-item"><Link to="/clients">Clients</Link></li>
+              <li className="breadcrumb-item active" aria-current="page">{client.companyName}</li>
+            </ol>
+          </nav>
+
+          {/* Right: action buttons */}
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            {/* Date Range Dropdown / Filter */}
+            <div className="position-relative date-dropdown-container">
+              <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={() => setShowDateDropdown(!showDateDropdown)}>
+                <IconCalendar /> <span className="d-none d-md-inline">{dateRange}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
+              </button>
+              {showDateDropdown && (
+                <div className="position-absolute end-0 mt-1 bg-white border rounded-3 shadow-lg py-1" style={{ zIndex: 1050, minWidth: 180 }}>
+                  {DATE_RANGES.map((r) => (
+                    <button key={r} className={`dropdown-item small px-3 py-2 ${r === dateRange ? 'fw-bold text-primary' : ''}`} onClick={() => { setDateRange(r); setShowDateDropdown(false); }}>
+                      {r === dateRange && <IconCheck />} {r}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div>
-              <h1 className="h2 mb-0">{client.companyName}</h1>
-              <p className="text-secondary mb-0">Client Portfolio Management Dashboard</p>
+
+            <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleShareReport}>
+              <IconShare /> <span className="d-none d-md-inline">Share</span>
+            </button>
+            <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleExportPDF}>
+              <IconPdf /> <span className="d-none d-md-inline">Export PDF</span>
+            </button>
+            <button className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleRefresh} disabled={refreshing}>
+              <IconRefresh spinning={refreshing} /> <span className="d-none d-md-inline">{refreshing ? 'Refreshing...' : 'Refresh all'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ─── Client Identity Header (Modern & Intuitive) ───────── */}
+        <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between mb-4 gap-3">
+          <div className="d-flex align-items-center gap-3">
+            <button
+              className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center p-2 rounded-circle no-print shadow-sm"
+              onClick={() => navigate('/clients')}
+              title="Back to Clients"
+              aria-label="Back to Clients"
+            >
+              <IconBack />
+            </button>
+
+            {/* Modern Gradient Avatar with Squircle & Initials */}
+            <div
+              className="d-flex align-items-center justify-content-center text-white fw-bold shadow-sm flex-shrink-0"
+              style={{
+                width: 52,
+                height: 52,
+                borderRadius: 14,
+                background: getClientGradient(client.companyName),
+                fontSize: '1.15rem',
+                letterSpacing: '0.5px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+              }}
+            >
+              {getClientInitials(client.companyName)}
+            </div>
+
+            {/* Client Name & Header Action */}
+            <div className="d-flex flex-column gap-2">
+              <div className="d-flex align-items-center gap-3 flex-wrap">
+                <h1 className="h3 mb-0 fw-bold text-body-emphasis me-1">{client.companyName}</h1>
+                {getStatusBadge(client.status)}
+                <button
+                  className="btn btn-sm btn-outline-secondary rounded-2 d-inline-flex align-items-center gap-1.5 px-2.5 py-1 no-print ms-1"
+                  onClick={openEditModal}
+                  title="Edit Client Information"
+                  aria-label="Edit Client"
+                  style={{ fontSize: '0.78rem' }}
+                >
+                  <IconEdit />
+                  <span>Edit</span>
+                </button>
+              </div>
+
+              {/* Subheader Metadata Spans (Email, Currency, Website) */}
+              <div className="d-flex align-items-center gap-3 text-secondary small flex-wrap" style={{ fontSize: '0.80rem' }}>
+                <a
+                  href={`mailto:${client.email}`}
+                  className="text-body-secondary text-decoration-none d-inline-flex align-items-center gap-2"
+                  title="Email Client"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-body-tertiary flex-shrink-0"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
+                  <span>{client.email}</span>
+                </a>
+
+                <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
+                <span className="badge bg-body-tertiary text-body-secondary border rounded-2 px-2.5 py-0.5 fw-semibold" style={{ fontSize: '0.74rem' }}>
+                  {getCurrencyName(client.currency)}
+                </span>
+
+                {(client.website || 'https://acmeglobal.com') && (
+                  <>
+                    <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
+                    <a
+                      href={(client.website || 'https://acmeglobal.com').startsWith('http') ? (client.website || 'https://acmeglobal.com') : `https://${client.website}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary text-decoration-none d-inline-flex align-items-center gap-2 fw-medium"
+                      title="Open Website"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+                      <span>{(client.website || 'acmeglobal.com').replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="ms-0.5 flex-shrink-0" style={{ opacity: 0.7 }}><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
+                    </a>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-          <button className="btn btn-outline-secondary" onClick={() => navigate('/clients')}>
-            <i className="ti ti-arrow-left"></i> Back
+        </div>
+
+        {/* ─── Client Goals & Target Tracking Bar (Linear Progress Under Stats) ───── */}
+        <div className="card border shadow-xs rounded-3 mb-3.5 bg-body-tertiary bg-opacity-40">
+          <div className="card-body py-2 px-3">
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 gap-xl-3">
+              {/* 1. Monthly Budget (Indigo Theme) */}
+              <div className="d-flex flex-column flex-grow-1" style={{ minWidth: 150 }}>
+                <div className="d-flex align-items-baseline justify-content-between mb-1">
+                  <div className="d-flex align-items-baseline gap-1">
+                    <span className="fw-semibold text-body-secondary small" style={{ fontSize: '0.76rem' }}>Budget:</span>
+                    <span className="fw-bold small" style={{ fontSize: '0.84rem', color: '#6366f1' }}>
+                      ${currentSpend >= 1000 ? `${(currentSpend / 1000).toFixed(1)}k` : currentSpend.toLocaleString()}
+                    </span>
+                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/${targetMonthlyBudget >= 1000 ? `${(targetMonthlyBudget / 1000).toFixed(targetMonthlyBudget % 1000 !== 0 ? 1 : 0)}k` : targetMonthlyBudget.toLocaleString()}</span>
+                  </div>
+                  <span
+                    className="badge rounded-pill px-2 py-0.5 fw-bold ms-2"
+                    style={{
+                      backgroundColor: 'rgba(99, 102, 241, 0.16)',
+                      color: '#6366f1',
+                      border: '1px solid rgba(99, 102, 241, 0.35)',
+                      fontSize: '0.72rem',
+                    }}
+                  >
+                    {budgetPct}%
+                  </span>
+                </div>
+                <div className="progress rounded-pill bg-body-secondary w-100" style={{ height: 4 }}>
+                  <div className="progress-bar rounded-pill" role="progressbar" style={{ width: `${Math.min(100, budgetPct)}%`, backgroundColor: '#6366f1' }}></div>
+                </div>
+              </div>
+
+              <div className="d-none d-xxl-block vr opacity-25 align-self-stretch my-1" style={{ width: 1 }}></div>
+
+              {/* 2. Revenue (Green Theme) */}
+              <div className="d-flex flex-column flex-grow-1" style={{ minWidth: 150 }}>
+                <div className="d-flex align-items-baseline justify-content-between mb-1">
+                  <div className="d-flex align-items-baseline gap-1">
+                    <span className="fw-semibold text-body-secondary small" style={{ fontSize: '0.76rem' }}>Revenue:</span>
+                    <span className="fw-bold small" style={{ fontSize: '0.84rem', color: '#00a76f' }}>
+                      ${currentRevenue >= 1000 ? `${(currentRevenue / 1000).toFixed(1)}k` : currentRevenue.toLocaleString()}
+                    </span>
+                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/${targetRevenue >= 1000 ? `${(targetRevenue / 1000).toFixed(targetRevenue % 1000 !== 0 ? 1 : 0)}k` : targetRevenue.toLocaleString()}</span>
+                  </div>
+                  <span
+                    className="badge rounded-pill px-2 py-0.5 fw-bold ms-2"
+                    style={{
+                      backgroundColor: 'rgba(0, 167, 111, 0.16)',
+                      color: '#00a76f',
+                      border: '1px solid rgba(0, 167, 111, 0.35)',
+                      fontSize: '0.72rem',
+                    }}
+                  >
+                    {revenuePct}%
+                  </span>
+                </div>
+                <div className="progress rounded-pill bg-body-secondary w-100" style={{ height: 4 }}>
+                  <div className="progress-bar rounded-pill" role="progressbar" style={{ width: `${Math.min(100, revenuePct)}%`, backgroundColor: '#00a76f' }}></div>
+                </div>
+              </div>
+
+              <div className="d-none d-xxl-block vr opacity-25 align-self-stretch my-1" style={{ width: 1 }}></div>
+
+              {/* 3. ROAS (Green Theme) */}
+              <div className="d-flex flex-column flex-grow-1" style={{ minWidth: 145 }}>
+                <div className="d-flex align-items-baseline justify-content-between mb-1">
+                  <div className="d-flex align-items-baseline gap-1">
+                    <span className="fw-semibold text-body-secondary small" style={{ fontSize: '0.76rem' }}>ROAS:</span>
+                    <span className="fw-bold small" style={{ fontSize: '0.84rem', color: '#00a76f' }}>
+                      {(Number(currentRoas) || 0).toFixed(2)}x
+                    </span>
+                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/{(Number(targetRoas) || 4.0).toFixed(1)}x</span>
+                  </div>
+                  <span
+                    className="badge rounded-pill px-2 py-0.5 fw-bold ms-2"
+                    style={{
+                      backgroundColor: 'rgba(0, 167, 111, 0.16)',
+                      color: '#00a76f',
+                      border: '1px solid rgba(0, 167, 111, 0.35)',
+                      fontSize: '0.72rem',
+                    }}
+                  >
+                    {roasPct}%
+                  </span>
+                </div>
+                <div className="progress rounded-pill bg-body-secondary w-100" style={{ height: 4 }}>
+                  <div className="progress-bar rounded-pill" role="progressbar" style={{ width: `${Math.min(100, roasPct)}%`, backgroundColor: '#00a76f' }}></div>
+                </div>
+              </div>
+
+              <div className="d-none d-xxl-block vr opacity-25 align-self-stretch my-1" style={{ width: 1 }}></div>
+
+              {/* 4. Conversions (Cyan Theme) */}
+              <div className="d-flex flex-column flex-grow-1" style={{ minWidth: 155 }}>
+                <div className="d-flex align-items-baseline justify-content-between mb-1">
+                  <div className="d-flex align-items-baseline gap-1">
+                    <span className="fw-semibold text-body-secondary small" style={{ fontSize: '0.76rem' }}>Conversions:</span>
+                    <span className="fw-bold small" style={{ fontSize: '0.84rem', color: '#0284c7' }}>
+                      {currentConversions >= 1000 ? `${(currentConversions / 1000).toFixed(1)}k` : currentConversions.toLocaleString()}
+                    </span>
+                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/{targetConversions >= 1000 ? `${(targetConversions / 1000).toFixed(targetConversions % 1000 !== 0 ? 1 : 0)}k` : targetConversions.toLocaleString()}</span>
+                  </div>
+                  <span
+                    className="badge rounded-pill px-2 py-0.5 fw-bold ms-2"
+                    style={{
+                      backgroundColor: 'rgba(2, 132, 199, 0.16)',
+                      color: '#0284c7',
+                      border: '1px solid rgba(2, 132, 199, 0.35)',
+                      fontSize: '0.72rem',
+                    }}
+                  >
+                    {conversionsPct}%
+                  </span>
+                </div>
+                <div className="progress rounded-pill bg-body-secondary w-100" style={{ height: 4 }}>
+                  <div className="progress-bar rounded-pill" role="progressbar" style={{ width: `${Math.min(100, conversionsPct)}%`, backgroundColor: '#0284c7' }}></div>
+                </div>
+              </div>
+
+              <div className="d-none d-xxl-block vr opacity-25 align-self-stretch my-1" style={{ width: 1 }}></div>
+
+              {/* 5. CPA (Danger Red Theme) */}
+              <div className="d-flex flex-column flex-grow-1" style={{ minWidth: 145 }}>
+                <div className="d-flex align-items-baseline justify-content-between mb-1">
+                  <div className="d-flex align-items-baseline gap-1">
+                    <span className="fw-semibold text-body-secondary small" style={{ fontSize: '0.76rem' }}>CPA:</span>
+                    <span className="fw-bold small" style={{ fontSize: '0.84rem', color: '#ef4444' }}>
+                      ${(Number(currentCpa) || 0).toFixed(2)}
+                    </span>
+                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/${(Number(targetCpa) || 5.50).toFixed(2)}</span>
+                  </div>
+                  <span
+                    className="badge rounded-pill px-2 py-0.5 fw-bold ms-2"
+                    style={{
+                      backgroundColor: 'rgba(239, 68, 68, 0.16)',
+                      color: '#ef4444',
+                      border: '1px solid rgba(239, 68, 68, 0.35)',
+                      fontSize: '0.72rem',
+                    }}
+                  >
+                    {cpaPct}%
+                  </span>
+                </div>
+                <div className="progress rounded-pill bg-body-secondary w-100" style={{ height: 4 }}>
+                  <div
+                    className="progress-bar rounded-pill"
+                    role="progressbar"
+                    style={{ width: `${Math.min(100, cpaPct)}%`, backgroundColor: '#ef4444' }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Edit Targets Action Button Under Stats */}
+            <div className="d-flex align-items-center justify-content-between pt-1 mt-2 flex-wrap gap-2">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <span
+                  className="badge rounded-pill px-2.5 py-1 fw-semibold d-inline-flex align-items-center gap-1.5"
+                  style={{
+                    backgroundColor: targetSettings?.businessModel === 'lead_generation' ? 'rgba(2, 132, 199, 0.14)' : 'rgba(0, 167, 111, 0.14)',
+                    color: targetSettings?.businessModel === 'lead_generation' ? '#0284c7' : '#00a76f',
+                    border: targetSettings?.businessModel === 'lead_generation' ? '1px solid rgba(2, 132, 199, 0.3)' : '1px solid rgba(0, 167, 111, 0.3)',
+                    fontSize: '0.74rem',
+                  }}
+                >
+                  {targetSettings.businessModel === 'ecommerce' ? '🛍️ E-Commerce' : '🎯 Lead Gen'}
+                </span>
+
+                <span
+                  className="badge bg-body text-body-emphasis border rounded-pill px-2.5 py-1 fw-medium d-inline-flex align-items-center gap-1 shadow-2xs"
+                  style={{ fontSize: '0.75rem' }}
+                >
+                  <span className="text-secondary fw-normal">Event:</span>
+                  <span className="fw-bold ms-1" style={{ color: '#0284c7' }}>
+                    {targetSettings.mainConversionEvent || 'Purchases'}
+                  </span>
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-xs btn-outline-primary d-inline-flex align-items-center px-2.5 py-1 rounded-2 shadow-2xs fw-semibold no-print"
+                style={{ fontSize: '0.74rem' }}
+                onClick={handleOpenTargetModal}
+                title="Edit Client Target Settings"
+              >
+                Edit Targets
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Tab Navigation (with Smooth Navigation Handlers) ──── */}
+        <div className="d-flex align-items-center border-bottom mb-4 no-print position-relative gap-2">
+          {/* Left Arrow Handler Button */}
+          <button
+            className="tab-scroll-btn"
+            onClick={() => handleTabScroll('left')}
+            title="Scroll tabs left"
+            aria-label="Scroll tabs left"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+
+          {/* Scrollable Tabs List with Drag & Wheel Support */}
+          <div
+            ref={tabsContainerRef}
+            className="flex-grow-1"
+            onMouseDown={handleTabsMouseDown}
+            onMouseMove={handleTabsMouseMove}
+            onMouseUp={handleTabsMouseUpOrLeave}
+            onMouseLeave={handleTabsMouseUpOrLeave}
+            onWheel={handleTabsWheel}
+            style={{
+              overflowX: 'auto',
+              whiteSpace: 'nowrap',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              cursor: isDraggingTabs ? 'grabbing' : 'grab',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              touchAction: 'pan-x',
+            }}
+          >
+            <div className="d-inline-flex gap-1" style={{ pointerEvents: isDraggingTabs ? 'none' : 'auto' }}>
+              {TABS.map((tab) => {
+                const isPlatform = ['meta', 'google', 'snapchat', 'tiktok'].includes(tab.key);
+                const isDisconnected = isPlatform && platformsState[tab.key]?.connected === false;
+
+                return (
+                  <button
+                    key={tab.key}
+                    className={`btn btn-link text-decoration-none rounded-0 tab-btn d-inline-flex align-items-center gap-2 ${activeTab === tab.key ? 'active' : 'text-secondary'}`}
+                    onClick={() => {
+                      if (!hasMovedDragRef.current && !isDraggingTabs) {
+                        setActiveTab(tab.key);
+                      }
+                    }}
+                    style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+                  >
+                    {tab.icon}
+                    <span>{tab.label}</span>
+                    {isDisconnected && (
+                      <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle rounded-pill px-1.5 py-0.5 ms-0.5" style={{ fontSize: '0.66rem' }}>
+                        Disconnected
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right Arrow Handler Button */}
+          <button
+            className="tab-scroll-btn"
+            onClick={() => handleTabScroll('right')}
+            title="Scroll tabs right"
+            aria-label="Scroll tabs right"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
           </button>
         </div>
 
-        <div className="row g-6">
-          {/* Left Column (8-col) */}
-          <div className="col-xl-8 col-lg-7 col-12">
-            <div className="d-flex flex-column gap-6">
-              
-              {/* Company Info Details Card */}
-              <div className="card">
-                <div className="card-header border-dashed-bottom">
-                  <h5 className="mb-0">Company Information</h5>
+        {/* ─── Tab Content ───────────────────────────────────────── */}
+
+        {/* === OVERVIEW TAB === */}
+        {activeTab === 'overview' && (
+          <div className="d-flex flex-column gap-4">
+
+            {/* ─── Client KPIs & Interval Bar with Customize KPIs Button ─── */}
+            <div>
+              <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div className="d-flex align-items-center gap-2 flex-wrap">
+                  <span className="d-inline-flex align-items-center gap-1.5 text-secondary small fw-semibold">
+                    <IconCalendar /> <span>{dateRange}</span>
+                  </span>
+                  <span className="text-body-tertiary opacity-75 d-none d-sm-inline">&bull;</span>
+                  <span
+                    className="badge bg-body-tertiary text-secondary border px-2.5 py-1 small d-inline-flex align-items-center gap-1.5 shadow-2xs"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                      <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
+                      <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
+                    </svg>
+                    <span>Last synced: <strong className="text-body-emphasis">{overviewLastSync?.lastSync || 'Just now'}</strong></span>
+                  </span>
                 </div>
-                <div className="card-body">
-                  <div className="row g-4">
-                    <div className="col-md-6 col-12">
-                      <small className="text-secondary d-block">Website</small>
-                      <a
-                        href={client.website?.startsWith('http') ? client.website : `https://${client.website}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="fw-semibold text-primary"
-                      >
-                        {client.website}
-                      </a>
+                <div className="position-relative no-print kpi-selector-container">
+                  <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-2" onClick={() => setShowKPISelector(!showKPISelector)}>
+                    <IconGear /> <span className="fw-semibold">Customize KPIs</span>
+                  </button>
+                  {showKPISelector && (
+                    <div className="position-absolute end-0 mt-1 bg-white border rounded-3 shadow-lg p-3" style={{ zIndex: 1050, minWidth: 260 }}>
+                      <h6 className="fw-bold small mb-2">Select KPIs to pin (max 5)</h6>
+                      <div className="d-flex flex-column gap-1">
+                        {availableKPIs.map((kpi) => {
+                          const isPinned = pinnedKPIs.includes(kpi.key);
+                          return (
+                            <label key={kpi.key} className={`d-flex align-items-center gap-2 px-2 py-1 rounded-2 cursor-pointer ${isPinned ? 'bg-primary-subtle' : 'bg-transparent'}`} style={{ cursor: 'pointer' }}>
+                              <input type="checkbox" className="form-check-input m-0" checked={isPinned} onChange={() => toggleKPI(kpi.key)} disabled={!isPinned && pinnedKPIs.length >= 5} />
+                              <span className="small">{kpi.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <button className="btn btn-sm btn-primary w-100 mt-2" onClick={() => setShowKPISelector(false)}>Done</button>
                     </div>
-                    <div className="col-md-6 col-12">
-                      <small className="text-secondary d-block">Email Address</small>
-                      <span className="fw-semibold">{client.email}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="kpi-grid-5">
+                {pinnedKPIs.slice(0, 5).map((key) => {
+                  const kpiDef = availableKPIs.find((k) => k.key === key);
+                  const kpiData = clientKPIs[key];
+                  if (!kpiDef || !kpiData) return null;
+                  const isPositive = kpiData.change >= 0;
+                  // For cost KPIs, decrease is good
+                  const isCostKPI = ['cpc', 'cpm', 'cpa', 'totalSpend'].includes(key);
+                  const isGood = isCostKPI ? !isPositive : isPositive;
+
+                  return (
+                    <div key={key}>
+                      <div className="card border-0 shadow-sm rounded-3 kpi-card h-100">
+                        <div className="card-body p-3 d-flex flex-column justify-content-between">
+                          <div className="d-flex justify-content-between align-items-center mb-1">
+                            <span className="text-secondary fw-semibold small text-truncate" title={kpiDef.label}>{kpiDef.label}</span>
+                            <span className={`badge rounded-pill bg-${kpiDef.color}-subtle text-${kpiDef.color}-emphasis px-2 py-0.5 fw-bold`} style={{ fontSize: '0.7rem' }}>
+                              {kpiDef.key.toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">
+                            {formatKPIValue(kpiData.value, kpiDef.format)}
+                          </div>
+                          <div className="d-flex align-items-center justify-content-between pt-1 border-top border-light-subtle mt-1">
+                            <div className={`d-flex align-items-center gap-1 fw-semibold small ${isGood ? 'text-success' : 'text-danger'}`}>
+                              {isPositive ? <IconUp /> : <IconDown />}
+                              <span>{Math.abs(kpiData.change).toFixed(1)}%</span>
+                            </div>
+                            <span className="text-secondary small" style={{ fontSize: '0.75rem' }}>vs prev</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="col-md-6 col-12">
-                      <small className="text-secondary d-block">Phone Number</small>
-                      <span className="fw-semibold">{client.phone}</span>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 1. Spend vs Revenue & ROAS by Platform Charts */}
+            <div className="row g-4">
+              {/* Spend vs Revenue Line Chart */}
+              <div className="col-xl-7 col-12">
+                <div className="card border-0 shadow-sm rounded-3 h-100">
+                  <div className="card-header bg-transparent border-bottom p-4 d-flex justify-content-between align-items-center">
+                    <div>
+                      <h5 className="mb-1 fw-bold">Metrics Chart</h5>
+                      <small className="text-secondary">Performance trend comparison over time</small>
                     </div>
-                    <div className="col-md-6 col-12">
-                      <small className="text-secondary d-block">Country Location</small>
-                      <span className="fw-semibold">{client.country}</span>
+                    <span className="badge bg-primary-subtle text-primary-emphasis px-2.5 py-1">{fullMonthText}</span>
+                  </div>
+                  <div className="card-body p-4">
+                    {/* Selectable Metric Legend Buttons */}
+                    <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+                      {Object.entries(CHART_METRICS).map(([key, cfg]) => {
+                        const isSelected = selectedMetrics.includes(key);
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => handleMetricToggle(key)}
+                            className={`btn btn-sm d-inline-flex align-items-center gap-2 px-2.5 py-1 rounded-pill transition-all ${
+                              isSelected
+                                ? 'bg-body-tertiary border text-body-emphasis fw-semibold shadow-xs'
+                                : 'bg-transparent border text-body-secondary'
+                            }`}
+                            style={{
+                              fontSize: '0.78rem',
+                              borderColor: isSelected ? cfg.color : 'rgba(0,0,0,0.12)',
+                              backgroundColor: isSelected ? `${cfg.color}15` : 'transparent',
+                            }}
+                          >
+                            <span
+                              className="rounded-circle d-inline-block"
+                              style={{
+                                width: '8px',
+                                height: '8px',
+                                backgroundColor: cfg.color,
+                                opacity: isSelected ? 1 : 0.35,
+                              }}
+                            />
+                            <span>{cfg.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div className="col-md-6 col-12">
-                      <small className="text-secondary d-block">Client Currency</small>
-                      <span className="badge bg-light text-dark border">{getCurrencyName(client.currency)}</span>
-                    </div>
-                    <div className="col-md-6 col-12">
-                      <small className="text-secondary d-block">Created On</small>
-                      <span className="fw-semibold">{new Date(client.createdAt).toLocaleDateString('en-US', { dateStyle: 'long' })}</span>
-                    </div>
+
+                    <ApexChart
+                      options={spendVsRevenueOptions}
+                      series={spendVsRevenueSeries}
+                      type="area"
+                      height={300}
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Notes Card */}
-              <div className="card">
-                <div className="card-header border-dashed-bottom">
-                  <h5 className="mb-0">Client Portfolio Notes</h5>
-                </div>
-                <div className="card-body">
-                  <p className="mb-0 text-dark bg-light p-4 rounded-3 border-start border-primary border-4 text-justify" style={{ whiteSpace: 'pre-wrap' }}>
-                    {client.notes || 'No notes available for this client portfolio.'}
-                  </p>
+              {/* ROAS by Platform Bar Chart */}
+              <div className="col-xl-5 col-12">
+                <div className="card border-0 shadow-sm rounded-3 h-100">
+                  <div className="card-header bg-transparent border-bottom p-4 d-flex justify-content-between align-items-center">
+                    <div>
+                      <h5 className="mb-1 fw-bold">ROAS by Platform</h5>
+                      <small className="text-secondary">Return on ad spend across channels</small>
+                    </div>
+                    <span className="badge bg-success-subtle text-success-emphasis px-2.5 py-1">Target: 3.0x</span>
+                  </div>
+                  <div className="card-body p-4">
+                    <ApexChart
+                      options={roasChartOptions}
+                      series={roasChartSeries}
+                      type="bar"
+                      height={300}
+                    />
+                  </div>
                 </div>
               </div>
+            </div>
 
-              {/* Platforms & Campaigns Table Card */}
-              <div className="card">
-                <div className="card-header border-dashed-bottom">
-                  <h5 className="mb-0">Linked Platforms & Campaigns</h5>
+            {/* ─── Platforms Barrier / Section Divider ─── */}
+            <div className="d-flex align-items-center gap-3 my-2 no-print">
+              <div className="flex-grow-1 border-top" style={{ borderColor: 'var(--bs-border-color)', opacity: 0.6 }}></div>
+              <div className="d-flex align-items-center gap-2 px-3 py-1.5 bg-body-tertiary border rounded-pill text-body-secondary small fw-semibold shadow-xs">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                  <rect width="7" height="9" x="3" y="3" rx="1" />
+                  <rect width="7" height="5" x="14" y="3" rx="1" />
+                  <rect width="7" height="9" x="14" y="12" rx="1" />
+                  <rect width="7" height="5" x="3" y="16" rx="1" />
+                </svg>
+                <span className="text-uppercase tracking-wider" style={{ fontSize: '0.72rem', letterSpacing: '0.6px' }}>
+                  Platforms Breakdown
+                </span>
+              </div>
+              <div className="flex-grow-1 border-top" style={{ borderColor: 'var(--bs-border-color)', opacity: 0.6 }}></div>
+            </div>
+
+            {/* 2. Platforms Comparison Table with Totals */}
+            <div className="card border-0 shadow-sm rounded-3">
+              <div className="card-header bg-transparent border-bottom p-4 d-flex justify-content-between align-items-center">
+                <div>
+                  <h5 className="mb-1 fw-bold text-body-emphasis">Platforms Comparison</h5>
+                  <small className="text-secondary">Full cross-platform metrics breakdown with summary aggregate</small>
                 </div>
-                <div className="card-body p-0">
-                  <div className="table-responsive">
-                    <table className="table text-nowrap mb-0 table-centered">
-                      <thead className="table-light">
-                        <tr>
-                          <th>Campaign Name</th>
-                          <th>Spend</th>
-                          <th>Revenue</th>
-                          <th>ROAS</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {campaigns.length === 0 ? (
-                          <tr>
-                            <td colSpan="5" className="text-center py-5 text-secondary">
-                              No campaigns linked to this client yet.
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge bg-body-tertiary text-body border px-2.5 py-1">
+                    {connectedPlatformsCount} of {platformEntries.length} Connected
+                  </span>
+                  {disconnectedPlatformsCount > 0 && (
+                    <span className="badge bg-danger-subtle text-danger border border-danger-subtle px-2.5 py-1">
+                      {disconnectedPlatformsCount} Disconnected
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="card-body p-0">
+                <div className="table-responsive">
+                  <table className="table align-middle text-nowrap mb-0 table-hover">
+                    <thead className="table-light bg-body-tertiary">
+                      <tr>
+                        <th className="ps-4 text-body fw-bold">Platform</th>
+                        <th className="text-body fw-bold">Spend</th>
+                        <th className="text-body fw-bold">Revenue</th>
+                        <th className="text-body fw-bold">ROAS</th>
+                        <th className="text-body fw-bold">Impressions</th>
+                        <th className="text-body fw-bold">Clicks</th>
+                        <th className="text-body fw-bold">CTR</th>
+                        <th className="text-body fw-bold">Conversions</th>
+                        <th className="pe-4 text-body fw-bold">CPA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {platformEntries.map(([key, plat]) => {
+                        const isConnected = platformsState[key]?.connected !== false;
+                        const isRef = !!platformRefreshing[key];
+                        return (
+                          <tr
+                            key={key}
+                            className={`platform-row ${!isConnected ? 'table-light-subtle opacity-75' : ''}`}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => setActiveTab(key)}
+                            title={`Click to view detailed ${plat.label} tab${!isConnected ? ' (Disconnected)' : ''}`}
+                          >
+                            <td className="ps-4">
+                              <div className="d-flex align-items-center gap-2">
+                                <span className={`badge rounded-circle p-1.5 ${key === 'meta' ? 'bg-primary' : key === 'google' ? 'bg-danger' : key === 'snapchat' ? 'bg-warning' : 'bg-dark'}`}>
+                                  <span className="visually-hidden">{plat.label}</span>
+                                </span>
+                                <span className="fw-bold text-body-emphasis fs-6">{plat.label}</span>
+                                {!isConnected ? (
+                                  <span className="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-2 py-0.5 d-inline-flex align-items-center gap-1 ms-1" style={{ fontSize: '0.68rem' }}>
+                                    <span className="d-inline-block rounded-circle bg-danger" style={{ width: 5, height: 5 }}></span>
+                                    Disconnected
+                                  </span>
+                                ) : (
+                                  <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle rounded-pill px-1.5 py-0.5 d-inline-flex align-items-center gap-1 ms-1" style={{ fontSize: '0.68rem' }}>
+                                    <span className="d-inline-block rounded-circle bg-success" style={{ width: 5, height: 5 }}></span>
+                                    Active
+                                  </span>
+                                )}
+                              </div>
                             </td>
+                            <td className="fw-semibold text-body-emphasis">
+                              {isConnected ? `$${plat.kpis.spend.toLocaleString()}` : <span className="text-secondary">${plat.kpis.spend.toLocaleString()}</span>}
+                            </td>
+                            <td className="text-success fw-bold">
+                              {isConnected ? `$${plat.kpis.revenue.toLocaleString()}` : <span className="text-secondary">${plat.kpis.revenue.toLocaleString()}</span>}
+                            </td>
+                            <td>
+                              <span className={`badge ${isConnected ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-body-secondary text-secondary border'} fw-bold px-2.5 py-1 fs-6`}>
+                                {plat.kpis.roas.toFixed(2)}x
+                              </span>
+                            </td>
+                            <td className="text-body fw-medium">{plat.kpis.impressions.toLocaleString()}</td>
+                            <td className="text-body fw-medium">{plat.kpis.clicks.toLocaleString()}</td>
+                            <td>
+                              <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle fw-semibold px-2 py-1">
+                                {plat.kpis.ctr.toFixed(2)}%
+                              </span>
+                            </td>
+                            <td className="fw-bold text-body-emphasis">{plat.kpis.conversions.toLocaleString()}</td>
+                            <td className="pe-4 fw-semibold text-body-emphasis">${plat.kpis.cpa.toFixed(2)}</td>
                           </tr>
-                        ) : (
-                          campaigns.map((camp) => (
-                            <tr key={camp.id}>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="table-light bg-body-tertiary border-top border-2 border-secondary-subtle">
+                      <tr className="fw-bold">
+                        <td className="ps-4 text-body-emphasis fs-6">Total / Aggregate</td>
+                        <td className="text-body-emphasis fs-6 fw-bold">${totalSpend.toLocaleString()}</td>
+                        <td className="text-success fs-6 fw-bold">${totalRevenue.toLocaleString()}</td>
+                        <td>
+                          <span className="badge bg-success text-white fw-bold px-2.5 py-1 fs-6 shadow-sm">
+                            {totalRoas.toFixed(2)}x
+                          </span>
+                        </td>
+                        <td className="text-body-emphasis fw-bold">{totalImpressions.toLocaleString()}</td>
+                        <td className="text-body-emphasis fw-bold">{totalClicks.toLocaleString()}</td>
+                        <td>
+                          <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle fw-bold px-2 py-1">
+                            {totalCtr.toFixed(2)}%
+                          </span>
+                        </td>
+                        <td className="text-body-emphasis fs-6 fw-bold">{totalConversions.toLocaleString()}</td>
+                        <td className="pe-4 text-body-emphasis fs-6 fw-bold">${totalCpa.toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* ─── Barrier / Section Divider ─── */}
+            <div className="d-flex align-items-center gap-3 my-2 no-print">
+              <div className="flex-grow-1 border-top" style={{ borderColor: 'var(--bs-border-color)', opacity: 0.6 }}></div>
+              <div className="d-flex align-items-center gap-2 px-3 py-1.5 bg-body-tertiary border rounded-pill text-body-secondary small fw-semibold shadow-xs">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                  <rect x="4" y="4" width="6" height="6" rx="1" />
+                  <rect x="14" y="4" width="6" height="6" rx="1" />
+                  <rect x="4" y="14" width="6" height="6" rx="1" />
+                  <rect x="14" y="14" width="6" height="6" rx="1" />
+                </svg>
+                <span className="text-uppercase tracking-wider" style={{ fontSize: '0.72rem', letterSpacing: '0.6px' }}>
+                  Campaigns Breakdown
+                </span>
+              </div>
+              <div className="flex-grow-1 border-top" style={{ borderColor: 'var(--bs-border-color)', opacity: 0.6 }}></div>
+            </div>
+
+            {/* 3. Campaign Performance Table */}
+            <div className="card border-0 shadow-sm rounded-3">
+              <div className="card-header bg-transparent border-bottom p-4">
+                <div className="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
+                  <div>
+                    <div className="d-flex align-items-center gap-2">
+                      <h5 className="mb-0 fw-bold text-body-emphasis">Campaign Performance</h5>
+                      <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-0.5 small fw-semibold">
+                        {filteredOverviewCampaigns.length} of {allOverviewCampaigns.length} Campaigns
+                      </span>
+                    </div>
+                    <small className="text-secondary">
+                      All advertising campaigns for {client?.companyName || 'this client'} across active channels
+                    </small>
+                  </div>
+                </div>
+                <div className="d-flex align-items-center gap-2 flex-wrap pt-3 border-top">
+                  {/* Search Input */}
+                  <div className="position-relative flex-grow-1" style={{ minWidth: 200, maxWidth: 360 }}>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm ps-4 rounded-2"
+                      placeholder="Search campaign name..."
+                      value={overviewSearchQuery}
+                      onChange={(e) => setOverviewSearchQuery(e.target.value)}
+                      style={{ fontSize: '0.82rem' }}
+                    />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="position-absolute start-0 top-50 translate-middle-y ms-2.5 text-secondary"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    {overviewSearchQuery && (
+                      <button
+                        type="button"
+                        className="btn btn-link btn-sm position-absolute end-0 top-50 translate-middle-y text-secondary text-decoration-none p-0 me-2"
+                        onClick={() => setOverviewSearchQuery('')}
+                        style={{ fontSize: '0.75rem' }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Right-aligned Status Dropdown & Filter Menu */}
+                  <div className="ms-auto d-flex align-items-center gap-2 flex-wrap">
+                    {/* Status Filter */}
+                    <select
+                      className="form-select form-select-sm rounded-2 text-secondary fw-semibold"
+                      value={overviewStatusFilter}
+                      onChange={(e) => setOverviewStatusFilter(e.target.value)}
+                      style={{ width: 'auto', fontSize: '0.82rem' }}
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="active">Active</option>
+                      <option value="paused">Paused</option>
+                      <option value="completed">Completed</option>
+                    </select>
+
+                    {/* Filter Menu Dropdown Button */}
+                    <div className="position-relative" ref={filterMenuRef}>
+                      <button
+                        type="button"
+                        onClick={handleToggleFilterMenu}
+                        className={`btn btn-sm d-inline-flex align-items-center gap-2 px-3 py-1.5 fw-semibold rounded-2 ${
+                          activeOverviewFiltersCount > 0 ? 'btn-primary shadow-sm' : 'btn-outline-secondary'
+                        }`}
+                        title="Toggle filter menu"
+                        aria-expanded={showFilterMenu}
+                        style={{ fontSize: '0.82rem' }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                        <span>Filters</span>
+                        {activeOverviewFiltersCount > 0 && (
+                          <span className="badge bg-white text-primary rounded-pill px-1.5 py-0.5" style={{ fontSize: '0.68rem' }}>
+                            {activeOverviewFiltersCount}
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Dropdown Filter Menu Popover */}
+                      {showFilterMenu && (
+                        <div
+                          className="card border shadow-lg rounded-3 position-absolute end-0 mt-2 bg-body p-3"
+                          style={{
+                            width: 290,
+                            maxWidth: '90vw',
+                            zIndex: 1050,
+                            boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
+                          }}
+                        >
+                          <div className="d-flex align-items-center justify-content-between pb-2 mb-3 border-bottom">
+                            <div className="d-flex align-items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                              </svg>
+                              <span className="fw-bold text-body-emphasis small mb-0">Filter Campaigns</span>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn-close"
+                              onClick={() => setShowFilterMenu(false)}
+                              aria-label="Close"
+                              style={{ fontSize: '0.65rem' }}
+                            ></button>
+                          </div>
+
+                          <form onSubmit={handleApplyFilterMenu}>
+                            <div className="d-flex flex-column gap-2.5">
+                              {/* 1. Platform Filter */}
+                              <div>
+                                <label className="form-label small fw-semibold text-secondary mb-1">Platform</label>
+                                <select
+                                  className="form-select form-select-sm rounded-2 text-body"
+                                  value={draftOverviewFilters.platform}
+                                  onChange={(e) => setDraftOverviewFilters((prev) => ({ ...prev, platform: e.target.value }))}
+                                  style={{ fontSize: '0.82rem' }}
+                                >
+                                  <option value="ALL">All Platforms</option>
+                                  <option value="meta">Meta Ads</option>
+                                  <option value="google">Google Ads</option>
+                                  <option value="snapchat">Snapchat Ads</option>
+                                  <option value="tiktok">TikTok Ads</option>
+                                </select>
+                              </div>
+
+                              {/* 2. Status Filter */}
+                              <div>
+                                <label className="form-label small fw-semibold text-secondary mb-1">Status</label>
+                                <select
+                                  className="form-select form-select-sm rounded-2 text-body"
+                                  value={draftOverviewFilters.status}
+                                  onChange={(e) => setDraftOverviewFilters((prev) => ({ ...prev, status: e.target.value }))}
+                                  style={{ fontSize: '0.82rem' }}
+                                >
+                                  <option value="ALL">All Statuses</option>
+                                  <option value="active">Active</option>
+                                  <option value="paused">Paused</option>
+                                  <option value="completed">Completed</option>
+                                </select>
+                              </div>
+
+                              {/* 3. Objective Filter */}
+                              <div>
+                                <label className="form-label small fw-semibold text-secondary mb-1">Objective</label>
+                                <select
+                                  className="form-select form-select-sm rounded-2 text-body"
+                                  value={draftOverviewFilters.objective}
+                                  onChange={(e) => setDraftOverviewFilters((prev) => ({ ...prev, objective: e.target.value }))}
+                                  style={{ fontSize: '0.82rem' }}
+                                >
+                                  <option value="ALL">All Objectives</option>
+                                  <option value="Sales">Sales</option>
+                                  <option value="Traffic">Traffic</option>
+                                  <option value="Awareness">Awareness</option>
+                                  <option value="Leads">Leads</option>
+                                  <option value="Conversions">Conversions</option>
+                                </select>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="d-flex align-items-center justify-content-between pt-2 border-top mt-1">
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-link text-secondary text-decoration-none p-0 fw-semibold"
+                                  onClick={handleResetFilterMenu}
+                                  style={{ fontSize: '0.78rem' }}
+                                >
+                                  Reset all
+                                </button>
+                                <div className="d-flex gap-2">
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-light border px-2.5 rounded-2"
+                                    onClick={() => setShowFilterMenu(false)}
+                                    style={{ fontSize: '0.78rem' }}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="submit"
+                                    className="btn btn-sm btn-primary px-3 rounded-2 fw-semibold"
+                                    style={{ fontSize: '0.78rem' }}
+                                  >
+                                    Apply
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </form>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Active Filter Chips Bar */}
+                {(overviewSearchQuery || overviewStatusFilter !== 'all' || overviewFilters.platform !== 'ALL' || overviewFilters.status !== 'ALL' || overviewFilters.objective !== 'ALL') && (
+                  <div className="d-flex align-items-center gap-2 flex-wrap pt-2 mt-2 border-top no-print" style={{ fontSize: '0.8rem' }}>
+                    <span className="fw-semibold text-secondary small">Active Filters:</span>
+
+                    {/* Platform Tag */}
+                    {overviewFilters.platform !== 'ALL' && (
+                      <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill d-inline-flex align-items-center gap-1 px-2 py-1">
+                        <span>Platform: {overviewFilters.platform === 'meta' ? 'Meta' : overviewFilters.platform === 'google' ? 'Google' : overviewFilters.platform === 'snapchat' ? 'Snap' : 'TikTok'}</span>
+                        <button
+                          type="button"
+                          className="btn-close btn-close-xs ms-1"
+                          style={{ fontSize: '0.55rem' }}
+                          onClick={() => setOverviewFilters((prev) => ({ ...prev, platform: 'ALL' }))}
+                          aria-label="Remove platform filter"
+                        ></button>
+                      </span>
+                    )}
+
+                    {/* Status Tag */}
+                    {(overviewStatusFilter !== 'all' || overviewFilters.status !== 'ALL') && (
+                      <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle rounded-pill d-inline-flex align-items-center gap-1 px-2 py-1">
+                        <span className="d-inline-block rounded-circle bg-success" style={{ width: 6, height: 6 }}></span>
+                        <span>Status: {overviewFilters.status !== 'ALL' ? overviewFilters.status : overviewStatusFilter}</span>
+                        <button
+                          type="button"
+                          className="btn-close btn-close-xs ms-1"
+                          style={{ fontSize: '0.55rem' }}
+                          onClick={() => {
+                            setOverviewStatusFilter('all');
+                            setOverviewFilters((prev) => ({ ...prev, status: 'ALL' }));
+                          }}
+                          aria-label="Remove status filter"
+                        ></button>
+                      </span>
+                    )}
+
+                    {/* Objective Tag */}
+                    {overviewFilters.objective !== 'ALL' && (
+                      <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle rounded-pill d-inline-flex align-items-center gap-1 px-2 py-1">
+                        <span>Objective: {overviewFilters.objective}</span>
+                        <button
+                          type="button"
+                          className="btn-close btn-close-xs ms-1"
+                          style={{ fontSize: '0.55rem' }}
+                          onClick={() => setOverviewFilters((prev) => ({ ...prev, objective: 'ALL' }))}
+                          aria-label="Remove objective filter"
+                        ></button>
+                      </span>
+                    )}
+
+                    {/* Search Tag */}
+                    {overviewSearchQuery && (
+                      <span className="badge bg-body-tertiary text-body border rounded-pill d-inline-flex align-items-center gap-1 px-2 py-1">
+                        <span>"{overviewSearchQuery}"</span>
+                        <button
+                          type="button"
+                          className="btn-close btn-close-xs ms-1"
+                          style={{ fontSize: '0.55rem' }}
+                          onClick={() => setOverviewSearchQuery('')}
+                          aria-label="Remove search filter"
+                        ></button>
+                      </span>
+                    )}
+
+                    {/* Clear All Link */}
+                    <button
+                      type="button"
+                      className="btn btn-link btn-sm text-danger text-decoration-none p-0 ms-auto fw-semibold"
+                      style={{ fontSize: '0.78rem' }}
+                      onClick={handleResetFilterMenu}
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="card-body p-0">
+                <div className="table-responsive">
+                  <table className="table align-middle mb-0 table-hover w-100">
+                    <thead className="table-light bg-body-tertiary">
+                      <tr>
+                        <th className="ps-4 text-body fw-bold" style={{ minWidth: 180, maxWidth: 260 }}>Campaign</th>
+                        <th className="text-body fw-bold" style={{ width: 80 }}>Platform</th>
+                        <th className="text-body fw-bold" style={{ width: 100 }}>Status</th>
+                        <th className="text-body fw-bold" style={{ width: 110 }}>Objective</th>
+
+                        {/* Spend Header (Click to Sort) */}
+                        <th
+                          className={`fw-bold user-select-none text-nowrap ${overviewSortField === 'spend' ? 'text-primary' : 'text-body'}`}
+                          style={{ cursor: 'pointer', width: 100 }}
+                          onClick={() => handleOverviewSort('spend')}
+                          title="Click to sort by Spend"
+                        >
+                          <div className="d-inline-flex align-items-center gap-1">
+                            <span>Spend</span>
+                            {renderSortIndicator('spend')}
+                          </div>
+                        </th>
+
+                        {/* Revenue Header (Click to Sort) */}
+                        <th
+                          className={`fw-bold user-select-none text-nowrap ${overviewSortField === 'revenue' ? 'text-primary' : 'text-body'}`}
+                          style={{ cursor: 'pointer', width: 100 }}
+                          onClick={() => handleOverviewSort('revenue')}
+                          title="Click to sort by Revenue"
+                        >
+                          <div className="d-inline-flex align-items-center gap-1">
+                            <span>Revenue</span>
+                            {renderSortIndicator('revenue')}
+                          </div>
+                        </th>
+
+                        {/* ROAS Header (Click to Sort) */}
+                        <th
+                          className={`fw-bold user-select-none text-nowrap ${overviewSortField === 'roas' ? 'text-primary' : 'text-body'}`}
+                          style={{ cursor: 'pointer', width: 80 }}
+                          onClick={() => handleOverviewSort('roas')}
+                          title="Click to sort by ROAS"
+                        >
+                          <div className="d-inline-flex align-items-center gap-1">
+                            <span>ROAS</span>
+                            {renderSortIndicator('roas')}
+                          </div>
+                        </th>
+
+                        {/* Start Date Header (Click to Sort) */}
+                        <th
+                          className={`text-center fw-bold user-select-none text-nowrap ${overviewSortField === 'startDate' ? 'text-primary' : 'text-body'}`}
+                          style={{ cursor: 'pointer', width: 110 }}
+                          onClick={() => handleOverviewSort('startDate')}
+                          title="Click to sort by Start Date"
+                        >
+                          <div className="d-inline-flex align-items-center gap-1 justify-content-center w-100">
+                            <span>Start Date</span>
+                            {renderSortIndicator('startDate')}
+                          </div>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleCampaigns.length === 0 ? (
+                        <tr>
+                          <td colSpan="8" className="text-center py-4 text-secondary">
+                            No campaigns match your search or selected filters.
+                          </td>
+                        </tr>
+                      ) : (
+                        visibleCampaigns.map((camp) => {
+                          const statusBadge =
+                            camp.status === 'Active'
+                              ? 'bg-success-subtle text-success-emphasis border-success-subtle'
+                              : camp.status === 'Paused'
+                                ? 'bg-warning-subtle text-warning-emphasis border-warning-subtle'
+                                : 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle';
+
+                          return (
+                            <tr
+                              key={camp.id}
+                              className="platform-row"
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => setActiveTab(camp.platformKey)}
+                              title={`Click to view ${camp.platformLabel} tab`}
+                            >
+                              {/* 1. Campaign Name */}
+                              <td className="ps-4" style={{ maxWidth: 260 }}>
+                                <span
+                                  className="fw-bold text-body text-truncate d-block"
+                                  style={{
+                                    color: 'var(--bs-heading-color, var(--bs-body-color))',
+                                    fontSize: '0.88rem',
+                                    letterSpacing: '-0.01em',
+                                    maxWidth: 240,
+                                  }}
+                                  title={camp.name}
+                                >
+                                  {camp.name}
+                                </span>
+                              </td>
+
+                              {/* 2. Platform */}
                               <td>
-                                <div>
-                                  <h6 className="mb-0">{camp.name}</h6>
-                                  <small className="text-secondary">Platform: {platforms.find(p => p.id === camp.platformId)?.platformType ?? 'Digital Ad'}</small>
+                                <div
+                                  className="d-inline-flex align-items-center justify-content-center rounded-2 border shadow-2xs"
+                                  style={{
+                                    width: 32,
+                                    height: 32,
+                                    backgroundColor:
+                                      camp.platformKey === 'meta'
+                                        ? 'rgba(24, 119, 242, 0.08)'
+                                        : camp.platformKey === 'google'
+                                          ? 'rgba(234, 67, 53, 0.08)'
+                                          : camp.platformKey === 'snapchat'
+                                            ? 'rgba(234, 179, 8, 0.12)'
+                                            : 'rgba(24, 24, 27, 0.08)',
+                                    borderColor:
+                                      camp.platformKey === 'meta'
+                                        ? 'rgba(24, 119, 242, 0.2)'
+                                        : camp.platformKey === 'google'
+                                          ? 'rgba(234, 67, 53, 0.2)'
+                                          : camp.platformKey === 'snapchat'
+                                            ? 'rgba(234, 179, 8, 0.25)'
+                                            : 'rgba(63, 63, 70, 0.2)',
+                                  }}
+                                  title={camp.platformLabel}
+                                  aria-label={camp.platformLabel}
+                                >
+                                  {getPlatformLogo(camp.platformKey)}
                                 </div>
                               </td>
-                              <td>{camp.spend?.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</td>
-                              <td>{camp.revenue?.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</td>
-                              <td><span className="fw-bold">{camp.roas?.toFixed(2)}x</span></td>
+
+                              {/* 3. Status */}
                               <td>
-                                <span className={camp.status === 'Active' || camp.status === 0 ? 'badge text-success-emphasis bg-success-subtle' : 'badge text-secondary-emphasis bg-secondary-subtle'}>
+                                <span className={`badge rounded-pill border px-2 py-0.5 fw-semibold d-inline-flex align-items-center gap-1 ${statusBadge}`} style={{ fontSize: '0.72rem' }}>
+                                  <span className={`d-inline-block rounded-circle ${camp.status === 'Active' ? 'bg-success' : camp.status === 'Paused' ? 'bg-warning' : 'bg-secondary'}`} style={{ width: 5, height: 5 }}></span>
                                   {camp.status}
                                 </span>
                               </td>
+
+                              {/* 4. Objective */}
+                              <td>
+                                <span className="badge bg-body-tertiary text-body border fw-semibold px-2.5 py-1" style={{ fontSize: '0.74rem' }}>
+                                  {camp.objective || 'Conversions'}
+                                </span>
+                              </td>
+
+                              {/* 5. Spend (danger) */}
+                              <td className="fw-bold text-danger text-nowrap" style={{ fontSize: '0.92rem' }}>
+                                ${camp.spend.toLocaleString()}
+                              </td>
+
+                              {/* 6. Revenue (success) */}
+                              <td className="fw-bold text-success text-nowrap" style={{ fontSize: '0.92rem' }}>
+                                ${camp.revenue.toLocaleString()}
+                              </td>
+
+                              {/* 7. ROAS */}
+                              <td className="text-nowrap">
+                                <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold px-2.5 py-1 fs-6">
+                                  {camp.roas.toFixed(1)}x
+                                </span>
+                              </td>
+
+                              {/* 8. Start Date */}
+                              <td className="text-center fw-medium text-body-secondary text-nowrap" style={{ fontSize: '0.85rem' }}>
+                                {camp.startDate || '01/07/26'}
+                              </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
+              <div className="card-footer bg-transparent border-top p-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span className="text-secondary small">
+                  Showing {visibleCampaigns.length} campaigns for {client?.companyName || 'this client'}
+                </span>
+              </div>
+            </div>
 
+          </div>
+        )}
+
+        {/* === PLATFORM TABS (Meta, Google, Snapchat, TikTok) === */}
+        {['meta', 'google', 'snapchat', 'tiktok'].includes(activeTab) && (
+          <PlatformTabContent
+            platform={clientPlatformPerformance[activeTab]}
+            platformKey={activeTab}
+            connectionState={platformsState[activeTab] || { connected: true, accountId: 'act_948291048', lastSync: '10m ago', lastSyncDate: 'Aug 18, 2026, 04:30 PM' }}
+            onReconnect={() => handleReconnectPlatform(activeTab)}
+            onRefresh={() => handleRefreshPlatform(activeTab)}
+            isRefreshing={!!platformRefreshing[activeTab]}
+            dateRange={dateRange}
+            clientName={client?.companyName}
+            clientId={id}
+            clientMultiplier={(clientKPIs?.totalSpend?.value || 45200) / 45200}
+          />
+        )}
+
+        {/* === INSIGHTS TAB === */}
+        {activeTab === 'insights' && (
+          <div>
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <h5 className="fw-bold mb-0">AI-Powered Insights & Recommendations</h5>
+              <span className="badge bg-primary-subtle text-primary-emphasis">{mockClientInsights.length} insights</span>
+            </div>
+            <div className="row g-4">
+              {mockClientInsights.map((insight) => (
+                <div key={insight.id} className="col-lg-6">
+                  <div className={`card border-0 shadow-sm rounded-3 insight-card priority-${insight.priority.toLowerCase()} h-100`}>
+                    <div className="card-body p-4">
+                      <div className="d-flex justify-content-between align-items-start mb-4 pb-2">
+                        <div className="d-flex align-items-center gap-2">
+                          <span className={`badge ${insight.priority === 'High' ? 'bg-danger' : insight.priority === 'Medium' ? 'bg-warning text-dark' : 'bg-info'}`}>{insight.priority}</span>
+                          <span className="badge bg-light text-dark border">{insight.category}</span>
+                        </div>
+                        <span className="badge bg-light text-secondary border small">{mockPlatformPerformance[insight.platform]?.label || insight.platform}</span>
+                      </div>
+                      <h6 className="fw-bold mb-2">{insight.title}</h6>
+                      <p className="text-secondary small mb-3" style={{ lineHeight: 1.6 }}>{insight.description}</p>
+                      <div className="d-flex align-items-center gap-2 bg-success-subtle text-success-emphasis px-3 py-2 rounded-2 small fw-semibold">
+                        <IconUp /> {insight.impact}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
+        )}
 
-          {/* Right Column (4-col) */}
-          <div className="col-xl-4 col-lg-5 col-12">
-            <div className="d-flex flex-column gap-6">
-              
-              {/* Status Display Card */}
-              <div className="card text-center py-5 px-4">
-                <div className="card-body d-flex flex-column align-items-center gap-3">
-                  <span className="text-secondary small uppercase fw-bold tracking-wider">Client Status</span>
-                  {getStatusBadge(client.status)}
+        {/* === NOTES TAB === */}
+        {activeTab === 'notes' && (
+          <div>
+            <h5 className="fw-bold mb-4">Client Notes</h5>
+
+            {/* Add Note Form */}
+            <div className="card border-0 shadow-sm rounded-3 mb-4 no-print">
+              <div className="card-body p-4">
+                <div className="d-flex gap-3">
+                  <div className="avatar bg-primary-subtle text-primary rounded-circle d-flex align-items-center justify-content-center fw-bold" style={{ width: 40, height: 40, minWidth: 40 }}>Y</div>
+                  <div className="flex-grow-1">
+                    <textarea
+                      className="form-control border-0 bg-light rounded-3 mb-2"
+                      rows={3}
+                      placeholder="Add a note about this client..."
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                    />
+                    <div className="text-end">
+                      <button className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleAddNote} disabled={!newNote.trim()}>
+                        <IconSend /> Post Note
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
+            </div>
 
-              {/* Manager Card */}
-              {manager && (
-                <div className="card">
-                  <div className="card-header border-dashed-bottom">
-                    <h5 className="mb-0">Assigned Account Manager</h5>
-                  </div>
-                  <div className="card-body text-center py-6">
-                    <div className="avatar avatar-xl bg-info-subtle text-info rounded-circle d-flex align-items-center justify-content-center fw-bold fs-3 mx-auto mb-4" style={{ width: '80px', height: '80px' }}>
-                      {manager.firstName ? manager.firstName.charAt(0).toUpperCase() : manager.userName.charAt(0).toUpperCase()}
-                    </div>
-                    <h5 className="mb-1">{manager.firstName ? `${manager.firstName} ${manager.lastName || ''}`.trim() : manager.userName}</h5>
-                    <span className="badge bg-info-subtle text-info-emphasis mb-4">
-                      {manager.role === 0 ? 'Administrator' : manager.role === 1 ? 'Manager' : 'User'}
-                    </span>
-                    
-                    <hr className="my-4 border-dashed" />
-                    
-                    <div className="text-start d-flex flex-column gap-3">
-                      <div>
-                        <small className="text-secondary d-block">Email Address</small>
-                        <span className="fw-semibold text-break">{manager.email}</span>
+            {/* Notes Timeline */}
+            <div className="d-flex flex-column gap-3">
+              {notes.length === 0 ? (
+                <div className="text-center py-5 text-secondary">No notes yet. Be the first to add one!</div>
+              ) : notes.map((note) => (
+                <div key={note.id} className="card border-0 shadow-sm rounded-3">
+                  <div className="card-body p-4">
+                    <div className="d-flex gap-3">
+                      <div className="avatar bg-info-subtle text-info rounded-circle d-flex align-items-center justify-content-center fw-bold" style={{ width: 40, height: 40, minWidth: 40 }}>
+                        {note.authorAvatar}
                       </div>
-                      <div>
-                        <small className="text-secondary d-block">Phone Number</small>
-                        <span className="fw-semibold">{manager.phoneNumber || 'N/A'}</span>
-                      </div>
-                      <div>
-                        <small className="text-secondary d-block">User Account ID</small>
-                        <code className="small text-secondary">{manager.id}</code>
+                      <div className="flex-grow-1">
+                        <div className="d-flex justify-content-between align-items-center mb-2">
+                          <span className="fw-bold small">{note.author}</span>
+                          <span className="text-secondary small">{new Date(note.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <p className="mb-0 small text-dark" style={{ lineHeight: 1.7 }}>{note.content}</p>
                       </div>
                     </div>
                   </div>
                 </div>
-              )}
+              ))}
+            </div>
+          </div>
+        )}
 
+      </div>
+
+      {/* ─── Edit Client Modal ──────────────────────────────────── */}
+      {showEditModal && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1060 }}
+          tabIndex="-1"
+          onClick={() => setShowEditModal(false)}
+        >
+          <div className="modal-dialog modal-dialog-centered modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg rounded-3">
+              <div className="modal-header border-bottom p-4">
+                <div className="d-flex align-items-center gap-2">
+                  <div className="avatar bg-primary-subtle text-primary rounded-2 p-2 d-flex align-items-center justify-content-center">
+                    <IconEdit />
+                  </div>
+                  <div>
+                    <h5 className="modal-title fw-bold mb-0">Edit Client Information</h5>
+                    <small className="text-secondary">Update company portfolio, contacts, and manager details</small>
+                  </div>
+                </div>
+                <button type="button" className="btn-close" onClick={() => setShowEditModal(false)} aria-label="Close"></button>
+              </div>
+
+              <form onSubmit={handleSaveEdit}>
+                <div className="modal-body p-4">
+                  {editError && <div className="alert alert-danger mb-3 py-2 px-3 small">{editError}</div>}
+
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">
+                        Company Name <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.companyName}
+                        onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                        placeholder="e.g. Acme Corp"
+                        required
+                      />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">
+                        Website <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.website}
+                        onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                        placeholder="https://acme.com"
+                        required
+                      />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">
+                        Email <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        className="form-control"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="contact@acme.com"
+                        required
+                      />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label small fw-semibold">
+                        Phone <span className="text-danger">*</span>
+                      </label>
+                      <div className="input-group">
+                        <select
+                          className="form-select"
+                          style={{ maxWidth: '110px' }}
+                          value={formData.countryCode || '+1'}
+                          onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
+                        >
+                          <option value="+1">🇺🇸 +1</option>
+                          <option value="+44">🇬🇧 +44</option>
+                          <option value="+49">🇩🇪 +49</option>
+                          <option value="+33">🇫🇷 +33</option>
+                          <option value="+91">🇮🇳 +91</option>
+                          <option value="+61">🇦🇺 +61</option>
+                          <option value="+971">🇦🇪 +971</option>
+                          <option value="+966">🇸🇦 +966</option>
+                          <option value="+81">🇯🇵 +81</option>
+                          <option value="+86">🇨🇳 +86</option>
+                          <option value="+55">🇧🇷 +55</option>
+                          <option value="+20">🇪🇬 +20</option>
+                        </select>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          placeholder="555-0199"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold">
+                        Country <span className="text-danger">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.country}
+                        onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                        placeholder="United States"
+                        required
+                      />
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold">Currency</label>
+                      <select
+                        className="form-select"
+                        value={formData.currency}
+                        onChange={(e) => setFormData({ ...formData, currency: parseInt(e.target.value, 10) })}
+                      >
+                        {currencies.map((curr, idx) => (
+                          <option key={curr || idx} value={idx}>
+                            {curr}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold">Status</label>
+                      <select
+                        className="form-select"
+                        value={formData.status}
+                        onChange={(e) => setFormData({ ...formData, status: parseInt(e.target.value, 10) })}
+                      >
+                        {statuses.map((st, idx) => (
+                          <option key={st || idx} value={idx}>
+                            {st}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="col-md-12">
+                      <label className="form-label small fw-semibold">Assigned Manager</label>
+                      <select
+                        className="form-select"
+                        value={formData.managerId}
+                        onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
+                      >
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : u.userName} ({u.email})
+                          </option>
+                        ))}
+                        {users.length === 0 && <option value="admin">System Admin (admin@dashboard.com)</option>}
+                      </select>
+                    </div>
+
+                    <div className="col-md-12">
+                      <label className="form-label small fw-semibold">Notes</label>
+                      <textarea
+                        className="form-control"
+                        rows="3"
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        placeholder="Additional details, strategic directives..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer border-top p-3 bg-light">
+                  <button type="button" className="btn btn-outline-secondary btn-sm px-3" onClick={() => setShowEditModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary btn-sm px-4 d-inline-flex align-items-center gap-2" disabled={editLoading}>
+                    {editLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ─── Target Settings Modal (Modern, Simple & Streamlined) ── */}
+      {showTargetModal && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 1070 }}
+          tabIndex="-1"
+          onClick={() => setShowTargetModal(false)}
+        >
+          <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-xl rounded-4 overflow-hidden">
+              {/* Modal Header */}
+              <div className="modal-header border-bottom px-4 py-3 bg-body-tertiary">
+                <div className="d-flex align-items-center" style={{ gap: '14px' }}>
+                  <div className="avatar bg-primary text-white rounded-3 d-flex align-items-center justify-content-center shadow-xs flex-shrink-0" style={{ width: 36, height: 36, marginRight: '2px' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <circle cx="12" cy="12" r="6"/>
+                      <circle cx="12" cy="12" r="2"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h5 className="modal-title fw-bold mb-0 text-body-emphasis" style={{ fontSize: '1.05rem' }}>Edit Targets</h5>
+                    <div className="text-secondary small" style={{ fontSize: '0.74rem' }}>{client?.companyName}</div>
+                  </div>
+                </div>
+                <button type="button" className="btn-close" onClick={() => setShowTargetModal(false)} aria-label="Close"></button>
+              </div>
+
+              <form onSubmit={handleSaveTargets}>
+                <div className="modal-body px-4 py-3.5 d-flex flex-column" style={{ gap: '16px' }}>
+                  {targetError && <div className="alert alert-danger mb-0 py-2 px-3 small rounded-3">{targetError}</div>}
+
+                  {/* ─── Business Model Selector (Modern Segmented Pill) ─── */}
+                  <div>
+                    <label className="form-label small fw-semibold text-secondary mb-1.5" style={{ fontSize: '0.78rem' }}>Business Model</label>
+                    <div className="d-flex p-1 bg-body-tertiary rounded-3 border">
+                      <button
+                        type="button"
+                        className={`btn btn-sm flex-fill rounded-2 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 border-0 ${
+                          targetFormData.businessModel === 'ecommerce'
+                            ? 'btn-primary shadow-xs'
+                            : 'btn-ghost text-body-secondary'
+                        }`}
+                        style={{ fontSize: '0.84rem' }}
+                        onClick={() => {
+                          setTargetFormData((prev) => ({
+                            ...prev,
+                            businessModel: 'ecommerce',
+                            mainConversionEvent: prev.mainConversionEvent === 'Form Submissions' || prev.mainConversionEvent === 'Qualified Leads' ? 'Purchases' : prev.mainConversionEvent,
+                          }));
+                        }}
+                      >
+                        <span>🛍️</span>
+                        <span>E-Commerce</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn btn-sm flex-fill rounded-2 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 border-0 ${
+                          targetFormData.businessModel === 'lead_generation'
+                            ? 'btn-primary shadow-xs'
+                            : 'btn-ghost text-body-secondary'
+                        }`}
+                        style={{ fontSize: '0.84rem' }}
+                        onClick={() => {
+                          setTargetFormData((prev) => ({
+                            ...prev,
+                            businessModel: 'lead_generation',
+                            mainConversionEvent: prev.mainConversionEvent === 'Purchases' || prev.mainConversionEvent === 'Add to Cart' ? 'Qualified Leads' : prev.mainConversionEvent,
+                          }));
+                        }}
+                      >
+                        <span>🎯</span>
+                        <span>Lead Generation</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ─── Main Conversion Event ─── */}
+                  <div>
+                    <label className="form-label small fw-semibold text-secondary mb-1.5" style={{ fontSize: '0.78rem' }}>Conversion Event</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={targetFormData.mainConversionEvent}
+                      onChange={(e) => setTargetFormData({ ...targetFormData, mainConversionEvent: e.target.value })}
+                      placeholder="e.g. Purchases, Leads, Bookings"
+                      required
+                    />
+                    <div className="d-flex align-items-center flex-wrap" style={{ marginTop: '10px', gap: '8px' }}>
+                      {(targetFormData.businessModel === 'ecommerce'
+                        ? ['Purchases', 'Add to Cart', 'Initiate Checkout']
+                        : ['Qualified Leads', 'Form Submissions', 'Bookings']
+                      ).map((evt) => (
+                        <button
+                          key={evt}
+                          type="button"
+                          className={`btn btn-xs rounded-pill px-2.5 py-1 ${targetFormData.mainConversionEvent === evt ? 'btn-primary' : 'btn-outline-secondary'}`}
+                          style={{ fontSize: '0.72rem' }}
+                          onClick={() => setTargetFormData({ ...targetFormData, mainConversionEvent: evt })}
+                        >
+                          {evt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* ─── Monthly Budget & Currency ─── */}
+                  <div className="row g-2.5">
+                    <div className="col-sm-7">
+                      <label className="form-label small fw-semibold text-secondary mb-1" style={{ fontSize: '0.78rem' }}>Monthly Budget</label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-body-tertiary fw-semibold">
+                          {getCurrencySymbol(targetFormData.currency)}
+                        </span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          className="form-control fw-bold"
+                          value={targetFormData.monthlyBudget}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const num = Number(val) || 0;
+                            const roas = Number(targetFormData.targetRoas) || 4.0;
+                            const cpa = Number(targetFormData.targetCpa) || 5.5;
+                            setTargetFormData({
+                              ...targetFormData,
+                              monthlyBudget: val,
+                              targetRevenue: Math.round(num * roas),
+                              targetConversions: Math.round(num / Math.max(0.1, cpa)),
+                            });
+                          }}
+                          placeholder="50000"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="col-sm-5">
+                      <label className="form-label small fw-semibold text-secondary mb-1" style={{ fontSize: '0.78rem' }}>Currency</label>
+                      <select
+                        className="form-select fw-semibold"
+                        value={targetFormData.currency || 'USD'}
+                        onChange={(e) => setTargetFormData({ ...targetFormData, currency: e.target.value })}
+                      >
+                        <option value="USD">USD ($)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="GBP">GBP (£)</option>
+                        <option value="AED">AED (AED)</option>
+                        <option value="SAR">SAR (SAR)</option>
+                        <option value="CAD">CAD (C$)</option>
+                        <option value="AUD">AUD (A$)</option>
+                        <option value="EGP">EGP (EGP)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* ─── Target ROAS & Target CPA ─── */}
+                  <div className="row g-2.5">
+                    <div className="col-sm-6">
+                      <label className="form-label small fw-semibold text-secondary mb-1" style={{ fontSize: '0.78rem' }}>Target ROAS</label>
+                      <div className="input-group">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0.1"
+                          className="form-control fw-bold text-success"
+                          value={targetFormData.targetRoas}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const num = Number(val) || 0;
+                            const budget = Number(targetFormData.monthlyBudget) || 50000;
+                            setTargetFormData({
+                              ...targetFormData,
+                              targetRoas: val,
+                              targetRevenue: Math.round(budget * num),
+                            });
+                          }}
+                          placeholder="4.0"
+                          required
+                        />
+                        <span className="input-group-text bg-body-tertiary fw-semibold">x</span>
+                      </div>
+                    </div>
+                    <div className="col-sm-6">
+                      <label className="form-label small fw-semibold text-secondary mb-1" style={{ fontSize: '0.78rem' }}>Target CPA</label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-body-tertiary fw-semibold">
+                          {getCurrencySymbol(targetFormData.currency)}
+                        </span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0.01"
+                          className="form-control fw-bold text-danger"
+                          value={targetFormData.targetCpa}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const num = Number(val) || 0;
+                            const budget = Number(targetFormData.monthlyBudget) || 50000;
+                            setTargetFormData({
+                              ...targetFormData,
+                              targetCpa: val,
+                              targetConversions: Math.round(budget / Math.max(0.1, num)),
+                            });
+                          }}
+                          placeholder="5.50"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ─── Projected Revenue & Projected Conversions (Editable Inputs) ─── */}
+                  <div className="row g-2.5">
+                    {/* Projected Revenue Input */}
+                    <div className="col-sm-6">
+                      <label className="form-label small fw-semibold text-secondary mb-1" style={{ fontSize: '0.78rem' }}>
+                        Projected Revenue
+                      </label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-body-tertiary fw-semibold text-success">
+                          {getCurrencySymbol(targetFormData.currency)}
+                        </span>
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          className="form-control fw-bold text-success"
+                          value={targetFormData.targetRevenue}
+                          onChange={(e) => setTargetFormData({ ...targetFormData, targetRevenue: e.target.value })}
+                          placeholder="200000"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {/* Projected Conversions Input */}
+                    <div className="col-sm-6">
+                      <label className="form-label small fw-semibold text-secondary mb-1" style={{ fontSize: '0.78rem' }}>
+                        Projected Conversions
+                      </label>
+                      <div className="input-group">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          className="form-control fw-bold text-info"
+                          value={targetFormData.targetConversions}
+                          onChange={(e) => setTargetFormData({ ...targetFormData, targetConversions: e.target.value })}
+                          placeholder="9000"
+                          required
+                        />
+                        <span className="input-group-text bg-body-tertiary text-secondary small" style={{ fontSize: '0.74rem' }}>
+                          {targetFormData.mainConversionEvent || 'events'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="modal-footer border-top px-4 py-2.5 bg-body-tertiary d-flex justify-content-end gap-2">
+                  <button type="button" className="btn btn-outline-secondary btn-sm px-3" onClick={() => setShowTargetModal(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary btn-sm px-4 fw-semibold" disabled={targetSaving}>
+                    {targetSaving ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-1.5" role="status" aria-hidden="true"></span>
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <span>Save Targets</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Toast Notification ─────────────────────────────────── */}
+      {toastMsg && (
+        <div className="position-fixed bottom-0 end-0 m-4 no-print" style={{ zIndex: 1090 }}>
+          <div className="alert alert-success d-flex align-items-center gap-2 shadow-lg mb-0 rounded-3 py-2 px-3 small">
+            <IconCheck /> {toastMsg}
+          </div>
+        </div>
+      )}
     </DashboardLayout>
+  );
+}
+
+
+// ════════════════════════════════════════════════════════════════════
+// PLATFORM TAB SUB-COMPONENT
+// ════════════════════════════════════════════════════════════════════
+
+function PlatformTabContent({ platform, platformKey, connectionState, onReconnect, onRefresh, isRefreshing, dateRange, clientName, clientId, clientMultiplier = 1 }) {
+  if (!platform) return <div className="text-center py-5 text-secondary">No data available for this platform.</div>;
+
+  const isConnected = connectionState?.connected !== false;
+  const rawKpis = platform.kpis;
+  const isSnapchat = platformKey === 'snapchat';
+  const isTikTok = platformKey === 'tiktok';
+  const isGoogle = platformKey === 'google';
+  const isMeta = platformKey === 'meta';
+
+  // Client-scaled platform metrics (specific to this client and platform only)
+  const kpis = {
+    spend: Math.round((rawKpis.spend || 0) * clientMultiplier),
+    conversions: Math.round((rawKpis.conversions || 0) * clientMultiplier),
+    clicks: Math.round((rawKpis.clicks || 0) * clientMultiplier),
+    impressions: Math.round((rawKpis.impressions || 0) * clientMultiplier),
+    roas: rawKpis.roas || 0,
+    cpa: rawKpis.cpa || 0,
+    ctr: rawKpis.ctr || 0,
+    videoViews: rawKpis.videoViews ? Math.round(rawKpis.videoViews * clientMultiplier) : undefined,
+    engagementRate: rawKpis.engagementRate,
+    swipeUps: rawKpis.swipeUps ? Math.round(rawKpis.swipeUps * clientMultiplier) : undefined,
+    storyViews: rawKpis.storyViews ? Math.round(rawKpis.storyViews * clientMultiplier) : undefined,
+    avgQualityScore: rawKpis.avgQualityScore,
+    searchImprShare: rawKpis.searchImprShare,
+  };
+
+  // Platform-specific default pinned KPIs
+  const defaultPinnedMap = {
+    meta: ['spend', 'roas', 'conversions', 'cpa', 'ctr'],
+    google: ['spend', 'roas', 'conversions', 'searchImprShare', 'avgQualityScore'],
+    tiktok: ['spend', 'videoViews', 'engagementRate', 'conversions', 'roas'],
+    snapchat: ['spend', 'swipeUps', 'storyViews', 'conversions', 'roas'],
+  };
+
+  const [showKPISelector, setShowKPISelector] = useState(false);
+  const [pinnedKPIs, setPinnedKPIs] = useState(defaultPinnedMap[platformKey] || ['spend', 'roas', 'conversions', 'cpa', 'ctr']);
+  const [searchTermQuery, setSearchTermQuery] = useState('');
+
+  // Click outside handler for platform KPI selector dropdown
+  useEffect(() => {
+    if (!showKPISelector) return;
+    const handleOutsideClick = (e) => {
+      const selector = e.target.closest('.platform-kpi-selector-container');
+      if (!selector) setShowKPISelector(false);
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [showKPISelector]);
+
+  // Strictly platform-specific metrics (No cross-channel totals or overall revenue)
+  let availablePlatformKPIs = [];
+  if (isMeta) {
+    availablePlatformKPIs = [
+      { key: 'spend', label: 'Meta Ad Spend', format: 'currency', color: 'danger', change: 6.4 },
+      { key: 'roas', label: 'Meta ROAS', format: 'multiplier', color: 'primary', change: 3.8 },
+      { key: 'conversions', label: 'Meta Purchases / Results', format: 'number', color: 'success', change: 14.2 },
+      { key: 'cpa', label: 'Cost per Result (CPA)', format: 'currency', color: 'warning', change: -4.1 },
+      { key: 'ctr', label: 'Link CTR', format: 'percent', color: 'info', change: 8.5 },
+      { key: 'clicks', label: 'Meta Link Clicks', format: 'number', color: 'primary', change: 12.0 },
+      { key: 'impressions', label: 'Meta Impressions', format: 'number', color: 'info', change: 9.3 },
+    ];
+  } else if (isGoogle) {
+    availablePlatformKPIs = [
+      { key: 'spend', label: 'Google Ad Spend', format: 'currency', color: 'danger', change: 5.1 },
+      { key: 'roas', label: 'Search & Shopping ROAS', format: 'multiplier', color: 'primary', change: 7.2 },
+      { key: 'conversions', label: 'Google Conversions', format: 'number', color: 'success', change: 11.8 },
+      { key: 'searchImprShare', label: 'Search Impr. Share', format: 'percent', color: 'info', change: 3.4 },
+      { key: 'avgQualityScore', label: 'Avg Quality Score', format: 'score', color: 'primary', change: 4.0 },
+      { key: 'cpa', label: 'Cost per Conv. (CPA)', format: 'currency', color: 'warning', change: -6.2 },
+      { key: 'ctr', label: 'Google Search CTR', format: 'percent', color: 'info', change: 5.8 },
+      { key: 'clicks', label: 'Search Ad Clicks', format: 'number', color: 'primary', change: 10.4 },
+      { key: 'impressions', label: 'Search Impressions', format: 'number', color: 'info', change: 8.1 },
+    ];
+  } else if (isTikTok) {
+    availablePlatformKPIs = [
+      { key: 'spend', label: 'TikTok Ad Spend', format: 'currency', color: 'danger', change: 12.8 },
+      { key: 'videoViews', label: 'TikTok Video Views', format: 'millions', color: 'danger', change: 22.4 },
+      { key: 'engagementRate', label: 'Video Engagement Rate', format: 'percent', color: 'success', change: 1.2 },
+      { key: 'conversions', label: 'TikTok Purchases / Conv.', format: 'number', color: 'success', change: 18.5 },
+      { key: 'roas', label: 'TikTok ROAS', format: 'multiplier', color: 'primary', change: 4.0 },
+      { key: 'cpa', label: 'Cost per Acquisition', format: 'currency', color: 'warning', change: -7.4 },
+      { key: 'clicks', label: 'TikTok Ad Clicks', format: 'number', color: 'primary', change: 15.2 },
+      { key: 'ctr', label: 'TikTok Ad CTR', format: 'percent', color: 'info', change: 6.1 },
+    ];
+  } else if (isSnapchat) {
+    availablePlatformKPIs = [
+      { key: 'spend', label: 'Snapchat Ad Spend', format: 'currency', color: 'danger', change: 4.2 },
+      { key: 'swipeUps', label: 'Direct Swipe-Ups', format: 'number', color: 'warning', change: 16.1 },
+      { key: 'storyViews', label: 'Story & Lens Views', format: 'millions', color: 'info', change: 18.7 },
+      { key: 'conversions', label: 'Snapchat Conversions', format: 'number', color: 'success', change: 9.4 },
+      { key: 'roas', label: 'Snapchat ROAS', format: 'multiplier', color: 'primary', change: 2.1 },
+      { key: 'cpa', label: 'Cost per Swipe/Conv', format: 'currency', color: 'warning', change: -5.0 },
+      { key: 'clicks', label: 'Snapchat Clicks', format: 'number', color: 'primary', change: 8.6 },
+      { key: 'ctr', label: 'Swipe-Up Rate (CTR)', format: 'percent', color: 'info', change: 4.3 },
+    ];
+  }
+
+  const toggleKPI = (key) => {
+    setPinnedKPIs((prev) => {
+      if (prev.includes(key)) return prev.filter((k) => k !== key);
+      if (prev.length >= 5) return prev;
+      return [...prev, key];
+    });
+  };
+
+  const formatValue = (val, format) => {
+    if (val === undefined || val === null) return '—';
+    switch (format) {
+      case 'currency': return `$${Number(val).toLocaleString(undefined, { minimumFractionDigits: val % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })}`;
+      case 'multiplier': return `${Number(val).toFixed(2)}x`;
+      case 'percent': return `${Number(val).toFixed(2)}%`;
+      case 'score': return `${Number(val).toFixed(1)} / 10`;
+      case 'millions': return `${(Number(val) / 1000000).toFixed(2)}M`;
+      case 'number': return Number(val).toLocaleString();
+      default: return String(val);
+    }
+  };
+
+  return (
+    <div>
+      {/* Simple, Friendly Disconnection Notice */}
+      {!isConnected && (
+        <div className="alert bg-warning-subtle border-0 rounded-3 p-3 p-md-4 mb-4 shadow-sm">
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+            <div className="d-flex align-items-center gap-3">
+              <div
+                className="rounded-circle bg-warning bg-opacity-25 text-warning-emphasis d-flex align-items-center justify-content-center flex-shrink-0"
+                style={{ width: 44, height: 44 }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+              <div>
+                <h6 className="fw-bold mb-1 text-body-emphasis">{platform.label} is currently disconnected for {clientName}</h6>
+                <p className="text-secondary small mb-0">
+                  Showing saved results from your last sync ({connectionState?.lastSyncDate || connectionState?.lastSync || 'earlier'}). Reconnect your account anytime to fetch live updates.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-shrink-0">
+              <button
+                className="btn btn-warning btn-sm d-inline-flex align-items-center gap-2 px-3 py-2 fw-semibold rounded-2 shadow-xs"
+                onClick={onReconnect}
+                title={`Reconnect ${platform.label}`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </svg>
+                <span>Reconnect Platform</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Platform KPIs & Interval Bar with Customize KPIs Button & Platform Refresh Button ─── */}
+      <div className="mb-4">
+        <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <span className="d-inline-flex align-items-center gap-1.5 text-secondary small fw-semibold">
+              <IconCalendar /> <span>{dateRange || 'Last 30 Days'}</span>
+            </span>
+            <span className="text-body-tertiary opacity-75 d-none d-sm-inline">&bull;</span>
+            <span className="badge bg-body-tertiary text-secondary border px-2.5 py-1 small d-inline-flex align-items-center gap-1.5 shadow-2xs">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
+                <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
+              </svg>
+              <span>Last synced: <strong className="text-body-emphasis">{connectionState?.lastSync || 'Just now'}</strong></span>
+            </span>
+          </div>
+          <div className="d-flex align-items-center gap-2 no-print">
+            <button
+              type="button"
+              className="btn btn-sm btn-primary d-inline-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-sm fw-semibold"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              title={`Refresh ${platform.label} data`}
+              aria-label={`Refresh ${platform.label} data`}
+            >
+              <IconRefresh spinning={isRefreshing} />
+              <span>{isRefreshing ? 'Syncing...' : `Refresh ${platform.label ? platform.label.replace(/\s+Ads$/i, '') : ''}`}</span>
+            </button>
+            <div className="position-relative platform-kpi-selector-container">
+              <button
+                className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-2"
+                onClick={() => setShowKPISelector(!showKPISelector)}
+              >
+                <IconGear /> <span className="fw-semibold">Customize KPIs</span>
+              </button>
+            {showKPISelector && (
+              <div className="position-absolute end-0 mt-1 bg-white border rounded-3 shadow-lg p-3" style={{ zIndex: 1050, minWidth: 280 }}>
+                <h6 className="fw-bold small mb-2">Select {platform.label} KPIs (max 5)</h6>
+                <div className="d-flex flex-column gap-1">
+                  {availablePlatformKPIs.map((kpi) => {
+                    const isPinned = pinnedKPIs.includes(kpi.key);
+                    return (
+                      <label
+                        key={kpi.key}
+                        className={`d-flex align-items-center gap-2 px-2 py-1 rounded-2 cursor-pointer ${isPinned ? 'bg-primary-subtle' : 'bg-transparent'}`}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="form-check-input m-0"
+                          checked={isPinned}
+                          onChange={() => toggleKPI(kpi.key)}
+                          disabled={!isPinned && pinnedKPIs.length >= 5}
+                        />
+                        <span className="small">{kpi.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <button className="btn btn-sm btn-primary w-100 mt-2" onClick={() => setShowKPISelector(false)}>
+                  Done
+                </button>
+              </div>
+            )}
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic KPI Cards Grid (Strictly platform-specific to this client) */}
+        <div className="kpi-grid-5">
+          {pinnedKPIs.slice(0, 5).map((key) => {
+            const kpiDef = availablePlatformKPIs.find((k) => k.key === key);
+            if (!kpiDef) return null;
+            const rawVal = kpis[key];
+            const isCostKPI = ['cpc', 'cpm', 'cpa', 'spend'].includes(key);
+            const mockChange = kpiDef.change || 4.2;
+            const isPositive = mockChange >= 0;
+            const isGood = isCostKPI ? !isPositive : isPositive;
+
+            return (
+              <div key={key}>
+                <div className="card border-0 shadow-sm rounded-3 kpi-card h-100">
+                  <div className="card-body p-3 d-flex flex-column justify-content-between">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <span className="text-secondary fw-semibold small text-truncate" title={kpiDef.label}>
+                        {kpiDef.label}
+                      </span>
+                      <span
+                        className={`badge rounded-pill bg-${kpiDef.color}-subtle text-${kpiDef.color}-emphasis px-2 py-0.5 fw-bold`}
+                        style={{ fontSize: '0.7rem' }}
+                      >
+                        {kpiDef.key.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">
+                      {formatValue(rawVal, kpiDef.format)}
+                    </div>
+                    <div className="d-flex align-items-center justify-content-between pt-1 border-top border-light-subtle mt-1">
+                      {isConnected ? (
+                        <div className={`d-flex align-items-center gap-1 fw-semibold small ${isGood ? 'text-success' : 'text-danger'}`}>
+                          {isPositive ? <IconUp /> : <IconDown />}
+                          <span>{Math.abs(mockChange).toFixed(1)}%</span>
+                        </div>
+                      ) : (
+                        <span className="badge bg-secondary-subtle text-secondary border px-1.5 py-0.5" style={{ fontSize: '0.66rem' }}>
+                          Saved snapshot
+                        </span>
+                      )}
+                      <span className="text-secondary small" style={{ fontSize: '0.75rem' }}>
+                        {isConnected ? `vs prev ${platform.label}` : 'last sync'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Campaigns Table */}
+      <div className="card border-0 shadow-sm rounded-3 mb-4">
+        <div className="card-header bg-transparent border-bottom p-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div className="d-flex align-items-center gap-2">
+            <h6 className="mb-0 fw-bold">Campaigns ({platform.campaigns.length})</h6>
+            {!isConnected && (
+              <span className="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle small px-2 py-0.5">
+                Last Synced Records
+              </span>
+            )}
+          </div>
+          {!isConnected && (
+            <span className="text-secondary small">
+              Snapshot as of {connectionState?.lastSyncDate || connectionState?.lastSync || 'Aug 18, 2026'}
+            </span>
+          )}
+        </div>
+        <div className="card-body p-0">
+          <div className="table-responsive">
+            <table className="table align-middle text-nowrap mb-0 table-hover">
+              <thead className="table-light bg-body-tertiary">
+                <tr>
+                  <th className="ps-4 text-body fw-bold">Campaign</th>
+                  <th className="text-body fw-bold">Status</th>
+                  <th className="text-body fw-bold">Spend</th>
+                  <th className="text-body fw-bold">Revenue</th>
+                  <th className="text-body fw-bold">ROAS</th>
+                  <th className="text-body fw-bold">Impressions</th>
+                  <th className="text-body fw-bold">Clicks</th>
+                  <th className="text-body fw-bold">CTR</th>
+                  <th className="text-body fw-bold">Conversions</th>
+                  <th className="pe-4 text-end text-body fw-bold">CPA</th>
+                </tr>
+              </thead>
+              <tbody>
+                {platform.campaigns.map((camp) => (
+                  <tr key={camp.id}>
+                    <td className="ps-4 fw-bold text-body" style={{ color: 'var(--bs-heading-color, var(--bs-body-color))', fontSize: '0.92rem', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {camp.name}
+                    </td>
+                    <td><span className={`badge ${camp.status === 'Active' ? 'bg-success-subtle text-success border border-success-subtle' : camp.status === 'Paused' ? 'bg-warning-subtle text-warning border border-warning-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle'} fw-bold`}>{camp.status}</span></td>
+                    <td className="fw-semibold text-body-emphasis">${camp.spend.toLocaleString()}</td>
+                    <td className="text-success fw-bold">${camp.revenue.toLocaleString()}</td>
+                    <td><span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold px-2 py-1">{camp.roas.toFixed(1)}x</span></td>
+                    <td className="text-body fw-medium">{(camp.impressions / 1000).toFixed(0)}K</td>
+                    <td className="text-body fw-medium">{(camp.clicks / 1000).toFixed(1)}K</td>
+                    <td className="text-body fw-semibold">{camp.ctr.toFixed(2)}%</td>
+                    <td className="text-body-emphasis fw-bold">{camp.conversions.toLocaleString()}</td>
+                    <td className="pe-4 text-end text-body-emphasis fw-semibold">${camp.cpa.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Search Terms Analysis (Google Ads) */}
+      {(isGoogle || platform.searchTerms) && (
+        <div className="card border-0 shadow-sm rounded-3 mt-4">
+          <div className="card-header bg-transparent border-bottom p-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div className="d-flex align-items-center gap-2">
+              <h6 className="mb-0 fw-bold">Search Terms Analysis</h6>
+              <span className="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle fw-semibold">
+                {(platform.searchTerms || []).length} keywords
+              </span>
+            </div>
+            <div className="d-flex align-items-center gap-2">
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                placeholder="Search keywords..."
+                value={searchTermQuery}
+                onChange={(e) => setSearchTermQuery(e.target.value)}
+                style={{ maxWidth: 220 }}
+              />
+            </div>
+          </div>
+          <div className="card-body p-0">
+            <div className="table-responsive">
+              <table className="table align-middle text-nowrap mb-0 table-hover">
+                <thead className="table-light bg-body-tertiary">
+                  <tr>
+                    <th className="ps-4 text-body fw-bold">Search Term</th>
+                    <th className="text-body fw-bold">Match Type</th>
+                    <th className="text-body fw-bold">Impressions</th>
+                    <th className="text-body fw-bold">Clicks</th>
+                    <th className="text-body fw-bold">CTR</th>
+                    <th className="text-body fw-bold">Avg CPC</th>
+                    <th className="text-body fw-bold">Conv.</th>
+                    <th className="text-body fw-bold">Conv. Rate</th>
+                    <th className="pe-4 text-end text-body fw-bold">Spend</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(platform.searchTerms || [])
+                    .filter((st) => !searchTermQuery || st.term.toLowerCase().includes(searchTermQuery.toLowerCase()))
+                    .map((st) => {
+                      const scaledImpr = Math.round(st.impressions * clientMultiplier);
+                      const scaledClicks = Math.round(st.clicks * clientMultiplier);
+                      const scaledConv = Math.round(st.conversions * clientMultiplier);
+                      const scaledSpend = st.spend * clientMultiplier;
+                      const ctrVal = scaledImpr > 0 ? (scaledClicks / scaledImpr) * 100 : st.ctr;
+                      const avgCpcVal = scaledClicks > 0 ? scaledSpend / scaledClicks : st.avgCpc;
+                      const convRateVal = scaledClicks > 0 ? (scaledConv / scaledClicks) * 100 : st.convRate;
+
+                      const matchTypeBadge =
+                        st.matchType === 'Exact' ? (
+                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold px-2 py-0.5" style={{ fontSize: '0.74rem' }}>Exact</span>
+                        ) : st.matchType === 'Phrase' ? (
+                          <span className="badge bg-info-subtle text-info border border-info-subtle fw-semibold px-2 py-0.5" style={{ fontSize: '0.74rem' }}>Phrase</span>
+                        ) : (
+                          <span className="badge bg-secondary-subtle text-secondary border border-secondary-subtle fw-semibold px-2 py-0.5" style={{ fontSize: '0.74rem' }}>Broad</span>
+                        );
+
+                      return (
+                        <tr key={st.id || st.term}>
+                          <td className="ps-4 fw-bold text-body-emphasis" style={{ fontSize: '0.90rem' }}>
+                            {st.term}
+                          </td>
+                          <td>{matchTypeBadge}</td>
+                          <td className="text-body fw-medium">{scaledImpr.toLocaleString()}</td>
+                          <td className="text-body fw-medium">{scaledClicks.toLocaleString()}</td>
+                          <td className="text-body fw-semibold">{ctrVal.toFixed(2)}%</td>
+                          <td className="text-body fw-semibold">${avgCpcVal.toFixed(2)}</td>
+                          <td className="text-body-emphasis fw-bold">{scaledConv.toLocaleString()}</td>
+                          <td className="text-body fw-semibold">{convRateVal.toFixed(2)}%</td>
+                          <td className="pe-4 text-end text-success fw-bold">${scaledSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Placements Breakdown (Meta only) */}
+      {platform.placements && (
+        <div className="card border-0 shadow-sm rounded-3">
+          <div className="card-header bg-transparent border-bottom p-4 d-flex justify-content-between align-items-center">
+            <h6 className="mb-0 fw-bold">Breakdown by Placement</h6>
+            {!isConnected && <span className="text-secondary small">Last synced breakdown</span>}
+          </div>
+          <div className="card-body p-4">
+            <div className="d-flex flex-column gap-3">
+              {platform.placements.map((p, i) => {
+                const maxSpend = Math.max(...platform.placements.map((x) => x.spend));
+                const pct = (p.spend / maxSpend) * 100;
+                return (
+                  <div key={i}>
+                    <div className="d-flex justify-content-between small mb-1">
+                      <span className="fw-semibold">{p.name}</span>
+                      <span className="text-secondary">${p.spend.toLocaleString()} &middot; {(p.impressions / 1000).toFixed(0)}K impr. &middot; {p.ctr.toFixed(2)}% CTR</span>
+                    </div>
+                    <div className="progress" style={{ height: 8 }}>
+                      <div className="progress-bar bg-primary" role="progressbar" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

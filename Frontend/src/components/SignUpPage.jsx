@@ -3,12 +3,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function SignUpPage() {
-  const [fullName, setFullName] = useState('');
-  const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [userName, setUserName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [agreeTerms, setAgreeTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const [errorMsg, setErrorMsg] = useState('');
@@ -18,78 +18,89 @@ export default function SignUpPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
 
+  const resetForm = () => {
+    setFirstName('');
+    setLastName('');
+    setUserName('');
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
-    if (!email || !password || !fullName) {
+    if (!firstName.trim() || !lastName.trim() || !userName.trim() || !email.trim() || !password) {
       setErrorMsg('Please fill in all required fields.');
       return;
     }
 
     if (password !== confirmPassword) {
-      setErrorMsg('Passwords do not match.');
+      setErrorMsg('Password and confirmation password do not match.');
       return;
     }
 
-    if (!agreeTerms) {
-      setErrorMsg('You must agree to the Terms of Use and Privacy Policy.');
+    if (password.length < 3) {
+      setErrorMsg('Password must be at least 3 characters long.');
       return;
     }
-
-    const nameParts = fullName.trim().split(' ');
-    const firstName = nameParts[0] || 'User';
-    const lastName = nameParts.slice(1).join(' ') || firstName;
-    const finalUserName = username.trim() || email.split('@')[0];
 
     setLoading(true);
     try {
       await register({
-        userName: finalUserName,
-        email,
+        userName: userName.trim(),
+        email: email.trim(),
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         password,
-        firstName,
-        lastName,
+        confirmPassword,
       });
 
-      setSuccessMsg('Account created successfully! Redirecting to sign in...');
-      setTimeout(() => {
-        navigate('/pages/authentication/sign-in');
-      }, 1500);
+      setSuccessMsg(`Manager account "${userName.trim()}" was created successfully!`);
+      resetForm();
     } catch (err) {
-      setErrorMsg(err.message || 'Registration failed. Please try again.');
+      setErrorMsg(err.message || 'Failed to register manager.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="d-flex flex-column justify-content-center vh-100">
+    <main className="d-flex flex-column justify-content-center min-vh-100 py-4">
       <section>
         <div className="container">
-          <div className="row mb-8">
-            <div className="col-xl-4 offset-xl-4 col-md-12 col-12">
+          <div className="row mb-3">
+            <div className="col-xl-6 offset-xl-3 col-md-12 col-12">
               <div className="text-center">
-                <Link to="/" className="fs-2 fw-bold d-flex align-items-center gap-2 justify-content-center mb-6">
+                <Link to="/" className="fs-2 fw-bold d-flex align-items-center gap-2 justify-content-center mb-2 text-decoration-none">
                   <img src="/assets/images/brand/logo/logo-icon.svg" alt="Dasher Logo" />
                   <span>Dasher</span>
                 </Link>
-                <h1 className="mb-1">Create Account</h1>
-                <p className="mb-0">Sign up now and get free account instant.</p>
+                <h1 className="h3 fw-bold mb-1 text-body-emphasis">Manager Registration</h1>
+                <p className="text-secondary small mb-2">
+                  Admin authorization required &bull; Creates an active Manager account
+                </p>
+                <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-1.5 rounded-pill fw-semibold">
+                  <i className="ti ti-shield-lock me-1"></i> Admin Portal
+                </span>
               </div>
             </div>
           </div>
           <div className="row justify-content-center">
-            <div className="col-xl-5 col-lg-6 col-md-8 col-12">
-              <div className="card shadow-sm mb-4">
-                <div className="card-body p-6">
+            <div className="col-xl-6 col-lg-7 col-md-9 col-12">
+              <div className="card shadow-sm border-0 mb-3 rounded-4">
+                <div className="card-body p-4 p-md-5">
                   {errorMsg && (
-                    <div className="alert alert-danger alert-dismissible fade show" role="alert">
-                      {errorMsg}
+                    <div className="alert alert-danger alert-dismissible fade show py-2.5 px-3 mb-4 rounded-3 d-flex align-items-center justify-content-between" role="alert">
+                      <div className="d-flex align-items-center gap-2">
+                        <i className="ti ti-alert-circle fs-5"></i>
+                        <span>{errorMsg}</span>
+                      </div>
                       <button
                         type="button"
-                        className="btn-close"
+                        className="btn-close py-2.5"
                         onClick={() => setErrorMsg('')}
                         aria-label="Close"
                       ></button>
@@ -97,191 +108,167 @@ export default function SignUpPage() {
                   )}
 
                   {successMsg && (
-                    <div className="alert alert-success fade show" role="alert">
-                      {successMsg}
+                    <div className="alert alert-success alert-dismissible fade show py-2.5 px-3 mb-4 rounded-3 d-flex align-items-center justify-content-between" role="alert">
+                      <div className="d-flex align-items-center gap-2">
+                        <i className="ti ti-circle-check fs-5"></i>
+                        <span>{successMsg}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-close py-2.5"
+                        onClick={() => setSuccessMsg('')}
+                        aria-label="Close"
+                      ></button>
                     </div>
                   )}
 
-                  <form className="mb-6" onSubmit={handleSubmit} noValidate>
-                    <div className="mb-3">
-                      <label htmlFor="signupFullnameInput" className="form-label">
-                        Full Name <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="signupFullnameInput"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Enter full name"
-                        required
-                        disabled={loading}
-                      />
-                    </div>
-
-                    <div className="mb-3">
-                      <label htmlFor="signupUsernameInput" className="form-label">
-                        Username (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="signupUsernameInput"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        placeholder="Choose username"
-                        disabled={loading}
-                      />
-                    </div>
-
-                    <div className="mb-3">
-                      <label htmlFor="signupEmailInput" className="form-label">
-                        Email <span className="text-danger">*</span>
-                      </label>
-                      <input
-                        type="email"
-                        className="form-control"
-                        id="signupEmailInput"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="Enter email address"
-                        required
-                        disabled={loading}
-                      />
-                    </div>
-
-                    <div className="mb-3">
-                      <label htmlFor="formSignUpPassword" className="form-label">
-                        Password <span className="text-danger">*</span>
-                      </label>
-                      <div className="password-field position-relative">
+                  <form onSubmit={handleSubmit} noValidate>
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6 col-12">
+                        <label htmlFor="regFirstName" className="form-label fw-semibold fs-6 mb-1.5">
+                          First Name <span className="text-danger">*</span>
+                        </label>
                         <input
-                          type={showPassword ? 'text' : 'password'}
-                          className="form-control fakePassword"
-                          id="formSignUpPassword"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Enter password"
+                          type="text"
+                          className="form-control py-2 fs-6"
+                          id="regFirstName"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          placeholder="e.g. Sarah"
                           required
                           disabled={loading}
                         />
-                        <span
-                          style={{ cursor: 'pointer', position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          <i className={`ti ${showPassword ? 'ti-eye' : 'ti-eye-off'} passwordToggler`}></i>
-                        </span>
                       </div>
-                    </div>
 
-                    <div className="mb-3">
-                      <label htmlFor="formSignUpConfirmPassword" className="form-label">
-                        Confirm Password <span className="text-danger">*</span>
-                      </label>
-                      <div className="password-field position-relative">
+                      <div className="col-md-6 col-12">
+                        <label htmlFor="regLastName" className="form-label fw-semibold fs-6 mb-1.5">
+                          Last Name <span className="text-danger">*</span>
+                        </label>
                         <input
-                          type={showPassword ? 'text' : 'password'}
-                          className="form-control fakePassword"
-                          id="formSignUpConfirmPassword"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Confirm password"
+                          type="text"
+                          className="form-control py-2 fs-6"
+                          id="regLastName"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          placeholder="e.g. Connor"
                           required
                           disabled={loading}
                         />
                       </div>
                     </div>
 
-                    <div className="mb-3">
-                      <div className="mb-4 d-flex align-items-center justify-content-between">
-                        <div className="form-check">
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6 col-12">
+                        <label htmlFor="regUsername" className="form-label fw-semibold fs-6 mb-1.5">
+                          Username <span className="text-danger">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control py-2 fs-6"
+                          id="regUsername"
+                          value={userName}
+                          onChange={(e) => setUserName(e.target.value)}
+                          placeholder="Choose username"
+                          required
+                          disabled={loading}
+                        />
+                      </div>
+
+                      <div className="col-md-6 col-12">
+                        <label htmlFor="regEmail" className="form-label fw-semibold fs-6 mb-1.5">
+                          Email Address <span className="text-danger">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          className="form-control py-2 fs-6"
+                          id="regEmail"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="manager@agency.com"
+                          required
+                          disabled={loading}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="row g-3 mb-3">
+                      <div className="col-md-6 col-12">
+                        <label htmlFor="regPassword" className="form-label fw-semibold fs-6 mb-1.5">
+                          Password <span className="text-danger">*</span>
+                        </label>
+                        <div className="password-field position-relative">
                           <input
-                            className="form-check-input"
-                            type="checkbox"
-                            id="signupCheckTextCheckbox"
-                            checked={agreeTerms}
-                            onChange={(e) => setAgreeTerms(e.target.checked)}
+                            type={showPassword ? 'text' : 'password'}
+                            className="form-control fakePassword py-2 fs-6"
+                            id="regPassword"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="Enter password"
+                            required
+                            disabled={loading}
                           />
-                          <label className="form-check-label ms-2" htmlFor="signupCheckTextCheckbox">
-                            <a href="#" onClick={(e) => e.preventDefault()}>Terms of Use</a> & <a href="#" onClick={(e) => e.preventDefault()}>Privacy Policy</a>
-                          </label>
+                          <span
+                            style={{ cursor: 'pointer', position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            <i className={`ti ${showPassword ? 'ti-eye' : 'ti-eye-off'} passwordToggler fs-5`}></i>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="col-md-6 col-12">
+                        <label htmlFor="regConfirmPassword" className="form-label fw-semibold fs-6 mb-1.5">
+                          Confirm Password <span className="text-danger">*</span>
+                        </label>
+                        <div className="password-field position-relative">
+                          <input
+                            type={showPassword ? 'text' : 'password'}
+                            className="form-control fakePassword py-2 fs-6"
+                            id="regConfirmPassword"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            placeholder="Confirm password"
+                            required
+                            disabled={loading}
+                          />
                         </div>
                       </div>
                     </div>
 
-                    <div className="d-grid">
-                      <button className="btn btn-primary" type="submit" disabled={loading}>
+                    <div className="mb-3 p-3 bg-body-tertiary rounded-3 border">
+                      <div className="d-flex align-items-center justify-content-between">
+                        <div>
+                          <div className="fw-semibold small text-body-emphasis">Assigned Account Role</div>
+                          <div className="text-secondary small">Automatically assigned with Manager permissions</div>
+                        </div>
+                        <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle px-2.5 py-1 rounded-pill fw-semibold">
+                          Manager
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="d-grid gap-2 mt-4">
+                      <button className="btn btn-primary py-2.5 fs-6 fw-semibold shadow-sm rounded-3" type="submit" disabled={loading}>
                         {loading ? (
                           <>
                             <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                            Registering...
+                            Registering Manager...
                           </>
                         ) : (
-                          'Sign Up'
+                          'Create Manager Account'
                         )}
                       </button>
+                      <Link to="/" className="btn btn-outline-secondary py-2 fs-6 rounded-3">
+                        Back to Dashboard
+                      </Link>
                     </div>
                   </form>
-
-                  <span>Sign up with your social network.</span>
-                  <div className="mt-3 d-flex gap-2 justify-content-between">
-                    <a href="#" className="btn btn-google w-100" onClick={(e) => e.preventDefault()}>
-                      <span className="me-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="ti ti-google" viewBox="0 0 16 16">
-                          <path d="M15.545 6.558a9.42 9.42 0 0 1 .139 1.626c0 2.434-.87 4.492-2.384 5.885h.002C11.978 15.292 10.158 16 8 16A8 8 0 1 1 8 0a7.689 7.689 0 0 1 5.352 2.082l-2.284 2.284A4.347 4.347 0 0 0 8 3.166c-2.087 0-3.86 1.408-4.492 3.304a4.792 4.792 0 0 0 0 3.063h.003c.635 1.893 2.405 3.301 4.492 3.301 1.078 0 2.004-.276 2.722-.764h-.003a3.702 3.702 0 0 0 1.599-2.431H8v-3.08h7.545z" />
-                        </svg>
-                      </span>
-                      Continue with Google
-                    </a>
-                    <a href="#" className="btn btn-facebook w-100" onClick={(e) => e.preventDefault()}>
-                      <span className="me-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="ti ti-facebook" viewBox="0 0 16 16">
-                          <path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.326H9.25V16c3.824-.604 6.75-3.934 6.75-7.951z" />
-                        </svg>
-                      </span>
-                      Continue with Facebook
-                    </a>
-                  </div>
                 </div>
               </div>
-              <span>
-                Already have an account?{' '}
-                <Link to="/pages/authentication/sign-in" className="text-primary">
-                  Sign in here.
-                </Link>
-              </span>
             </div>
           </div>
         </div>
       </section>
-
-      <div className="position-absolute end-0 bottom-0 m-4">
-        <div className="dropdown">
-          <button className="btn btn-light btn-icon rounded-circle d-flex align-items-center" type="button" data-bs-toggle="dropdown" aria-label="Toggle theme">
-            <i className="bi theme-icon-active lh-1"><i class="bi theme-icon bi-sun-fill"></i></i>
-          </button>
-          <ul className="dropdown-menu dropdown-menu-end shadow">
-            <li>
-              <button type="button" className="dropdown-item d-flex align-items-center active" data-bs-theme-value="light">
-                <i className="ti theme-icon ti ti-sun"></i>
-                <span className="ms-2">Light</span>
-              </button>
-            </li>
-            <li>
-              <button type="button" className="dropdown-item d-flex align-items-center" data-bs-theme-value="dark">
-                <i className="ti theme-icon ti-moon-stars"></i>
-                <span className="ms-2">Dark</span>
-              </button>
-            </li>
-            <li>
-              <button type="button" className="dropdown-item d-flex align-items-center" data-bs-theme-value="auto">
-                <i className="ti theme-icon ti-circle-half-2"></i>
-                <span className="ms-2">Auto</span>
-              </button>
-            </li>
-          </ul>
-        </div>
-      </div>
     </main>
   );
 }

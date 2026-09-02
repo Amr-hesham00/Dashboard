@@ -1,4 +1,4 @@
-﻿using Dashboard.Domain.Entities;
+using Dashboard.Domain.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +20,7 @@ public class AppDbContext : IdentityDbContext
     public DbSet<Client> client { get; set; }
     public DbSet<Platform> platform { get; set; }
     public DbSet<Assignment> Assignment { get; set; }
+    public DbSet<RefreshToken> RefreshTokens { get; set; }
 
     //protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //{

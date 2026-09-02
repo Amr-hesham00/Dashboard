@@ -138,5 +138,5 @@ export default function HtmlPage({ html, title, scripts = [] }) {
     reinitBootstrap(container);
   }, [html]);
 
-  return <div ref={containerRef} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div ref={containerRef} className="min-vh-100 d-flex flex-column" dangerouslySetInnerHTML={{ __html: html }} />;
 }

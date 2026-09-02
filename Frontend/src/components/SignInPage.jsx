@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { isAdmin as checkIsAdmin } from '../api/auth';
 
 export default function SignInPage() {
   const [emailOrUserName, setEmailOrUserName] = useState('');
@@ -10,22 +11,45 @@ export default function SignInPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { login, isAuthenticated, user, initialLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const customTarget = location.state?.from?.pathname;
+
+  // If already authenticated, redirect to target or appropriate dashboard
+  useEffect(() => {
+    if (!initialLoading && isAuthenticated) {
+      if (customTarget && customTarget !== '/pages/authentication/sign-in' && customTarget !== '/login') {
+        navigate(customTarget, { replace: true });
+      } else if (checkIsAdmin(user)) {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+    }
+  }, [isAuthenticated, user, initialLoading, navigate, customTarget]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!emailOrUserName || !password) {
-      setErrorMsg('Please fill in all required fields.');
+    if (!emailOrUserName.trim() || !password) {
+      setErrorMsg('Please enter both your email/username and password.');
       return;
     }
 
     setLoading(true);
     try {
-      await login({ emailOrUserName, password });
-      navigate('/', { replace: true });
+      const result = await login({ emailOrUserName: emailOrUserName.trim(), password });
+      const loggedUser = result?.user || user;
+      if (customTarget && customTarget !== '/pages/authentication/sign-in' && customTarget !== '/login') {
+        navigate(customTarget, { replace: true });
+      } else if (checkIsAdmin(loggedUser)) {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     } catch (err) {
       setErrorMsg(err.message || 'Invalid username/email or password.');
     } finally {
@@ -40,44 +64,39 @@ export default function SignInPage() {
           <div className="row mb-8">
             <div className="col-xl-4 offset-xl-4 col-md-12 col-12">
               <div className="text-center">
-                <Link to="/" className="fs-2 fw-bold d-flex align-items-center gap-2 justify-content-center mb-6">
+                <Link to="/pages/authentication/sign-in" className="fs-2 fw-bold d-flex align-items-center gap-2 justify-content-center mb-6">
                   <img src="/assets/images/brand/logo/logo-icon.svg" alt="Dasher Logo" />
                   <span>Dasher</span>
                 </Link>
-                <h1 className="mb-1">Welcome Back</h1>
-                <p className="mb-0">
-                  Don’t have an account yet?{' '}
-                  <Link to="/pages/authentication/sign-up" className="text-primary">
-                    Register here
-                  </Link>
-                </p>
+                <h1 className="h2 fw-bold mb-1">Welcome Back</h1>
+                <p className="text-secondary fs-6 mb-0">Sign in to your account</p>
               </div>
             </div>
           </div>
           <div className="row justify-content-center">
             <div className="col-xl-5 col-lg-6 col-md-8 col-12">
-              <div className="card card-lg mb-6">
-                <div className="card-body p-6">
+              <div className="card shadow-sm border-0 mb-4">
+                <div className="card-body p-4 p-md-5">
                   {errorMsg && (
-                    <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                    <div className="alert alert-danger alert-dismissible fade show py-2.5 px-3 mb-3" role="alert">
                       {errorMsg}
                       <button
                         type="button"
-                        className="btn-close"
+                        className="btn-close py-2.5"
                         onClick={() => setErrorMsg('')}
                         aria-label="Close"
                       ></button>
                     </div>
                   )}
 
-                  <form className="mb-6" onSubmit={handleSubmit} noValidate>
+                  <form onSubmit={handleSubmit} noValidate>
                     <div className="mb-3">
-                      <label htmlFor="signinEmailInput" className="form-label">
+                      <label htmlFor="signinEmailInput" className="form-label fw-semibold fs-6 mb-1.5">
                         Email or Username <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
-                        className="form-control"
+                        className="form-control py-2 fs-6"
                         id="signinEmailInput"
                         value={emailOrUserName}
                         onChange={(e) => setEmailOrUserName(e.target.value)}
@@ -88,13 +107,13 @@ export default function SignInPage() {
                     </div>
 
                     <div className="mb-3">
-                      <label htmlFor="formSignUpPassword" className="form-label">
+                      <label htmlFor="formSignUpPassword" className="form-label fw-semibold fs-6 mb-1.5">
                         Password <span className="text-danger">*</span>
                       </label>
                       <div className="password-field position-relative">
                         <input
                           type={showPassword ? 'text' : 'password'}
-                          className="form-control fakePassword"
+                          className="form-control fakePassword py-2 fs-6"
                           id="formSignUpPassword"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
@@ -106,7 +125,7 @@ export default function SignInPage() {
                           style={{ cursor: 'pointer', position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}
                           onClick={() => setShowPassword(!showPassword)}
                         >
-                          <i className={`ti ${showPassword ? 'ti-eye' : 'ti-eye-off'} passwordToggler`}></i>
+                          <i className={`ti ${showPassword ? 'ti-eye' : 'ti-eye-off'} passwordToggler fs-5`}></i>
                         </span>
                       </div>
                     </div>
@@ -120,20 +139,20 @@ export default function SignInPage() {
                           checked={rememberMe}
                           onChange={(e) => setRememberMe(e.target.checked)}
                         />
-                        <label className="form-check-label" htmlFor="rememberMeCheckbox">
+                        <label className="form-check-label ms-1" htmlFor="rememberMeCheckbox">
                           Remember me
                         </label>
                       </div>
 
                       <div>
-                        <Link to="/pages/authentication/forget-password" className="text-primary">
+                        <Link to="/pages/authentication/forget-password" className="text-primary fw-medium">
                           Forgot Password
                         </Link>
                       </div>
                     </div>
 
-                    <div className="d-grid">
-                      <button className="btn btn-primary" type="submit" disabled={loading}>
+                    <div className="d-grid mb-3">
+                      <button className="btn btn-primary py-2.5 fs-6 fw-semibold shadow-sm" type="submit" disabled={loading}>
                         {loading ? (
                           <>
                             <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -146,25 +165,7 @@ export default function SignInPage() {
                     </div>
                   </form>
 
-                  <span>Sign in with your social network.</span>
-                  <div className="mt-3 d-flex gap-2 justify-content-between">
-                    <a href="#" className="btn btn-google w-100" onClick={(e) => e.preventDefault()}>
-                      <span className="me-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="ti ti-google" viewBox="0 0 16 16">
-                          <path d="M15.545 6.558a9.42 9.42 0 0 1 .139 1.626c0 2.434-.87 4.492-2.384 5.885h.002C11.978 15.292 10.158 16 8 16A8 8 0 1 1 8 0a7.689 7.689 0 0 1 5.352 2.082l-2.284 2.284A4.347 4.347 0 0 0 8 3.166c-2.087 0-3.86 1.408-4.492 3.304a4.792 4.792 0 0 0 0 3.063h.003c.635 1.893 2.405 3.301 4.492 3.301 1.078 0 2.004-.276 2.722-.764h-.003a3.702 3.702 0 0 0 1.599-2.431H8v-3.08h7.545z" />
-                        </svg>
-                      </span>
-                      Continue with Google
-                    </a>
-                    <a href="#" className="btn btn-facebook w-100" onClick={(e) => e.preventDefault()}>
-                      <span className="me-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="ti ti-facebook" viewBox="0 0 16 16">
-                          <path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.326H9.25V16c3.824-.604 6.75-3.934 6.75-7.951z" />
-                        </svg>
-                      </span>
-                      Continue with Facebook
-                    </a>
-                  </div>
+
                 </div>
               </div>
             </div>
@@ -172,32 +173,21 @@ export default function SignInPage() {
         </div>
       </section>
 
-      <div className="position-absolute end-0 bottom-0 m-4">
-        <div className="dropdown">
-          <button className="btn btn-light btn-icon rounded-circle d-flex align-items-center" type="button" data-bs-toggle="dropdown" aria-label="Toggle theme">
-            <i className="bi theme-icon-active lh-1"><i class="bi theme-icon bi-sun-fill"></i></i>
-          </button>
-          <ul className="dropdown-menu dropdown-menu-end shadow">
-            <li>
-              <button type="button" className="dropdown-item d-flex align-items-center active" data-bs-theme-value="light">
-                <i className="ti theme-icon ti ti-sun"></i>
-                <span className="ms-2">Light</span>
-              </button>
-            </li>
-            <li>
-              <button type="button" className="dropdown-item d-flex align-items-center" data-bs-theme-value="dark">
-                <i className="ti theme-icon ti-moon-stars"></i>
-                <span className="ms-2">Dark</span>
-              </button>
-            </li>
-            <li>
-              <button type="button" className="dropdown-item d-flex align-items-center" data-bs-theme-value="auto">
-                <i className="ti theme-icon ti-circle-half-2"></i>
-                <span className="ms-2">Auto</span>
-              </button>
-            </li>
-          </ul>
-        </div>
+      <div className="position-absolute top-0 end-0 m-4">
+        <button
+          className="btn btn-light btn-icon rounded-circle d-flex align-items-center justify-content-center shadow-sm theme-toggle-btn"
+          type="button"
+          aria-label="Toggle theme"
+          style={{ width: '40px', height: '40px' }}
+        >
+          <span className="theme-icon-active d-flex align-items-center justify-content-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-sun text-warning">
+              <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+              <path d="M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" />
+              <path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7" />
+            </svg>
+          </span>
+        </button>
       </div>
     </main>
   );

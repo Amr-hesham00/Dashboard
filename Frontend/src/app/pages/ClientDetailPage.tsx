@@ -174,7 +174,7 @@ export default function ClientDetailPage() {
               className={`flex items-center gap-1.5 text-xs border rounded-lg px-3 py-2 transition-all ${refreshing ? 'border-indigo-300 text-indigo-600 bg-indigo-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50 bg-white'}`}
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline" style={{ fontWeight: 500 }}>{refreshing ? 'Refreshing…' : 'Refresh'}</span>
+              <span className="hidden sm:inline" style={{ fontWeight: 500 }}>{refreshing ? 'Refreshing…' : 'Refresh all'}</span>
             </button>
           </div>
         </div>

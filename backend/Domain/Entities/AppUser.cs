@@ -17,4 +17,7 @@ public class AppUser : IdentityUser
 
     // Associate role
     public AssociateProfile? AssociateProfile { get; set; }
+
+    // Refresh Tokens
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

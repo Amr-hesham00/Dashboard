@@ -12,6 +12,7 @@ public class Client
     public string Country { get; set; } = null!;
     public Currency Currency { get; set; }
     public ClientStatus Status { get; set; }
+    public BusinessModel BusinessModel { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? Notes { get; set; }
 

@@ -1,31 +1,38 @@
-import { getAuthHeaders } from './auth';
+import { apiFetch } from './auth';
+import { mockCampaigns } from '../mock/mockData';
 
 const API_BASE_URL = '/api';
 
 export async function getCampaignsApi() {
-  const response = await fetch(`${API_BASE_URL}/Campaign`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to fetch campaigns.');
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/Campaign`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
+  } catch {
+    // Fall through to mockCampaigns
   }
-  return response.json();
+  return mockCampaigns;
 }
 
 export async function getCampaignByIdApi(id) {
-  const response = await fetch(`${API_BASE_URL}/Campaign/${id}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to fetch campaign details.');
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/Campaign/${id}`);
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch {
+    // Fall through to mockCampaigns
   }
-  return response.json();
+  const found = mockCampaigns.find((c) => String(c.id) === String(id));
+  if (found) return found;
+  return mockCampaigns[0];
 }
 
 export async function createCampaignApi(campaignDto) {
-  const response = await fetch(`${API_BASE_URL}/Campaign`, {
+  const response = await apiFetch(`${API_BASE_URL}/Campaign`, {
     method: 'POST',
-    headers: getAuthHeaders(),
     body: JSON.stringify(campaignDto),
   });
   const data = await response.json().catch(() => ({}));
@@ -36,9 +43,8 @@ export async function createCampaignApi(campaignDto) {
 }
 
 export async function updateCampaignApi(id, campaignDto) {
-  const response = await fetch(`${API_BASE_URL}/Campaign/${id}`, {
+  const response = await apiFetch(`${API_BASE_URL}/Campaign/${id}`, {
     method: 'PUT',
-    headers: getAuthHeaders(),
     body: JSON.stringify(campaignDto),
   });
   const data = await response.json().catch(() => ({}));
@@ -49,9 +55,8 @@ export async function updateCampaignApi(id, campaignDto) {
 }
 
 export async function deleteCampaignApi(id) {
-  const response = await fetch(`${API_BASE_URL}/Campaign/${id}`, {
+  const response = await apiFetch(`${API_BASE_URL}/Campaign/${id}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -61,17 +66,14 @@ export async function deleteCampaignApi(id) {
 }
 
 export async function getCampaignStatusesApi() {
-  const response = await fetch(`${API_BASE_URL}/Campaign/statuses`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await apiFetch(`${API_BASE_URL}/Campaign/statuses`);
   if (!response.ok) return ['Active', 'Paused', 'Completed', 'Draft'];
   return response.json();
 }
 
 export async function getCampaignObjectivesApi() {
-  const response = await fetch(`${API_BASE_URL}/Campaign/objectives`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await apiFetch(`${API_BASE_URL}/Campaign/objectives`);
   if (!response.ok) return ['Awareness', 'Traffic', 'Engagement', 'Leads', 'Sales'];
   return response.json();
 }
+

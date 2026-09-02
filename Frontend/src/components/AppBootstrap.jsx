@@ -1,10 +1,35 @@
 import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ConfirmDialog from './ConfirmDialog';
 
 export default function AppBootstrap() {
   const { logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  useEffect(() => {
+    const currentTheme = document.documentElement.getAttribute('data-bs-theme') || localStorage.getItem('theme') || 'light';
+    const effectiveTheme =
+      currentTheme === 'auto'
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light'
+        : currentTheme;
+
+    const updateThemeIcons = (theme) => {
+      const themeIconActives = document.querySelectorAll('.theme-icon-active');
+      themeIconActives.forEach((iconEl) => {
+        if (theme === 'dark') {
+          iconEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-moon text-info"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" /></svg>`;
+        } else {
+          iconEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-sun text-warning"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7" /></svg>`;
+        }
+      });
+    };
+    updateThemeIcons(effectiveTheme);
+  }, [location.pathname]);
 
   useEffect(() => {
     // 1. Sync initial sidebar state from localStorage
@@ -31,7 +56,7 @@ export default function AppBootstrap() {
       const themeIconActives = document.querySelectorAll('.theme-icon-active');
       themeIconActives.forEach((iconEl) => {
         if (theme === 'dark') {
-          iconEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-moon text-info"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.446z" /></svg>`;
+          iconEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-moon text-info"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" /></svg>`;
         } else {
           iconEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-sun text-warning"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7" /></svg>`;
         }
@@ -39,7 +64,7 @@ export default function AppBootstrap() {
     };
     updateThemeIcons(effectiveTheme);
 
-    // 3. Global event delegation for sidebar toggle, theme toggle, and LOGOUT confirmation
+    // 3. Global event delegation for sidebar toggle, theme toggle, link routing, and LOGOUT confirmation
     const handleGlobalClick = (e) => {
       // Check for Logout action click
       const logoutBtn = e.target.closest('.sidebar-logout-btn, [data-action="logout"]');
@@ -56,6 +81,28 @@ export default function AppBootstrap() {
         return;
       }
 
+      // Internal Link Routing
+      const internalLink = e.target.closest('a[data-internal-link="true"], a[href^="/"]');
+      if (internalLink) {
+        const href = internalLink.getAttribute('href');
+        const target = internalLink.getAttribute('target');
+        if (
+          href &&
+          href.startsWith('/') &&
+          !href.startsWith('//') &&
+          target !== '_blank' &&
+          !href.startsWith('/assets/') &&
+          !href.startsWith('/vendor/') &&
+          !href.startsWith('/node_modules/')
+        ) {
+          e.preventDefault();
+          if (window.location.pathname !== href) {
+            navigate(href);
+          }
+          return;
+        }
+      }
+
       // Sidebar Toggle
       const toggleBtn = e.target.closest('.sidebar-toggle');
       if (toggleBtn) {
@@ -69,6 +116,54 @@ export default function AppBootstrap() {
           document.documentElement.classList.add('collapsed');
           document.documentElement.classList.remove('expanded');
           localStorage.setItem('sidebarExpanded', 'false');
+        }
+        return;
+      }
+
+      // Offcanvas Dismiss or Backdrop Click Handling
+      const isBackdrop = e.target.classList.contains('offcanvas-backdrop');
+      const isDismiss = e.target.closest('[data-bs-dismiss="offcanvas"]');
+      if (isBackdrop || isDismiss) {
+        e.preventDefault();
+        e.stopPropagation();
+        const openOffcanvas = document.querySelectorAll('.offcanvas.show');
+        openOffcanvas.forEach((el) => {
+          el.classList.remove('show');
+          el.style.visibility = 'hidden';
+        });
+        document.querySelectorAll('.offcanvas-backdrop').forEach((bd) => bd.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+        return;
+      }
+
+      // Offcanvas Toggle Button Click Handling
+      const offcanvasToggle = e.target.closest('[data-bs-toggle="offcanvas"]');
+      if (offcanvasToggle) {
+        e.preventDefault();
+        e.stopPropagation();
+        const targetSelector = offcanvasToggle.getAttribute('href') || offcanvasToggle.getAttribute('data-bs-target');
+        if (targetSelector) {
+          const targetEl = document.querySelector(targetSelector);
+          if (targetEl) {
+            const isOpen = targetEl.classList.contains('show');
+            document.querySelectorAll('.offcanvas-backdrop').forEach((bd) => bd.remove());
+            if (isOpen) {
+              targetEl.classList.remove('show');
+              targetEl.style.visibility = 'hidden';
+              document.body.style.overflow = '';
+            } else {
+              targetEl.classList.add('show');
+              targetEl.style.visibility = 'visible';
+              document.body.style.overflow = 'hidden';
+
+              const backdrop = document.createElement('div');
+              backdrop.className = 'offcanvas-backdrop fade show';
+              backdrop.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.35); backdrop-filter: blur(2px); z-index: 1040; opacity: 0.35; transition: opacity 0.15s linear;';
+              document.body.appendChild(backdrop);
+            }
+          }
         }
         return;
       }
@@ -111,9 +206,10 @@ export default function AppBootstrap() {
     };
   }, []);
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
     setShowLogoutConfirm(false);
-    logout();
+    await logout();
+    navigate('/pages/authentication/sign-in', { replace: true });
   };
 
   const handleCancelLogout = () => {

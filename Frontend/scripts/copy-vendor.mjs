@@ -8,6 +8,7 @@ const nodeModules = path.join(projectRoot, 'node_modules');
 const vendorRoot = path.join(projectRoot, 'public', 'vendor');
 
 const vendorPaths = [
+  'bootstrap/dist',
   'jsvectormap/dist',
   'apexcharts/dist',
   'choices.js/public/assets/scripts',

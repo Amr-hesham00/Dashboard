@@ -15,8 +15,9 @@ public class UnitOfWork : IUnitOfWork
     public IClientRepo Client { get; private set; }
     public IPlatformRepo Platform { get; private set; }
     public IUserRepo User { get; private set; }
+    public IRefreshTokenRepo RefreshToken { get; private set; }
 
-    public UnitOfWork(AppDbContext context, IAdRepo ad, IAdSetRepo adSet, IAssignmentRepo assignment, IAssociateProfileRepo associateProfile, IAssociateTeamRepo associateTeam, ICampaignRepo campaign, IClientRepo client, IPlatformRepo platform, IUserRepo user)
+    public UnitOfWork(AppDbContext context, IAdRepo ad, IAdSetRepo adSet, IAssignmentRepo assignment, IAssociateProfileRepo associateProfile, IAssociateTeamRepo associateTeam, ICampaignRepo campaign, IClientRepo client, IPlatformRepo platform, IUserRepo user, IRefreshTokenRepo refreshToken)
     {
         _context = context;
         Ad = ad;
@@ -28,6 +29,7 @@ public class UnitOfWork : IUnitOfWork
         Client = client;
         Platform = platform;
         User = user;
+        RefreshToken = refreshToken;
     }
     public async Task Complete()
     {

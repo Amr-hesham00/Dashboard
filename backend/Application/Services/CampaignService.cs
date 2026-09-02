@@ -32,12 +32,14 @@ public class CampaignService : ICampaignService
             Name = dto.Name,
             Objective = dto.Objective,
             Status = dto.Status,
-            Spend = dto.Spend,
-            Revenue = dto.Revenue,
-            ROAS = dto.ROAS,
             StartDate = dto.StartDate,
             EndDate = dto.EndDate,
             PlatformId = dto.PlatformId,
+            Impressions = dto.Impressions,
+            Clicks = dto.Clicks,
+            Conversions = dto.Conversions,
+            Spend = dto.Spend,
+            Revenue = dto.Revenue,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -58,12 +60,14 @@ public class CampaignService : ICampaignService
         campaign.Name = dto.Name;
         campaign.Objective = dto.Objective;
         campaign.Status = dto.Status;
-        campaign.Spend = dto.Spend;
-        campaign.Revenue = dto.Revenue;
-        campaign.ROAS = dto.ROAS;
         campaign.StartDate = dto.StartDate;
         campaign.EndDate = dto.EndDate;
         campaign.PlatformId = dto.PlatformId;
+        campaign.Impressions = dto.Impressions;
+        campaign.Clicks = dto.Clicks;
+        campaign.Conversions = dto.Conversions;
+        campaign.Spend = dto.Spend;
+        campaign.Revenue = dto.Revenue;
 
         _unitOfWork.Campaign.Update(campaign);
         await _unitOfWork.Complete();
@@ -93,13 +97,16 @@ public class CampaignService : ICampaignService
             Name = campaign.Name,
             Objective = campaign.Objective,
             Status = campaign.Status,
-            Spend = campaign.Spend,
-            Revenue = campaign.Revenue,
-            ROAS = campaign.ROAS,
             StartDate = campaign.StartDate,
             EndDate = campaign.EndDate,
             CreatedAt = campaign.CreatedAt,
-            PlatformId = campaign.PlatformId
+            PlatformId = campaign.PlatformId,
+            Impressions = campaign.Impressions,
+            Clicks = campaign.Clicks,
+            Conversions = campaign.Conversions,
+            Spend = campaign.Spend,
+            Revenue = campaign.Revenue
         };
     }
 }
+

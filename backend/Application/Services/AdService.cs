@@ -38,12 +38,9 @@ public class AdService : IAdService
             Status = dto.Status,
             Impressions = dto.Impressions,
             Clicks = dto.Clicks,
-            CTR = dto.CTR,
-            CPC = dto.CPC,
             Conversions = dto.Conversions,
             Spend = dto.Spend,
             Revenue = dto.Revenue,
-            ROAS = dto.ROAS,
             AdSetId = dto.AdSetId,
             CreatedAt = DateTime.UtcNow
         };
@@ -71,12 +68,9 @@ public class AdService : IAdService
         ad.Status = dto.Status;
         ad.Impressions = dto.Impressions;
         ad.Clicks = dto.Clicks;
-        ad.CTR = dto.CTR;
-        ad.CPC = dto.CPC;
         ad.Conversions = dto.Conversions;
         ad.Spend = dto.Spend;
         ad.Revenue = dto.Revenue;
-        ad.ROAS = dto.ROAS;
         ad.AdSetId = dto.AdSetId;
 
         _unitOfWork.Ad.Update(ad);
@@ -113,14 +107,13 @@ public class AdService : IAdService
             Status = ad.Status,
             Impressions = ad.Impressions,
             Clicks = ad.Clicks,
-            CTR = ad.CTR,
-            CPC = ad.CPC,
             Conversions = ad.Conversions,
             Spend = ad.Spend,
             Revenue = ad.Revenue,
-            ROAS = ad.ROAS,
             CreatedAt = ad.CreatedAt,
             AdSetId = ad.AdSetId
         };
     }
 }
+
+

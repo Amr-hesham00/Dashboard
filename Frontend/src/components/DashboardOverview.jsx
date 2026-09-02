@@ -114,53 +114,81 @@ export default function DashboardOverview() {
 
     if (!data) return;
 
-    // Update KPI Cards
-    const kpiCards = root.querySelectorAll('.row-cols-xl-2 .card-body');
-    if (kpiCards.length >= 2) {
-      // Card 1: Total Revenue
-      const card1Title = kpiCards[0].querySelector('div:nth-child(1) div:last-child');
-      const card1Value = kpiCards[0].querySelector('.fs-3.fw-bold');
-      if (card1Title) card1Title.textContent = 'Total Revenue';
-      if (card1Value) card1Value.textContent = data.kpis.totalRevenue;
-
-      // Card 2: Avg ROAS
-      const card2Title = kpiCards[1].querySelector('div:nth-child(1) div:last-child');
-      const card2Value = kpiCards[1].querySelector('.fs-3.fw-bold');
-      if (card2Title) card2Title.textContent = 'Average ROAS';
-      if (card2Value) card2Value.textContent = data.kpis.avgRoas;
-    }
-
-    // Update Total Income vs Total Expenses tab labels
-    const totalIncomeEl = root.querySelector('#current-week-tab .fs-3');
-    const totalExpensesEl = root.querySelector('#past-week-tab .fs-3');
-    if (totalIncomeEl) totalIncomeEl.textContent = data.kpis.totalRevenue;
-    if (totalExpensesEl) totalExpensesEl.textContent = data.kpis.totalSpend;
-
-    // Populate Recent Campaigns Table if campaigns exist
-    const recentTableBody = root.querySelector('.table-responsive table tbody');
-    if (recentTableBody && data.campaigns && data.campaigns.length > 0) {
-      recentTableBody.innerHTML = '';
-      data.campaigns.slice(0, 5).forEach((camp) => {
+    // Populate Client Performance Table from mock data
+    const clientTableBody = root.querySelector('#clientPerformanceTable tbody');
+    if (clientTableBody && data.clients && data.clients.length > 0) {
+      clientTableBody.innerHTML = '';
+      data.clients.forEach((client, idx) => {
         const tr = document.createElement('tr');
-        const statusBadgeClass =
-          camp.status === 'Active' || camp.status === 0
-            ? 'badge text-success-emphasis bg-success-subtle'
-            : camp.status === 'Completed' || camp.status === 2
-              ? 'badge text-info-emphasis bg-info-subtle'
-              : 'badge text-warning-emphasis bg-warning-subtle';
+        const clientCampaigns = (data.campaigns || []).filter(
+          (c) => c.clientId === client.id || String(c.clientName || '').toLowerCase() === String(client.companyName || client.name || '').toLowerCase()
+        );
+        const activeCount = clientCampaigns.filter((c) => c.status === 0 || c.status === 'Active').length || (client.activeCampaignsCount || 2);
+        const totalSpend = clientCampaigns.reduce((acc, c) => acc + (c.spend || 0), 0);
+        const totalRev = clientCampaigns.reduce((acc, c) => acc + (c.revenue || 0), 0);
+        const roasVal = totalSpend > 0 ? (totalRev / totalSpend).toFixed(2) : (client.roas ? Number(client.roas).toFixed(2) : '3.50');
+        const curConv = client.conversions != null ? client.conversions : 250;
+        const tgtConv = client.targetConversions != null ? client.targetConversions : 300;
+        const convPercent = Math.round((curConv / Math.max(1, tgtConv)) * 100);
+        const convTrendIcon =
+          convPercent >= 100
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-success"><polyline points="18 15 12 9 6 15"/></svg>'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-danger"><polyline points="6 9 12 15 18 9"/></svg>';
 
-        const spendFormatted = (camp.spend || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-        const revFormatted = (camp.revenue || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+        const targetPercent = client.targetAchievement != null ? client.targetAchievement : convPercent;
+        const trafficClass = targetPercent >= 85 ? 'progress-traffic-green' : targetPercent >= 50 ? 'progress-traffic-yellow' : 'progress-traffic-red';
+        const textColor = targetPercent >= 85 ? 'text-success' : targetPercent >= 50 ? 'text-warning' : 'text-danger';
+        const gradients = [
+          'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+          'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+          'linear-gradient(135deg, #059669 0%, #047857 100%)',
+          'linear-gradient(135deg, #db2777 0%, #be185d 100%)',
+          'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
+        ];
+        const clientGradient = gradients[idx % gradients.length];
+        const clientId = client.id || `cli-10${idx + 1}`;
+        const initials = (client.companyName || client.name || 'CL').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 
         tr.innerHTML = `
-          <td>#CMP-${camp.id}</td>
-          <td><strong>${camp.name || 'Campaign'}</strong></td>
-          <td>${spendFormatted}</td>
-          <td>${revFormatted}</td>
-          <td><span class="${statusBadgeClass}">${camp.status ?? 'Active'}</span></td>
-          <td><a href="/campaigns" data-internal-link="true" class="btn btn-white btn-sm">View</a></td>
+          <td class="ps-4">
+            <a href="/clients/${clientId}" data-internal-link="true" class="d-flex align-items-center gap-3 text-decoration-none group-client-hover" title="View ${client.companyName || client.name} details">
+              <div class="avatar text-white fw-bold rounded-3 d-flex align-items-center justify-content-center flex-shrink-0 shadow-sm" style="width: 42px; height: 42px; background: ${clientGradient}; font-size: 0.95rem; letter-spacing: 0.5px;">
+                ${initials}
+              </div>
+              <div>
+                <div class="fw-bold text-body-emphasis client-name-hover">${client.companyName || client.name}</div>
+                <small class="text-secondary">${client.category || 'General'}</small>
+              </div>
+            </a>
+          </td>
+          <td>
+            <span class="fw-semibold text-body">${activeCount} Active</span>
+          </td>
+          <td>
+            <span class="badge ${client.status === 'Active' ? 'bg-success-subtle text-success-emphasis' : 'bg-warning-subtle text-warning-emphasis'} rounded-pill px-2.5 py-1 fw-semibold">
+              ${client.status || 'Active'}
+            </span>
+          </td>
+          <td>
+            <span class="fw-bold text-body-emphasis">${roasVal}x</span>
+          </td>
+          <td>
+            <div class="d-flex align-items-center gap-1.5">
+              <span class="fw-semibold text-body">${curConv} / ${tgtConv}</span>
+              <span class="text-secondary small fw-medium">(${convPercent}%)</span>
+              ${convTrendIcon}
+            </div>
+          </td>
+          <td class="pe-4">
+            <div class="d-flex align-items-center gap-2" style="min-width: 140px;">
+              <div class="progress flex-grow-1 progress-traffic-track">
+                <div class="progress-bar ${trafficClass}" role="progressbar" style="width: ${Math.min(targetPercent, 100)}%;"></div>
+              </div>
+              <span class="small fw-bold ${textColor}">${targetPercent}%</span>
+            </div>
+          </td>
         `;
-        recentTableBody.appendChild(tr);
+        clientTableBody.appendChild(tr);
       });
     }
 
@@ -172,7 +200,7 @@ export default function DashboardOverview() {
   }, [data, user, logout]);
 
   return (
-    <div ref={wrapperRef} className="position-relative">
+    <div ref={wrapperRef} className="position-relative min-vh-100 d-flex flex-column">
       {loading && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-white bg-opacity-75"

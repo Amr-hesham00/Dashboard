@@ -1,21 +1,24 @@
-import { getAuthHeaders } from './auth';
+import { apiFetch } from './auth';
+import { mockPlatforms } from '../mock/mockData';
 
 const API_BASE_URL = '/api';
 
 export async function getPlatformsApi() {
-  const response = await fetch(`${API_BASE_URL}/Platform`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to fetch platforms list.');
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/Platform`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
+  } catch {
+    // Fall through to mockPlatforms
   }
-  return response.json();
+  return mockPlatforms;
 }
 
 export async function createPlatformApi(platformDto) {
-  const response = await fetch(`${API_BASE_URL}/Platform`, {
+  const response = await apiFetch(`${API_BASE_URL}/Platform`, {
     method: 'POST',
-    headers: getAuthHeaders(),
     body: JSON.stringify(platformDto),
   });
   const data = await response.json().catch(() => ({}));
@@ -26,9 +29,8 @@ export async function createPlatformApi(platformDto) {
 }
 
 export async function updatePlatformApi(id, platformDto) {
-  const response = await fetch(`${API_BASE_URL}/Platform/${id}`, {
+  const response = await apiFetch(`${API_BASE_URL}/Platform/${id}`, {
     method: 'PUT',
-    headers: getAuthHeaders(),
     body: JSON.stringify(platformDto),
   });
   const data = await response.json().catch(() => ({}));
@@ -39,9 +41,8 @@ export async function updatePlatformApi(id, platformDto) {
 }
 
 export async function deletePlatformApi(id) {
-  const response = await fetch(`${API_BASE_URL}/Platform/${id}`, {
+  const response = await apiFetch(`${API_BASE_URL}/Platform/${id}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -51,17 +52,14 @@ export async function deletePlatformApi(id) {
 }
 
 export async function getPlatformTypesApi() {
-  const response = await fetch(`${API_BASE_URL}/Platform/types`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await apiFetch(`${API_BASE_URL}/Platform/types`);
   if (!response.ok) return ['GoogleAds', 'FacebookAds', 'TikTokAds', 'LinkedInAds', 'InstagramAds'];
   return response.json();
 }
 
 export async function getPlatformStatusesApi() {
-  const response = await fetch(`${API_BASE_URL}/Platform/statuses`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await apiFetch(`${API_BASE_URL}/Platform/statuses`);
   if (!response.ok) return ['Active', 'Inactive', 'Pending'];
   return response.json();
 }
+

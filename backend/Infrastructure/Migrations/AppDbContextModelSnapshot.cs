@@ -33,15 +33,9 @@ namespace Dashboard.Infrastructure.Migrations
                     b.Property<int>("AdSetId")
                         .HasColumnType("int");
 
-                    b.Property<float>("CPC")
-                        .HasColumnType("real");
-
                     b.Property<string>("CTA")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
-
-                    b.Property<float>("CTR")
-                        .HasColumnType("real");
 
                     b.Property<int>("Clicks")
                         .HasColumnType("int");
@@ -75,9 +69,6 @@ namespace Dashboard.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
-
-                    b.Property<float>("ROAS")
-                        .HasColumnType("real");
 
                     b.Property<double>("Revenue")
                         .HasColumnType("float");
@@ -243,11 +234,20 @@ namespace Dashboard.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("Clicks")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Conversions")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<int>("Impressions")
+                        .HasColumnType("int");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -260,9 +260,6 @@ namespace Dashboard.Infrastructure.Migrations
 
                     b.Property<int>("PlatformId")
                         .HasColumnType("int");
-
-                    b.Property<float>("ROAS")
-                        .HasColumnType("real");
 
                     b.Property<double>("Revenue")
                         .HasColumnType("float");
@@ -374,6 +371,42 @@ namespace Dashboard.Infrastructure.Migrations
                     b.HasIndex("ClientId");
 
                     b.ToTable("Platforms", (string)null);
+                });
+
+            modelBuilder.Entity("Dashboard.Domain.Entities.RefreshToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -583,7 +616,7 @@ namespace Dashboard.Infrastructure.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("Dashboard.Domain.Entities.AppUser", b =>
+            modelBuilder.Entity("Dashboard.Infrastructure.AppUser", b =>
                 {
                     b.HasBaseType("Microsoft.AspNetCore.Identity.IdentityUser");
 
@@ -651,7 +684,7 @@ namespace Dashboard.Infrastructure.Migrations
 
             modelBuilder.Entity("Dashboard.Domain.Entities.AssociateProfile", b =>
                 {
-                    b.HasOne("Dashboard.Domain.Entities.AppUser", null)
+                    b.HasOne("Dashboard.Infrastructure.AppUser", null)
                         .WithOne("AssociateProfile")
                         .HasForeignKey("Dashboard.Domain.Entities.AssociateProfile", "Id")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -668,7 +701,7 @@ namespace Dashboard.Infrastructure.Migrations
 
             modelBuilder.Entity("Dashboard.Domain.Entities.AssociateTeam", b =>
                 {
-                    b.HasOne("Dashboard.Domain.Entities.AppUser", null)
+                    b.HasOne("Dashboard.Infrastructure.AppUser", null)
                         .WithMany("ManagedTeams")
                         .HasForeignKey("ManagerId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -688,7 +721,7 @@ namespace Dashboard.Infrastructure.Migrations
 
             modelBuilder.Entity("Dashboard.Domain.Entities.Client", b =>
                 {
-                    b.HasOne("Dashboard.Domain.Entities.AppUser", null)
+                    b.HasOne("Dashboard.Infrastructure.AppUser", null)
                         .WithMany("ManagedClients")
                         .HasForeignKey("ManagerId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -704,6 +737,17 @@ namespace Dashboard.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Client");
+                });
+
+            modelBuilder.Entity("Dashboard.Domain.Entities.RefreshToken", b =>
+                {
+                    b.HasOne("Dashboard.Infrastructure.AppUser", "User")
+                        .WithMany("RefreshTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -789,13 +833,15 @@ namespace Dashboard.Infrastructure.Migrations
                     b.Navigation("Campaigns");
                 });
 
-            modelBuilder.Entity("Dashboard.Domain.Entities.AppUser", b =>
+            modelBuilder.Entity("Dashboard.Infrastructure.AppUser", b =>
                 {
                     b.Navigation("AssociateProfile");
 
                     b.Navigation("ManagedClients");
 
                     b.Navigation("ManagedTeams");
+
+                    b.Navigation("RefreshTokens");
                 });
 #pragma warning restore 612, 618
         }

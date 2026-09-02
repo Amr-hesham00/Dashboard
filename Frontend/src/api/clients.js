@@ -1,31 +1,38 @@
-import { getAuthHeaders } from './auth';
+import { apiFetch } from './auth';
+import { mockClients, mockUsers, getClientTargets, saveClientTargets } from '../mock/mockData';
 
 const API_BASE_URL = '/api';
 
 export async function getClientsApi() {
-  const response = await fetch(`${API_BASE_URL}/Client`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to fetch clients list.');
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/Client`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
+  } catch {
+    // Fall through to mockClients
   }
-  return response.json();
+  return mockClients;
 }
 
 export async function getClientByIdApi(id) {
-  const response = await fetch(`${API_BASE_URL}/Client/${id}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch client with ID ${id}.`);
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/Client/${id}`);
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch {
+    // Fall through to mockClients
   }
-  return response.json();
+  const found = mockClients.find((c) => String(c.id) === String(id));
+  if (found) return found;
+  return mockClients[0];
 }
 
 export async function createClientApi(clientDto) {
-  const response = await fetch(`${API_BASE_URL}/Client`, {
+  const response = await apiFetch(`${API_BASE_URL}/Client`, {
     method: 'POST',
-    headers: getAuthHeaders(),
     body: JSON.stringify(clientDto),
   });
   const data = await response.json().catch(() => ({}));
@@ -36,9 +43,8 @@ export async function createClientApi(clientDto) {
 }
 
 export async function updateClientApi(id, clientDto) {
-  const response = await fetch(`${API_BASE_URL}/Client/${id}`, {
+  const response = await apiFetch(`${API_BASE_URL}/Client/${id}`, {
     method: 'PUT',
-    headers: getAuthHeaders(),
     body: JSON.stringify(clientDto),
   });
   const data = await response.json().catch(() => ({}));
@@ -49,9 +55,8 @@ export async function updateClientApi(id, clientDto) {
 }
 
 export async function deleteClientApi(id) {
-  const response = await fetch(`${API_BASE_URL}/Client/${id}`, {
+  const response = await apiFetch(`${API_BASE_URL}/Client/${id}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -61,25 +66,56 @@ export async function deleteClientApi(id) {
 }
 
 export async function getClientStatusesApi() {
-  const response = await fetch(`${API_BASE_URL}/Client/statuses`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await apiFetch(`${API_BASE_URL}/Client/statuses`);
   if (!response.ok) return ['Active', 'Inactive', 'Lead', 'Archived'];
   return response.json();
 }
 
 export async function getClientCurrenciesApi() {
-  const response = await fetch(`${API_BASE_URL}/Client/currencies`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await apiFetch(`${API_BASE_URL}/Client/currencies`);
   if (!response.ok) return ['USD', 'EUR', 'GBP', 'CAD', 'AUD'];
   return response.json();
 }
 
 export async function getUsersApi() {
-  const response = await fetch(`${API_BASE_URL}/User`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) return [];
-  return response.json();
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/User`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
+  } catch {
+    // Fall through to mockUsers
+  }
+  return mockUsers;
 }
+
+export async function getClientTargetsApi(clientId) {
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/Client/${clientId}/targets`);
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch {
+    // Fallback to local storage / mock
+  }
+  return getClientTargets(clientId);
+}
+
+export async function updateClientTargetsApi(clientId, targets) {
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/Client/${clientId}/targets`, {
+      method: 'PUT',
+      body: JSON.stringify(targets),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      saveClientTargets(clientId, data);
+      return data;
+    }
+  } catch {
+    // Fallback to local storage / mock
+  }
+  return saveClientTargets(clientId, targets);
+}
+

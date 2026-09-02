@@ -1,5 +1,6 @@
-using System.ComponentModel.DataAnnotations;
 using Dashboard.Domain.Enums;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 
 namespace Dashboard.Application.DTOs;
 
@@ -10,10 +11,8 @@ public class UserDTO
     public string Email { get; set; } = null!;
     public string FirstName { get; set; } = null!;
     public string LastName { get; set; } = null!;
-    public string? ProfileImage { get; set; }
     public Roles? Role { get; set; }
-    public string? PhoneNumber { get; set; }
-    public bool EmailConfirmed { get; set; }
+
 }
 
 public class CreateUserDTO
@@ -26,20 +25,19 @@ public class CreateUserDTO
     public string Email { get; set; } = null!;
 
     [Required]
-    [MinLength(3)]
-    public string Password { get; set; } = null!;
-
-    [Required]
     public string FirstName { get; set; } = null!;
 
     [Required]
     public string LastName { get; set; } = null!;
 
-    public Roles? Role { get; set; }
+    [Required]
+    [MinLength(3)]
+    public string Password { get; set; } = null!;
 
-    public string? ProfileImage { get; set; }
+    [Required]
+    [MinLength(3)]
+    public string ConfirmPassword { get; set; } = null!;
 
-    public string? PhoneNumber { get; set; }
 }
 
 public class UpdateUserDTO
@@ -77,6 +75,7 @@ public class LoginDTO
     public string EmailOrUserName { get; set; } = null!;
 
     [Required]
+    [PasswordPropertyText]
     public string Password { get; set; } = null!;
 }
 

@@ -283,20 +283,35 @@ export default function AdSetsPage() {
                         <td className="text-secondary">{adSet.location || 'Global'}</td>
                         <td>{getStatusBadge(adSet.status)}</td>
                         <td className="pe-4 text-end">
-                          <button
-                            onClick={() => handleOpenEditModal(adSet)}
-                            className="btn btn-sm btn-outline-secondary me-2"
-                            title="Edit AdSet"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(adSet.id)}
-                            className="btn btn-sm btn-outline-danger"
-                            title="Delete AdSet"
-                          >
-                            Delete
-                          </button>
+                          <div className="d-inline-flex align-items-center gap-1">
+                            <button
+                              onClick={() => handleOpenEditModal(adSet)}
+                              className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1 px-2 py-1"
+                              title="Edit AdSet"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                                <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"/>
+                                <path d="M13.5 6.5l4 4"/>
+                              </svg>
+                              <span className="d-none d-md-inline small">Edit</span>
+                            </button>
+                            <button
+                              onClick={() => handleDelete(adSet.id)}
+                              className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1 px-2 py-1"
+                              title="Delete AdSet"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+                                <line x1="4" y1="7" x2="20" y2="7"/>
+                                <line x1="10" y1="11" x2="10" y2="17"/>
+                                <line x1="14" y1="11" x2="14" y2="17"/>
+                                <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/>
+                                <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/>
+                              </svg>
+                              <span className="d-none d-md-inline small">Delete</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -309,8 +324,13 @@ export default function AdSetsPage() {
 
         {/* Create / Edit Modal */}
         {showModal && (
-          <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex="-1">
-            <div className="modal-dialog modal-dialog-centered">
+          <div
+            className="modal fade show d-block"
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+            tabIndex="-1"
+            onClick={() => setShowModal(false)}
+          >
+            <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
               <div className="modal-content border-0 shadow-lg rounded-3">
                 <div className="modal-header">
                   <h5 className="modal-title fw-bold">

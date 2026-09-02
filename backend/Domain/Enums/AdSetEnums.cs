@@ -5,3 +5,9 @@ public enum AdSetStatus
     Paused,
     Completed
 }
+public enum AdSetGender
+{
+    All,
+    Male,
+    Female
+}

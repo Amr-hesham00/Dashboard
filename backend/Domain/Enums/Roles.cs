@@ -1,5 +1,5 @@
 ﻿namespace Dashboard.Domain.Enums;
 public enum Roles
 {
-    Admin, Manager, Associate
+    Manager, Admin, Associate
 }

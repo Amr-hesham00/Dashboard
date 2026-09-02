@@ -1,31 +1,38 @@
-import { getAuthHeaders } from './auth';
+import { apiFetch } from './auth';
+import { mockAdSets } from '../mock/mockData';
 
 const API_BASE_URL = '/api';
 
 export async function getAdSetsApi() {
-  const response = await fetch(`${API_BASE_URL}/AdSet`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to fetch ad sets.');
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/AdSet`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
+  } catch {
+    // Fall through to mockAdSets
   }
-  return response.json();
+  return mockAdSets;
 }
 
 export async function getAdSetByIdApi(id) {
-  const response = await fetch(`${API_BASE_URL}/AdSet/${id}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    throw new Error('Failed to fetch ad set details.');
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/AdSet/${id}`);
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch {
+    // Fall through to mockAdSets
   }
-  return response.json();
+  const found = mockAdSets.find((a) => String(a.id) === String(id));
+  if (found) return found;
+  return mockAdSets[0];
 }
 
 export async function createAdSetApi(adSetDto) {
-  const response = await fetch(`${API_BASE_URL}/AdSet`, {
+  const response = await apiFetch(`${API_BASE_URL}/AdSet`, {
     method: 'POST',
-    headers: getAuthHeaders(),
     body: JSON.stringify(adSetDto),
   });
   const data = await response.json().catch(() => ({}));
@@ -36,9 +43,8 @@ export async function createAdSetApi(adSetDto) {
 }
 
 export async function updateAdSetApi(id, adSetDto) {
-  const response = await fetch(`${API_BASE_URL}/AdSet/${id}`, {
+  const response = await apiFetch(`${API_BASE_URL}/AdSet/${id}`, {
     method: 'PUT',
-    headers: getAuthHeaders(),
     body: JSON.stringify(adSetDto),
   });
   const data = await response.json().catch(() => ({}));
@@ -49,9 +55,8 @@ export async function updateAdSetApi(id, adSetDto) {
 }
 
 export async function deleteAdSetApi(id) {
-  const response = await fetch(`${API_BASE_URL}/AdSet/${id}`, {
+  const response = await apiFetch(`${API_BASE_URL}/AdSet/${id}`, {
     method: 'DELETE',
-    headers: getAuthHeaders(),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -61,17 +66,14 @@ export async function deleteAdSetApi(id) {
 }
 
 export async function getAdSetStatusesApi() {
-  const response = await fetch(`${API_BASE_URL}/AdSet/statuses`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await apiFetch(`${API_BASE_URL}/AdSet/statuses`);
   if (!response.ok) return ['Active', 'Paused', 'Completed', 'Draft'];
   return response.json();
 }
 
 export async function getAdSetGendersApi() {
-  const response = await fetch(`${API_BASE_URL}/AdSet/genders`, {
-    headers: getAuthHeaders(),
-  });
+  const response = await apiFetch(`${API_BASE_URL}/AdSet/genders`);
   if (!response.ok) return ['All', 'Male', 'Female'];
   return response.json();
 }
+

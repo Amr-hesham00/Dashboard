@@ -12,7 +12,11 @@ import ClientDetailsPage from './components/ClientDetailsPage.jsx';
 import PlatformsPage from './components/PlatformsPage.jsx';
 import CampaignsPage from './components/CampaignsPage.jsx';
 import AdSetsPage from './components/AdSetsPage.jsx';
+import InsightsPage from './components/InsightsPage.jsx';
+import ReportsPage from './components/ReportsPage.jsx';
+import TeamPage from './components/TeamPage.jsx';
 import AccountSettingsPage from './components/AccountSettingsPage.jsx';
+import AdminManagementPage from './components/AdminManagementPage.jsx';
 
 const pageModules = import.meta.glob('./content/**/*.html', { query: '?raw', import: 'default', eager: true });
 
@@ -57,7 +61,6 @@ function createPageComponent(routeMeta) {
 
 const PUBLIC_ROUTES = [
   '/pages/authentication/sign-in',
-  '/pages/authentication/sign-up',
   '/pages/authentication/forget-password',
   '/pages/authentication/reset-password',
   '/pages/authentication/otp-varification',
@@ -77,12 +80,34 @@ export default function App() {
         <AppBootstrap />
         <Routes>
           <Route path="/pages/authentication/sign-in" element={<SignInPage />} />
-          <Route path="/pages/authentication/sign-up" element={<SignUpPage />} />
+          <Route path="/login" element={<Navigate to="/pages/authentication/sign-in" replace />} />
+
+          {/* Admin Management page restricted to authenticated Admin users only */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute adminOnly>
+                <AdminManagementPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Manager Registration is restricted to authenticated Admin users only */}
+          <Route
+            path="/pages/authentication/sign-up"
+            element={
+              <ProtectedRoute adminOnly>
+                <SignUpPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/register" element={<Navigate to="/pages/authentication/sign-up" replace />} />
+          <Route path="/signup" element={<Navigate to="/pages/authentication/sign-up" replace />} />
 
           <Route
             path="/"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute nonAdminOnly>
                 <DashboardOverview />
               </ProtectedRoute>
             }
@@ -91,7 +116,7 @@ export default function App() {
           <Route
             path="/clients"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute nonAdminOnly>
                 <ClientsPage />
               </ProtectedRoute>
             }
@@ -100,7 +125,7 @@ export default function App() {
           <Route
             path="/clients/:id"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute nonAdminOnly>
                 <ClientDetailsPage />
               </ProtectedRoute>
             }
@@ -109,7 +134,7 @@ export default function App() {
           <Route
             path="/platforms"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute nonAdminOnly>
                 <PlatformsPage />
               </ProtectedRoute>
             }
@@ -118,7 +143,7 @@ export default function App() {
           <Route
             path="/campaigns"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute nonAdminOnly>
                 <CampaignsPage />
               </ProtectedRoute>
             }
@@ -127,8 +152,35 @@ export default function App() {
           <Route
             path="/adsets"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute nonAdminOnly>
                 <AdSetsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/insights"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <InsightsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/team"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <TeamPage />
               </ProtectedRoute>
             }
           />
@@ -147,10 +199,14 @@ export default function App() {
           {routeComponents.map(({ route, Component }) => {
             if (
               route === '/' ||
+              route === '/admin' ||
               route === '/clients' ||
               route === '/platforms' ||
               route === '/campaigns' ||
               route === '/adsets' ||
+              route === '/insights' ||
+              route === '/reports' ||
+              route === '/team' ||
               route === '/pages/clients' ||
               route === '/pages/platforms' ||
               route === '/pages/campaigns' ||

@@ -13,6 +13,7 @@ public interface IUnitOfWork : IDisposable
     IClientRepo Client { get; }
     IPlatformRepo Platform { get; }
     IUserRepo User { get; }
+    IRefreshTokenRepo RefreshToken { get; }
 
     Task Complete();
 }
