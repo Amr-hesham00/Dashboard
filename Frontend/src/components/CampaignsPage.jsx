@@ -399,13 +399,6 @@ export default function CampaignsPage() {
     sortDirection,
   ]);
 
-  // Overall KPIs calculation
-  const totalSpend = campaigns.reduce((acc, curr) => acc + (curr.spend || 0), 0);
-  const totalRevenue = campaigns.reduce((acc, curr) => acc + (curr.revenue || 0), 0);
-  const avgRoas = campaigns.length
-    ? (campaigns.reduce((acc, curr) => acc + (curr.roas || 0), 0) / campaigns.length).toFixed(2)
-    : 0;
-
   // Active Applied Filters count (excluding search)
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -427,6 +420,31 @@ export default function CampaignsPage() {
   }, [appliedFilters]);
 
   const hasAnyFilterActive = search.trim() !== '' || activeFiltersCount > 0;
+
+  // KPIs calculation (reacts cleanly to active filters)
+  const displayCampaigns = hasAnyFilterActive ? filteredAndSortedCampaigns : campaigns;
+  const kpiTotalCampaigns = displayCampaigns.length;
+  const kpiActiveCount = displayCampaigns.filter((c) => Number(c.status) === 0).length;
+  const kpiPausedCount = displayCampaigns.filter((c) => Number(c.status) === 1).length;
+  const kpiTotalSpend = displayCampaigns.reduce((acc, curr) => acc + (Number(curr.spend) || 0), 0);
+  const kpiTotalRevenue = displayCampaigns.reduce((acc, curr) => acc + (Number(curr.revenue) || 0), 0);
+  const kpiRoas = kpiTotalSpend > 0
+    ? (kpiTotalRevenue / kpiTotalSpend).toFixed(2)
+    : (displayCampaigns.length
+        ? (displayCampaigns.reduce((acc, curr) => acc + (Number(curr.roas) || 0), 0) / displayCampaigns.length).toFixed(2)
+        : '0.00');
+  const kpiConversions = displayCampaigns.reduce((acc, curr) => acc + (Number(curr.conversions) || 0), 0);
+  const kpiImpressions = displayCampaigns.reduce((acc, curr) => acc + (Number(curr.impressions) || 0), 0);
+  const kpiClicks = displayCampaigns.reduce((acc, curr) => acc + (Number(curr.clicks) || 0), 0);
+  const kpiCtr = kpiImpressions > 0 ? ((kpiClicks / kpiImpressions) * 100).toFixed(2) : '0.00';
+  const kpiNetProfit = kpiTotalRevenue - kpiTotalSpend;
+
+  const formatKpiNumber = (num) => {
+    if (!num) return '0';
+    if (num >= 1000000) return `${(num / 1000000).toFixed(2)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    return num.toLocaleString();
+  };
 
   // Clear all filters handler
   const clearAllFilters = () => {
@@ -579,6 +597,20 @@ export default function CampaignsPage() {
   return (
     <DashboardLayout title="Campaigns Management | Dasher">
       <div className="container-fluid px-0">
+        {/* ─── Breadcrumb ─── */}
+        <nav aria-label="breadcrumb" className="mb-4">
+          <ol className="breadcrumb mb-0 py-0 bg-transparent small align-items-center">
+            <li className="breadcrumb-item">
+              <Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">
+                Dashboard
+              </Link>
+            </li>
+            <li className="breadcrumb-item active text-success fw-semibold" aria-current="page">
+              Campaigns
+            </li>
+          </ol>
+        </nav>
+
         {/* Header Title & Actions */}
         <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
           <div>
@@ -594,30 +626,131 @@ export default function CampaignsPage() {
           </button>
         </div>
 
-        {/* KPI Metrics Summary */}
-        <div className="row g-3 mb-4">
-          <div className="col-12 col-sm-6 col-xl-3">
-            <div className="card border-0 shadow-sm rounded-3 p-3">
-              <span className="text-secondary small fw-medium">Total Campaigns</span>
-              <h3 className="h4 mb-0 fw-bold mt-2">{campaigns.length}</h3>
+        {/* ─── Modern Refactored KPI Section ─── */}
+        <div className="card border-0 shadow-sm rounded-3 mb-4 overflow-hidden">
+          <div className="card-body p-3 p-md-3.5">
+            <div className="row g-3">
+              {/* 1. Campaigns */}
+              <div className="col-6 col-md-3">
+                <div className="d-flex flex-column">
+                  <span className="text-secondary small fw-medium text-uppercase" style={{ fontSize: '0.72rem', letterSpacing: '0.04em' }}>
+                    Campaigns
+                  </span>
+                  <div className="d-flex align-items-baseline gap-1 mt-0.5">
+                    <span className="fs-4 fw-bold text-body-emphasis" style={{ letterSpacing: '-0.02em' }}>
+                      {kpiTotalCampaigns}
+                    </span>
+                  </div>
+                  <div className="d-flex align-items-center gap-1.5 mt-1 flex-wrap">
+                    <span className="badge bg-success-subtle text-success border border-success-subtle rounded-pill px-1.5 py-0.5" style={{ fontSize: '0.68rem' }}>
+                      ● {kpiActiveCount} Active
+                    </span>
+                    {kpiPausedCount > 0 && (
+                      <span className="text-secondary small" style={{ fontSize: '0.72rem' }}>
+                        · {kpiPausedCount} Paused
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Total Spend */}
+              <div className="col-6 col-md-3">
+                <div className="d-flex flex-column border-start-md ps-md-3">
+                  <span className="text-secondary small fw-medium text-uppercase" style={{ fontSize: '0.72rem', letterSpacing: '0.04em' }}>
+                    Total Spend
+                  </span>
+                  <div className="d-flex align-items-baseline gap-1 mt-0.5">
+                    <span className="fs-4 fw-bold text-danger" style={{ letterSpacing: '-0.02em' }}>
+                      ${kpiTotalSpend.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="text-secondary small mt-1" style={{ fontSize: '0.72rem' }}>
+                    {kpiTotalCampaigns > 0 ? `$${Math.round(kpiTotalSpend / kpiTotalCampaigns).toLocaleString()} avg / camp` : 'No spend'}
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Total Revenue */}
+              <div className="col-6 col-md-3">
+                <div className="d-flex flex-column border-start-md ps-md-3">
+                  <span className="text-secondary small fw-medium text-uppercase" style={{ fontSize: '0.72rem', letterSpacing: '0.04em' }}>
+                    Total Revenue
+                  </span>
+                  <div className="d-flex align-items-baseline gap-1 mt-0.5">
+                    <span className="fs-4 fw-bold text-success" style={{ letterSpacing: '-0.02em' }}>
+                      ${kpiTotalRevenue.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="mt-1" style={{ fontSize: '0.72rem' }}>
+                    <span className={`fw-semibold ${kpiNetProfit >= 0 ? 'text-success' : 'text-danger'}`}>
+                      {kpiNetProfit >= 0 ? `+$${kpiNetProfit.toLocaleString()}` : `-$${Math.abs(kpiNetProfit).toLocaleString()}`} Net
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Blended ROAS */}
+              <div className="col-6 col-md-3">
+                <div className="d-flex flex-column border-start-md ps-md-3">
+                  <span className="text-secondary small fw-medium text-uppercase" style={{ fontSize: '0.72rem', letterSpacing: '0.04em' }}>
+                    Blended ROAS
+                  </span>
+                  <div className="d-flex align-items-baseline gap-1.5 mt-0.5">
+                    <span className="fs-4 fw-bold text-primary" style={{ letterSpacing: '-0.02em' }}>
+                      {kpiRoas}x
+                    </span>
+                    <span
+                      className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-1.5 py-0.5"
+                      style={{ fontSize: '0.68rem' }}
+                    >
+                      Target: 3.5x
+                    </span>
+                  </div>
+                  <div className="text-secondary small mt-1" style={{ fontSize: '0.72rem' }}>
+                    Overall efficiency
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="col-12 col-sm-6 col-xl-3">
-            <div className="card border-0 shadow-sm rounded-3 p-3">
-              <span className="text-secondary small fw-medium">Total Spend</span>
-              <h3 className="h4 mb-0 fw-bold mt-2 text-danger">${totalSpend.toLocaleString()}</h3>
-            </div>
-          </div>
-          <div className="col-12 col-sm-6 col-xl-3">
-            <div className="card border-0 shadow-sm rounded-3 p-3">
-              <span className="text-secondary small fw-medium">Total Revenue</span>
-              <h3 className="h4 mb-0 fw-bold mt-2 text-success">${totalRevenue.toLocaleString()}</h3>
-            </div>
-          </div>
-          <div className="col-12 col-sm-6 col-xl-3">
-            <div className="card border-0 shadow-sm rounded-3 p-3">
-              <span className="text-secondary small fw-medium">Average ROAS</span>
-              <h3 className="h4 mb-0 fw-bold mt-2 text-primary">{avgRoas}x</h3>
+
+          {/* Secondary Performance Strip */}
+          <div className="bg-body-tertiary px-3 px-md-3.5 py-2 border-top">
+            <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 text-secondary small">
+              <div className="d-flex flex-wrap align-items-center gap-3 gap-md-4">
+                <div className="d-flex align-items-center gap-1.5">
+                  <span className="text-secondary">Conversions:</span>
+                  <strong className="text-body fw-semibold">{kpiConversions.toLocaleString()}</strong>
+                </div>
+                <div className="d-flex align-items-center gap-1.5">
+                  <span className="text-secondary">Impressions:</span>
+                  <strong className="text-body fw-semibold">{formatKpiNumber(kpiImpressions)}</strong>
+                </div>
+                <div className="d-flex align-items-center gap-1.5">
+                  <span className="text-secondary">Clicks:</span>
+                  <strong className="text-body fw-semibold">{formatKpiNumber(kpiClicks)}</strong>
+                </div>
+                <div className="d-flex align-items-center gap-1.5">
+                  <span className="text-secondary">Avg CTR:</span>
+                  <strong className="text-body fw-semibold">{kpiCtr}%</strong>
+                </div>
+              </div>
+              {hasAnyFilterActive && (
+                <div className="d-flex align-items-center gap-2 ms-auto">
+                  <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2 py-0.5" style={{ fontSize: '0.7rem' }}>
+                    Filtered ({kpiTotalCampaigns} of {campaigns.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={clearAllFilters}
+                    className="btn btn-link p-0 text-decoration-none text-secondary small"
+                    style={{ fontSize: '0.72rem' }}
+                  >
+                    Reset
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1205,16 +1338,17 @@ export default function CampaignsPage() {
                         <tr key={camp.id}>
                           {/* 1. Campaign Name */}
                           <td className="ps-4">
-                            <span
-                              className="fw-bold text-body"
+                            <Link
+                              to={`/clients/${clientInfo.id}/campaigns/${camp.id}`}
+                              className="fw-bold text-body-emphasis text-decoration-none hover-primary"
                               style={{
-                                color: 'var(--bs-heading-color, var(--bs-body-color))',
                                 fontSize: '0.92rem',
                                 letterSpacing: '-0.01em',
                               }}
+                              title={`View campaign details for ${camp.name}`}
                             >
                               {camp.name}
-                            </span>
+                            </Link>
                           </td>
 
                           {/* 2. Client Name */}

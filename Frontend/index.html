@@ -1,182 +1,351 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <meta content="Codescandy" name="author" />
-    <link rel="apple-touch-icon" sizes="57x57" href="/assets/images/favicon/apple-icon-57x57.png" />
-    <link rel="apple-touch-icon" sizes="60x60" href="/assets/images/favicon/apple-icon-60x60.png" />
-    <link rel="apple-touch-icon" sizes="72x72" href="/assets/images/favicon/apple-icon-72x72.png" />
-    <link rel="apple-touch-icon" sizes="76x76" href="/assets/images/favicon/apple-icon-76x76.png" />
-    <link rel="apple-touch-icon" sizes="114x114" href="/assets/images/favicon/apple-icon-114x114.png" />
-    <link rel="apple-touch-icon" sizes="120x120" href="/assets/images/favicon/apple-icon-120x120.png" />
-    <link rel="apple-touch-icon" sizes="144x144" href="/assets/images/favicon/apple-icon-144x144.png" />
-    <link rel="apple-touch-icon" sizes="152x152" href="/assets/images/favicon/apple-icon-152x152.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/favicon/apple-icon-180x180.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/favicon/android-icon-192x192.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon/favicon-32x32.png" />
-    <link rel="icon" type="image/png" sizes="96x96" href="/assets/images/favicon/favicon-96x96.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon/favicon-16x16.png" />
-    <meta name="msapplication-TileColor" content="#ffffff" />
-    <meta name="msapplication-TileImage" content="/assets/images/favicon/ms-icon-144x144.png" />
-    <meta name="theme-color" content="#ffffff" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800&display=swap" />
-    <link rel="stylesheet" href="/vendor/simplebar/dist/simplebar.min.css" />
-    <link rel="stylesheet" href="/vendor/tabler-icons/tabler-icons.min.css" />
-    <link rel="stylesheet" href="/vendor/swiper/swiper-bundle.min.css" />
-    <link rel="stylesheet" href="/vendor/jsvectormap/dist/css/jsvectormap.min.css" />
-    <link rel="stylesheet" href="/assets/css/theme.css" />
-    <style>
-      /* Sidebar Account Section - Fixed position, Hover Flyout to Right */
-      .sidebar-account-footer {
-        position: relative !important;
-      }
-      .sidebar-account-card-wrapper {
-        position: relative !important;
-      }
-      .sidebar-account-card {
-        transition: background-color 0.2s ease, border-color 0.2s ease;
-        transform: none !important;
-        margin: 0 !important;
-        cursor: pointer;
-      }
-      .sidebar-account-card:hover {
-        background: rgba(30, 41, 59, 0.9) !important;
-        border-color: rgba(16, 185, 129, 0.4) !important;
-      }
-      .sidebar-account-flyout {
-        position: absolute;
-        left: 100%;
-        bottom: 0;
-        margin-left: 12px;
-        min-width: 210px;
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
-        transform: translateX(-10px);
-        z-index: 99999 !important;
-        background: #0f172a !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
-        border-radius: 14px !important;
-        padding: 8px !important;
-      }
-      /* Invisible hover bridge between card and flyout to prevent accidental closing */
-      .sidebar-account-card-wrapper::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 100%;
-        width: 16px;
-      }
-      /* Hover Trigger */
-      .sidebar-account-card-wrapper:hover .sidebar-account-flyout,
-      .sidebar-account-flyout:hover {
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
-        transform: translateX(0);
-      }
-      .sidebar-account-flyout .dropdown-item:hover {
-        background-color: rgba(255, 255, 255, 0.08) !important;
-      }
 
-      /* Faded subtle backdrop for modals */
-      .modal-backdrop {
-        background-color: rgba(15, 23, 42, 0.15) !important;
-        backdrop-filter: blur(5px) !important;
-        -webkit-backdrop-filter: blur(5px) !important;
-      }
-      .modal-backdrop.show {
-        opacity: 1 !important;
-      }
-      #searchModal .modal-content {
-        border-radius: 14px;
-        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.18);
-      }
-      #searchModal .modal-header {
-        padding: 0.75rem 1.25rem;
-      }
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <meta content="Codescandy" name="author" />
+  <link rel="apple-touch-icon" sizes="57x57" href="/assets/images/favicon/apple-icon-57x57.png" />
+  <link rel="apple-touch-icon" sizes="60x60" href="/assets/images/favicon/apple-icon-60x60.png" />
+  <link rel="apple-touch-icon" sizes="72x72" href="/assets/images/favicon/apple-icon-72x72.png" />
+  <link rel="apple-touch-icon" sizes="76x76" href="/assets/images/favicon/apple-icon-76x76.png" />
+  <link rel="apple-touch-icon" sizes="114x114" href="/assets/images/favicon/apple-icon-114x114.png" />
+  <link rel="apple-touch-icon" sizes="120x120" href="/assets/images/favicon/apple-icon-120x120.png" />
+  <link rel="apple-touch-icon" sizes="144x144" href="/assets/images/favicon/apple-icon-144x144.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="/assets/images/favicon/apple-icon-152x152.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/images/favicon/apple-icon-180x180.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/assets/images/favicon/android-icon-192x192.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="96x96" href="/assets/images/favicon/favicon-96x96.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon/favicon-16x16.png" />
+  <meta name="msapplication-TileColor" content="#ffffff" />
+  <meta name="msapplication-TileImage" content="/assets/images/favicon/ms-icon-144x144.png" />
+  <meta name="theme-color" content="#ffffff" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800&display=swap" />
+  <link rel="stylesheet" href="/vendor/simplebar/dist/simplebar.min.css" />
+  <link rel="stylesheet" href="/vendor/tabler-icons/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/vendor/swiper/swiper-bundle.min.css" />
+  <link rel="stylesheet" href="/vendor/jsvectormap/dist/css/jsvectormap.min.css" />
+  <link rel="stylesheet" href="/assets/css/theme.css" />
+  <style>
+    /* Sidebar Account Section - Fixed position, Hover Flyout to Right */
+    .sidebar-account-footer {
+      position: relative !important;
+    }
 
-      /* Client-Style KPI Card Hover Animations */
-      .kpi-stat-card {
-        transition: transform 0.18s ease, box-shadow 0.18s ease;
-      }
-      .kpi-stat-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
-      }
+    .sidebar-account-card-wrapper {
+      position: relative !important;
+    }
 
-      /* Balanced KPI Title */
-      .kpi-title {
-        color: #475569 !important;
-        font-weight: 600 !important;
-        letter-spacing: 0.4px;
-        font-size: 0.785rem;
-      }
-      [data-bs-theme="dark"] .kpi-title {
-        color: #94a3b8 !important;
-      }
+    .sidebar-account-card {
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+      transform: none !important;
+      margin: 0 !important;
+      cursor: pointer;
+    }
 
-      /* Traffic Light Single-Color Progress Bars */
-      .progress-traffic-track {
-        height: 7px;
-        border-radius: 10px;
-        background-color: rgba(148, 163, 184, 0.2);
-        overflow: hidden;
-      }
-      .progress-traffic-green {
-        background: linear-gradient(90deg, #10b981, #059669) !important;
-        border-radius: 10px;
-      }
-      .progress-traffic-yellow {
-        background: linear-gradient(90deg, #f59e0b, #d97706) !important;
-        border-radius: 10px;
-      }
-      .progress-traffic-red {
-        background: linear-gradient(90deg, #ef4444, #dc2626) !important;
-        border-radius: 10px;
-      }
+    .sidebar-account-card:hover {
+      background: rgba(30, 41, 59, 0.9) !important;
+      border-color: rgba(16, 185, 129, 0.4) !important;
+    }
 
-      /* Clickable Client Link Hover */
-      .group-client-hover {
-        cursor: pointer;
-      }
-      .group-client-hover:hover .client-name-hover {
-        color: var(--bs-primary) !important;
-      }
-      .group-client-hover .avatar {
-        transition: transform 0.18s ease, box-shadow 0.18s ease;
-      }
-      .group-client-hover:hover .avatar {
-        transform: scale(1.06);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-      }
+    .sidebar-account-flyout {
+      position: absolute;
+      left: 100%;
+      bottom: 0;
+      margin-left: 12px;
+      min-width: 210px;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+      transform: translateX(-10px);
+      z-index: 99999 !important;
+      background: #1c252e !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+      border-radius: 14px !important;
+      padding: 8px !important;
+    }
 
-      /* Pinned Bottom Footer */
-      #content {
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-      }
-      #content .custom-container {
-        flex: 1 0 auto;
-      }
-      #content footer {
-        margin-top: auto;
-      }
-    </style>
-    <script src="/assets/js/vendors/color-modes.js"></script>
-    <script src="/vendor/simplebar/dist/simplebar.min.js"></script>
-    <title>Dasher Free - Responsive Bootstrap 5 Admin Dashboard</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script src="/assets/js/main.js"></script>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+    /* Invisible hover bridge between card and flyout to prevent accidental closing */
+    .sidebar-account-card-wrapper::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 100%;
+      width: 16px;
+    }
+
+    /* Hover Trigger */
+    .sidebar-account-card-wrapper:hover .sidebar-account-flyout,
+    .sidebar-account-flyout:hover {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+
+    .sidebar-account-flyout .dropdown-item:hover {
+      background-color: rgba(255, 255, 255, 0.08) !important;
+    }
+
+    /* Faded subtle backdrop for modals */
+    .modal-backdrop {
+      background-color: rgba(15, 23, 42, 0.15) !important;
+      backdrop-filter: blur(5px) !important;
+      -webkit-backdrop-filter: blur(5px) !important;
+    }
+
+    .modal-backdrop.show {
+      opacity: 1 !important;
+    }
+
+    #searchModal .modal-content {
+      border-radius: 14px;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.18);
+    }
+
+    #searchModal .modal-header {
+      padding: 0.75rem 1.25rem;
+    }
+
+    /* Client-Style KPI Card Hover Animations */
+    .kpi-stat-card {
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .kpi-stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+    }
+
+    /* Balanced KPI Title */
+    .kpi-title {
+      color: #475569 !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.4px;
+      font-size: 0.785rem;
+    }
+
+    [data-bs-theme="dark"] .kpi-title {
+      color: #94a3b8 !important;
+    }
+
+    /* Traffic Light Single-Color Progress Bars */
+    .progress-traffic-track {
+      height: 7px;
+      border-radius: 10px;
+      background-color: rgba(148, 163, 184, 0.2);
+      overflow: hidden;
+    }
+
+    .progress-traffic-green {
+      background: linear-gradient(90deg, #10b981, #059669) !important;
+      border-radius: 10px;
+    }
+
+    .progress-traffic-yellow {
+      background: linear-gradient(90deg, #f59e0b, #d97706) !important;
+      border-radius: 10px;
+    }
+
+    .progress-traffic-red {
+      background: linear-gradient(90deg, #ef4444, #dc2626) !important;
+      border-radius: 10px;
+    }
+
+    /* Clickable Client Link Hover */
+    .group-client-hover {
+      cursor: pointer;
+    }
+
+    .group-client-hover:hover .client-name-hover {
+      color: var(--bs-primary) !important;
+    }
+
+    .group-client-hover .avatar {
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .group-client-hover:hover .avatar {
+      transform: scale(1.06);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    /* Pinned Bottom Footer */
+    #content {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #content .custom-container {
+      flex: 1 0 auto;
+    }
+
+    #content footer {
+      margin-top: auto;
+    }
+
+    /* ─── Universal Clean & Clear Breadcrumb Styling ─── */
+    .breadcrumb {
+      margin-bottom: 0;
+      padding: 0;
+      background: transparent;
+      font-size: 0.84rem;
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .breadcrumb-item {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .breadcrumb-item a,
+    .breadcrumb-item .text-secondary {
+      color: #64748b !important;
+      font-weight: 500 !important;
+      text-decoration: none !important;
+      transition: color 0.15s ease-in-out;
+    }
+
+    .breadcrumb-item a:hover {
+      color: #059669 !important;
+    }
+
+    .breadcrumb-item.active,
+    .breadcrumb-item.active a,
+    .breadcrumb-item.active.text-primary,
+    .breadcrumb-item.active.text-success {
+      color: #047857 !important;
+      font-weight: 600 !important;
+    }
+
+    [data-bs-theme="dark"] .breadcrumb-item a,
+    [data-bs-theme="dark"] .breadcrumb-item .text-secondary {
+      color: #94a3b8 !important;
+    }
+
+    [data-bs-theme="dark"] .breadcrumb-item a:hover {
+      color: #10b981 !important;
+    }
+
+    [data-bs-theme="dark"] .breadcrumb-item.active,
+    [data-bs-theme="dark"] .breadcrumb-item.active.text-primary,
+    [data-bs-theme="dark"] .breadcrumb-item.active.text-success {
+      color: #10b981 !important;
+    }
+
+    .hover-primary:hover {
+      color: #059669 !important;
+    }
+
+    /* ─── Universal Navbar Title & Heading Styling ─── */
+    .topbar-page-title,
+    h1.topbar-page-title,
+    button.topbar-page-title,
+    .navbar .topbar-page-title {
+      color: #c4cdd5 !important;
+    }
+
+    .nav-heading,
+    .navbar-vertical .nav-heading,
+    #miniSidebar .nav-heading,
+    .offcanvasNav .nav-heading {
+      color: #c4cdd5 !important;
+    }
+
+    /* ─── Profile Menu Dropdown Global Styles ─── */
+    .profile-menu-dropdown {
+      background-color: #1c252e !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.55), 0 6px 16px rgba(0, 0, 0, 0.35) !important;
+      border-radius: 14px !important;
+      padding: 8px !important;
+      backdrop-filter: blur(14px);
+    }
+
+    .profile-menu-item {
+      color: #94a3b8 !important;
+      border-radius: 8px !important;
+      padding: 10px 16px !important;
+      font-size: 0.92rem !important;
+      font-weight: 500 !important;
+      gap: 16px !important;
+      transition: background-color 0.15s ease, color 0.15s ease;
+      background: transparent;
+      cursor: pointer !important;
+    }
+
+    .profile-menu-item:hover,
+    .profile-menu-item:focus {
+      background-color: rgba(255, 255, 255, 0.08) !important;
+      color: #ffffff !important;
+    }
+
+    .profile-menu-item svg {
+      color: #94a3b8;
+      transition: color 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .profile-menu-item:hover svg,
+    .profile-menu-item:focus svg {
+      color: #ffffff;
+    }
+
+    .profile-menu-danger {
+      color: #f87171 !important;
+      border-radius: 8px !important;
+      padding: 10px 16px !important;
+      font-size: 0.92rem !important;
+      font-weight: 500 !important;
+      gap: 16px !important;
+      transition: all 0.15s ease;
+      background: transparent;
+      cursor: pointer !important;
+    }
+
+    .profile-menu-danger:hover,
+    .profile-menu-danger:focus {
+      background-color: rgba(239, 68, 68, 0.12) !important;
+      color: #ef4444 !important;
+    }
+
+    .profile-menu-danger svg {
+      color: #f87171 !important;
+      transition: color 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .profile-menu-danger:hover svg,
+    .profile-menu-danger:focus svg {
+      color: #ef4444 !important;
+    }
+
+    /* ─── Suppress Bootstrap popup tooltips on sidebar navigation items ─── */
+    #miniSidebar .tooltip,
+    .navbar-vertical .tooltip,
+    .sidebar-account-footer .tooltip {
+      display: none !important;
+    }
+  </style>
+  <script src="/assets/js/vendors/color-modes.js"></script>
+  <script src="/vendor/simplebar/dist/simplebar.min.js"></script>
+  <title>Dasher Free - Responsive Bootstrap 5 Admin Dashboard</title>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script src="/assets/js/main.js"></script>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
 </html>

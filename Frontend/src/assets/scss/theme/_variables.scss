@@ -940,13 +940,13 @@ $navbar-light-brand-hover-color: $navbar-light-active-color !default;
 // scss-docs-end navbar-variables
 
 // scss-docs-start navbar-dark-variables
-$navbar-dark-color: rgba($white, 0.85) !default;
+$navbar-dark-color: $gray-400 !default; // #c4cdd5
 $navbar-dark-hover-color: rgba($white, 1) !default;
 $navbar-dark-active-color: $white !default;
 $navbar-dark-disabled-color: rgba($white, 0.25) !default;
 $navbar-dark-toggler-icon-bg: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'><path stroke='#{$navbar-dark-color}' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/></svg>") !default;
 $navbar-dark-toggler-border-color: rgba($white, 0.1) !default;
-$navbar-dark-brand-color: $navbar-dark-active-color !default;
+$navbar-dark-brand-color: $gray-400 !default; // #c4cdd5
 $navbar-dark-brand-hover-color: $navbar-dark-active-color !default;
 // scss-docs-end navbar-dark-variables
 

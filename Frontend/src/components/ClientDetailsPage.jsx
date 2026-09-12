@@ -24,6 +24,7 @@ import {
   defaultClientTargets,
 } from '../mock/mockData';
 import metaIcon from '../assets/meta-icon.webp';
+import KpiMetricBadge from './KpiMetricBadge';
 
 // ─── ApexCharts React Wrapper ───────────────────────────────────────
 function ApexChart({ options, series, type, height = 310 }) {
@@ -1066,14 +1067,14 @@ export default function ClientDetailsPage() {
     const nowDate = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const updatedOverview = { lastSync: now, lastSyncDate: nowDate };
     setOverviewLastSync(updatedOverview);
-    try { localStorage.setItem(overviewSyncStorageKey, JSON.stringify(updatedOverview)); } catch {}
+    try { localStorage.setItem(overviewSyncStorageKey, JSON.stringify(updatedOverview)); } catch { }
 
     setPlatformsState((prev) => {
       const updated = {};
       Object.keys(prev).forEach((k) => {
         updated[k] = { ...prev[k], lastSync: now, lastSyncDate: nowDate };
       });
-      try { localStorage.setItem(platformsStorageKey, JSON.stringify(updated)); } catch {}
+      try { localStorage.setItem(platformsStorageKey, JSON.stringify(updated)); } catch { }
       return updated;
     });
     setTimeout(() => {
@@ -1192,8 +1193,14 @@ export default function ClientDetailsPage() {
   // ═══════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════
+  const dynamicClientName = client?.companyName || client?.name || 'Client';
+
   return (
-    <DashboardLayout title={`${client.companyName || 'Client'} | Dasher`}>
+    <DashboardLayout
+      title={`${dynamicClientName} | Dasher`}
+      pageTitle={dynamicClientName}
+      clientSwitcher={{ currentClientId: client?.id || id, currentClientName: dynamicClientName }}
+    >
       {/* Micro-animations & custom styling */}
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -1287,10 +1294,23 @@ export default function ClientDetailsPage() {
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 gap-2 no-print">
           {/* Left: Breadcrumb */}
           <nav aria-label="breadcrumb">
-            <ol className="breadcrumb small mb-0">
-              <li className="breadcrumb-item"><Link to="/">Dashboard</Link></li>
-              <li className="breadcrumb-item"><Link to="/clients">Clients</Link></li>
-              <li className="breadcrumb-item active" aria-current="page">{client.companyName}</li>
+            <ol className="breadcrumb mb-0 py-0 bg-transparent small align-items-center">
+              <li className="breadcrumb-item">
+                <Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">
+                  Dashboard
+                </Link>
+              </li>
+              <li className="breadcrumb-item">
+                <Link to="/clients" className="text-decoration-none fw-semibold text-secondary hover-primary">
+                  Clients
+                </Link>
+              </li>
+              <li
+                className="breadcrumb-item active text-success fw-semibold"
+                aria-current="page"
+              >
+                {dynamicClientName}
+              </li>
             </ol>
           </nav>
 
@@ -1738,9 +1758,7 @@ export default function ClientDetailsPage() {
                         <div className="card-body p-3 d-flex flex-column justify-content-between">
                           <div className="d-flex justify-content-between align-items-center mb-1">
                             <span className="text-secondary fw-semibold small text-truncate" title={kpiDef.label}>{kpiDef.label}</span>
-                            <span className={`badge rounded-pill bg-${kpiDef.color}-subtle text-${kpiDef.color}-emphasis px-2 py-0.5 fw-bold`} style={{ fontSize: '0.7rem' }}>
-                              {kpiDef.key.toUpperCase()}
-                            </span>
+                            <KpiMetricBadge metricKey={kpiDef.key} color={kpiDef.color} label={kpiDef.label} size={34} />
                           </div>
                           <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">
                             {formatKPIValue(kpiData.value, kpiDef.format)}
@@ -1782,11 +1800,10 @@ export default function ClientDetailsPage() {
                             key={key}
                             type="button"
                             onClick={() => handleMetricToggle(key)}
-                            className={`btn btn-sm d-inline-flex align-items-center gap-2 px-2.5 py-1 rounded-pill transition-all ${
-                              isSelected
-                                ? 'bg-body-tertiary border text-body-emphasis fw-semibold shadow-xs'
-                                : 'bg-transparent border text-body-secondary'
-                            }`}
+                            className={`btn btn-sm d-inline-flex align-items-center gap-2 px-2.5 py-1 rounded-pill transition-all ${isSelected
+                              ? 'bg-body-tertiary border text-body-emphasis fw-semibold shadow-xs'
+                              : 'bg-transparent border text-body-secondary'
+                              }`}
                             style={{
                               fontSize: '0.78rem',
                               borderColor: isSelected ? cfg.color : 'rgba(0,0,0,0.12)',
@@ -2064,9 +2081,8 @@ export default function ClientDetailsPage() {
                       <button
                         type="button"
                         onClick={handleToggleFilterMenu}
-                        className={`btn btn-sm d-inline-flex align-items-center gap-2 px-3 py-1.5 fw-semibold rounded-2 ${
-                          activeOverviewFiltersCount > 0 ? 'btn-primary shadow-sm' : 'btn-outline-secondary'
-                        }`}
+                        className={`btn btn-sm d-inline-flex align-items-center gap-2 px-3 py-1.5 fw-semibold rounded-2 ${activeOverviewFiltersCount > 0 ? 'btn-primary shadow-sm' : 'btn-outline-secondary'
+                          }`}
                         title="Toggle filter menu"
                         aria-expanded={showFilterMenu}
                         style={{ fontSize: '0.82rem' }}
@@ -2357,17 +2373,16 @@ export default function ClientDetailsPage() {
                           return (
                             <tr
                               key={camp.id}
-                              className="platform-row"
+                              className="platform-row cursor-pointer"
                               style={{ cursor: 'pointer' }}
-                              onClick={() => setActiveTab(camp.platformKey)}
-                              title={`Click to view ${camp.platformLabel} tab`}
+                              onClick={() => navigate(`/clients/${id}/campaigns/${camp.id}`)}
+                              title={`Click to view ${camp.name} details`}
                             >
                               {/* 1. Campaign Name */}
                               <td className="ps-4" style={{ maxWidth: 260 }}>
                                 <span
-                                  className="fw-bold text-body text-truncate d-block"
+                                  className="fw-bold text-primary text-truncate d-block"
                                   style={{
-                                    color: 'var(--bs-heading-color, var(--bs-body-color))',
                                     fontSize: '0.88rem',
                                     letterSpacing: '-0.01em',
                                     maxWidth: 240,
@@ -2781,9 +2796,9 @@ export default function ClientDetailsPage() {
                 <div className="d-flex align-items-center" style={{ gap: '14px' }}>
                   <div className="avatar bg-primary text-white rounded-3 d-flex align-items-center justify-content-center shadow-xs flex-shrink-0" style={{ width: 36, height: 36, marginRight: '2px' }}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10"/>
-                      <circle cx="12" cy="12" r="6"/>
-                      <circle cx="12" cy="12" r="2"/>
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="6" />
+                      <circle cx="12" cy="12" r="2" />
                     </svg>
                   </div>
                   <div>
@@ -2804,11 +2819,10 @@ export default function ClientDetailsPage() {
                     <div className="d-flex p-1 bg-body-tertiary rounded-3 border">
                       <button
                         type="button"
-                        className={`btn btn-sm flex-fill rounded-2 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 border-0 ${
-                          targetFormData.businessModel === 'ecommerce'
-                            ? 'btn-primary shadow-xs'
-                            : 'btn-ghost text-body-secondary'
-                        }`}
+                        className={`btn btn-sm flex-fill rounded-2 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 border-0 ${targetFormData.businessModel === 'ecommerce'
+                          ? 'btn-primary shadow-xs'
+                          : 'btn-ghost text-body-secondary'
+                          }`}
                         style={{ fontSize: '0.84rem' }}
                         onClick={() => {
                           setTargetFormData((prev) => ({
@@ -2823,11 +2837,10 @@ export default function ClientDetailsPage() {
                       </button>
                       <button
                         type="button"
-                        className={`btn btn-sm flex-fill rounded-2 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 border-0 ${
-                          targetFormData.businessModel === 'lead_generation'
-                            ? 'btn-primary shadow-xs'
-                            : 'btn-ghost text-body-secondary'
-                        }`}
+                        className={`btn btn-sm flex-fill rounded-2 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 border-0 ${targetFormData.businessModel === 'lead_generation'
+                          ? 'btn-primary shadow-xs'
+                          : 'btn-ghost text-body-secondary'
+                          }`}
                         style={{ fontSize: '0.84rem' }}
                         onClick={() => {
                           setTargetFormData((prev) => ({
@@ -3066,6 +3079,7 @@ export default function ClientDetailsPage() {
 // ════════════════════════════════════════════════════════════════════
 
 function PlatformTabContent({ platform, platformKey, connectionState, onReconnect, onRefresh, isRefreshing, dateRange, clientName, clientId, clientMultiplier = 1 }) {
+  const navigate = useNavigate();
   if (!platform) return <div className="text-center py-5 text-secondary">No data available for this platform.</div>;
 
   const isConnected = connectionState?.connected !== false;
@@ -3262,35 +3276,35 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
               >
                 <IconGear /> <span className="fw-semibold">Customize KPIs</span>
               </button>
-            {showKPISelector && (
-              <div className="position-absolute end-0 mt-1 bg-white border rounded-3 shadow-lg p-3" style={{ zIndex: 1050, minWidth: 280 }}>
-                <h6 className="fw-bold small mb-2">Select {platform.label} KPIs (max 5)</h6>
-                <div className="d-flex flex-column gap-1">
-                  {availablePlatformKPIs.map((kpi) => {
-                    const isPinned = pinnedKPIs.includes(kpi.key);
-                    return (
-                      <label
-                        key={kpi.key}
-                        className={`d-flex align-items-center gap-2 px-2 py-1 rounded-2 cursor-pointer ${isPinned ? 'bg-primary-subtle' : 'bg-transparent'}`}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <input
-                          type="checkbox"
-                          className="form-check-input m-0"
-                          checked={isPinned}
-                          onChange={() => toggleKPI(kpi.key)}
-                          disabled={!isPinned && pinnedKPIs.length >= 5}
-                        />
-                        <span className="small">{kpi.label}</span>
-                      </label>
-                    );
-                  })}
+              {showKPISelector && (
+                <div className="position-absolute end-0 mt-1 bg-white border rounded-3 shadow-lg p-3" style={{ zIndex: 1050, minWidth: 280 }}>
+                  <h6 className="fw-bold small mb-2">Select {platform.label} KPIs (max 5)</h6>
+                  <div className="d-flex flex-column gap-1">
+                    {availablePlatformKPIs.map((kpi) => {
+                      const isPinned = pinnedKPIs.includes(kpi.key);
+                      return (
+                        <label
+                          key={kpi.key}
+                          className={`d-flex align-items-center gap-2 px-2 py-1 rounded-2 cursor-pointer ${isPinned ? 'bg-primary-subtle' : 'bg-transparent'}`}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <input
+                            type="checkbox"
+                            className="form-check-input m-0"
+                            checked={isPinned}
+                            onChange={() => toggleKPI(kpi.key)}
+                            disabled={!isPinned && pinnedKPIs.length >= 5}
+                          />
+                          <span className="small">{kpi.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <button className="btn btn-sm btn-primary w-100 mt-2" onClick={() => setShowKPISelector(false)}>
+                    Done
+                  </button>
                 </div>
-                <button className="btn btn-sm btn-primary w-100 mt-2" onClick={() => setShowKPISelector(false)}>
-                  Done
-                </button>
-              </div>
-            )}
+              )}
             </div>
           </div>
         </div>
@@ -3314,12 +3328,7 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
                       <span className="text-secondary fw-semibold small text-truncate" title={kpiDef.label}>
                         {kpiDef.label}
                       </span>
-                      <span
-                        className={`badge rounded-pill bg-${kpiDef.color}-subtle text-${kpiDef.color}-emphasis px-2 py-0.5 fw-bold`}
-                        style={{ fontSize: '0.7rem' }}
-                      >
-                        {kpiDef.key.toUpperCase()}
-                      </span>
+                      <KpiMetricBadge metricKey={kpiDef.key} color={kpiDef.color} label={kpiDef.label} size={34} />
                     </div>
                     <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">
                       {formatValue(rawVal, kpiDef.format)}
@@ -3377,25 +3386,29 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
                   <th className="text-body fw-bold">Impressions</th>
                   <th className="text-body fw-bold">Clicks</th>
                   <th className="text-body fw-bold">CTR</th>
-                  <th className="text-body fw-bold">Conversions</th>
-                  <th className="pe-4 text-end text-body fw-bold">CPA</th>
+                  <th className="pe-4 text-end text-body fw-bold">Conversions</th>
                 </tr>
               </thead>
               <tbody>
                 {platform.campaigns.map((camp) => (
-                  <tr key={camp.id}>
-                    <td className="ps-4 fw-bold text-body" style={{ color: 'var(--bs-heading-color, var(--bs-body-color))', fontSize: '0.92rem', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <tr
+                    key={camp.id}
+                    className="cursor-pointer"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/clients/${clientId}/campaigns/${camp.id}`)}
+                    title={`Click to view ${camp.name} details`}
+                  >
+                    <td className="ps-4 fw-bold text-primary" style={{ fontSize: '0.92rem', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {camp.name}
                     </td>
                     <td><span className={`badge ${camp.status === 'Active' ? 'bg-success-subtle text-success border border-success-subtle' : camp.status === 'Paused' ? 'bg-warning-subtle text-warning border border-warning-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle'} fw-bold`}>{camp.status}</span></td>
-                    <td className="fw-semibold text-body-emphasis">${camp.spend.toLocaleString()}</td>
+                    <td className="fw-bold text-danger text-nowrap">${camp.spend.toLocaleString()}</td>
                     <td className="text-success fw-bold">${camp.revenue.toLocaleString()}</td>
                     <td><span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold px-2 py-1">{camp.roas.toFixed(1)}x</span></td>
                     <td className="text-body fw-medium">{(camp.impressions / 1000).toFixed(0)}K</td>
                     <td className="text-body fw-medium">{(camp.clicks / 1000).toFixed(1)}K</td>
                     <td className="text-body fw-semibold">{camp.ctr.toFixed(2)}%</td>
-                    <td className="text-body-emphasis fw-bold">{camp.conversions.toLocaleString()}</td>
-                    <td className="pe-4 text-end text-body-emphasis fw-semibold">${camp.cpa.toFixed(2)}</td>
+                    <td className="pe-4 text-end text-body-emphasis fw-bold">{camp.conversions.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
@@ -3485,34 +3498,6 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
         </div>
       )}
 
-      {/* Placements Breakdown (Meta only) */}
-      {platform.placements && (
-        <div className="card border-0 shadow-sm rounded-3">
-          <div className="card-header bg-transparent border-bottom p-4 d-flex justify-content-between align-items-center">
-            <h6 className="mb-0 fw-bold">Breakdown by Placement</h6>
-            {!isConnected && <span className="text-secondary small">Last synced breakdown</span>}
-          </div>
-          <div className="card-body p-4">
-            <div className="d-flex flex-column gap-3">
-              {platform.placements.map((p, i) => {
-                const maxSpend = Math.max(...platform.placements.map((x) => x.spend));
-                const pct = (p.spend / maxSpend) * 100;
-                return (
-                  <div key={i}>
-                    <div className="d-flex justify-content-between small mb-1">
-                      <span className="fw-semibold">{p.name}</span>
-                      <span className="text-secondary">${p.spend.toLocaleString()} &middot; {(p.impressions / 1000).toFixed(0)}K impr. &middot; {p.ctr.toFixed(2)}% CTR</span>
-                    </div>
-                    <div className="progress" style={{ height: 8 }}>
-                      <div className="progress-bar bg-primary" role="progressbar" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

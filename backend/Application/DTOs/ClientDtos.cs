@@ -1,5 +1,5 @@
-using System.ComponentModel.DataAnnotations;
 using Dashboard.Domain.Enums;
+using System.ComponentModel.DataAnnotations;
 
 namespace Dashboard.Application.DTOs;
 
@@ -14,11 +14,25 @@ public class ClientDTO
     public string Country { get; set; } = null!;
     public Currency Currency { get; set; }
     public ClientStatus Status { get; set; }
+    public BusinessModel BusinessModel { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? Notes { get; set; }
     public string ManagerId { get; set; } = null!;
+    public ClientTargetDTO? Target { get; set; }
+    public List<PlatformDTO> Platforms { get; set; } = new();
+
+    // Performance & ROAS Target Metrics
+    public decimal Spend { get; set; }
+    public decimal Revenue { get; set; }
+    public int Conversions { get; set; }
+    public double AchievedROAS { get; set; }
+    public double ActualROAS { get; set; }
+    public double TargetROAS { get; set; }
 }
 
+public class ManagerClientsDTO : ClientDTO { }
+public class AdminClientsDTO : ClientDTO { }
+public class AssociateClientsDTO : ClientDTO { }
 public class CreateClientDTO
 {
     [Required]
@@ -45,6 +59,7 @@ public class CreateClientDTO
     public Currency Currency { get; set; }
 
     public ClientStatus Status { get; set; }
+    public BusinessModel BusinessModel { get; set; }
 
     public string? Notes { get; set; }
 
@@ -78,6 +93,7 @@ public class UpdateClientDTO
     public Currency Currency { get; set; }
 
     public ClientStatus Status { get; set; }
+    public BusinessModel BusinessModel { get; set; }
 
     public string? Notes { get; set; }
 

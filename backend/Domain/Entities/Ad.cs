@@ -11,6 +11,7 @@ public class Ad
     public string? MediaURL { get; set; }
     public MediaType? MediaType { get; set; }
     public AdStatus Status { get; set; }
+    public DateTime CreatedAt { get; set; }
 
     public int Impressions { get; set; }
     public int Clicks { get; set; }
@@ -18,7 +19,6 @@ public class Ad
     public double Spend { get; set; }
     public double Revenue { get; set; }
 
-    public DateTime CreatedAt { get; set; }
     public int AdSetId { get; set; }
     public AdSet Adset { get; set; }
 }

@@ -60,7 +60,7 @@ export default function TeamPage() {
   };
 
   return (
-    <DashboardLayout title="Team & Specialists | Dasher">
+    <DashboardLayout title="Team & Specialists | Dasher" pageTitle="Team">
       <div className="container-fluid px-0">
         {/* Toast */}
         {toastMsg && (
@@ -77,15 +77,23 @@ export default function TeamPage() {
           </div>
         )}
 
+        {/* ─── Breadcrumb ─── */}
+        <nav aria-label="breadcrumb" className="mb-4">
+          <ol className="breadcrumb mb-0 py-0 bg-transparent small align-items-center">
+            <li className="breadcrumb-item">
+              <Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">
+                Dashboard
+              </Link>
+            </li>
+            <li className="breadcrumb-item active text-success fw-semibold" aria-current="page">
+              Team
+            </li>
+          </ol>
+        </nav>
+
         {/* Header */}
         <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
           <div>
-            <nav aria-label="breadcrumb">
-              <ol className="breadcrumb small mb-1">
-                <li className="breadcrumb-item"><Link to="/">Dashboard</Link></li>
-                <li className="breadcrumb-item active" aria-current="page">Team</li>
-              </ol>
-            </nav>
             <h1 className="h3 mb-0 fw-bold text-body-emphasis">Team Members &amp; Specialists</h1>
             <p className="text-secondary small mb-0 mt-1">
               Manage agency media buyers, campaign managers, and client portfolio allocations.

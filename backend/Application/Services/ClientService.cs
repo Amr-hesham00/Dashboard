@@ -13,15 +13,33 @@ public class ClientService : IClientService
         _unitOfWork = unitOfWork;
     }
 
+
+    public async Task<IEnumerable<ClientDTO>> GetManagerClientasync(string userId)
+    {
+        var clients = await _unitOfWork.Client.GetClientsByUserAsync(userId, "Manager");
+        return clients.Select(c => MapToDTO(c));
+    }
+
+    public async Task<IEnumerable<ClientDTO>> GetAssociateClientasync(string userId)
+    {
+        var clients = await _unitOfWork.Client.GetClientsByUserAsync(userId, "Associate");
+        return clients.Select(c => MapToDTO(c));
+    }
+
+    public async Task<IEnumerable<ClientDTO>> GetAdminClientasync(string userId)
+    {
+        var clients = await _unitOfWork.Client.GetClientsByUserAsync(userId, "Admin");
+        return clients.Select(c => MapToDTO(c));
+    }
     public async Task<IEnumerable<ClientDTO>> GetAllClientsAsync()
     {
-        var clients = await _unitOfWork.Client.GetAll(new Client());
-        return clients.Select(MapToDTO);
+        var clients = await _unitOfWork.Client.GetAllWithDetailsAsync();
+        return clients.Select(c => MapToDTO(c));
     }
 
     public async Task<ClientDTO?> GetClientByIdAsync(int id)
     {
-        var client = await _unitOfWork.Client.GetById(id);
+        var client = await _unitOfWork.Client.GetByIdWithDetailsAsync(id);
         return client == null ? null : MapToDTO(client);
     }
 
@@ -37,6 +55,7 @@ public class ClientService : IClientService
             Country = dto.Country,
             Currency = dto.Currency,
             Status = dto.Status,
+            BusinessModel = dto.BusinessModel,
             Notes = dto.Notes,
             ManagerId = dto.ManagerId,
             CreatedAt = DateTime.UtcNow
@@ -64,6 +83,7 @@ public class ClientService : IClientService
         client.Country = dto.Country;
         client.Currency = dto.Currency;
         client.Status = dto.Status;
+        client.BusinessModel = dto.BusinessModel;
         client.Notes = dto.Notes;
         client.ManagerId = dto.ManagerId;
 
@@ -89,6 +109,27 @@ public class ClientService : IClientService
 
     private static ClientDTO MapToDTO(Client client)
     {
+        var campaigns = client.Platforms?
+            .Where(p => p.Campaigns != null)
+            .SelectMany(p => p.Campaigns)
+            .ToList() ?? new List<Campaign>();
+
+        decimal spend = (decimal)Math.Round(campaigns.Sum(c => c.Spend), 2);
+        decimal revenue = (decimal)Math.Round(campaigns.Sum(c => c.Revenue), 2);
+        int conversions = campaigns.Sum(c => c.Conversions);
+
+        double targetRoas = (client.Target?.TargetROAS.HasValue == true && client.Target.TargetROAS.Value > 0)
+            ? client.Target.TargetROAS.Value
+            : 4.0;
+
+        double actualRoas = spend > 0
+            ? Math.Round((double)(revenue / spend), 2)
+            : targetRoas;
+
+        double achievedRoas = targetRoas > 0 // current ROAS percentage 
+            ? Math.Round((actualRoas * 100.0) / targetRoas, 1)
+            : 0;
+
         return new ClientDTO
         {
             Id = client.Id,
@@ -100,9 +141,38 @@ public class ClientService : IClientService
             Country = client.Country,
             Currency = client.Currency,
             Status = client.Status,
+            BusinessModel = client.BusinessModel,
             CreatedAt = client.CreatedAt,
             Notes = client.Notes,
-            ManagerId = client.ManagerId
+            ManagerId = client.ManagerId,
+            Target = client.Target == null ? null : new ClientTargetDTO
+            {
+                Id = client.Target.Id,
+                ClientId = client.Target.ClientId,
+                TargetROAS = client.Target.TargetROAS ?? 4.0,
+                TargetCPA = client.Target.TargetCPA,
+                MonthlyBudget = client.Target.MonthlyBudget,
+                TargetRevenue = client.Target.TargetRevenue,
+                TargetConversions = client.Target.TargetConversions,
+                TargetCTR = client.Target.TargetCTR,
+                TargetCPC = client.Target.TargetCPC
+            },
+            Platforms = client.Platforms == null ? new() : client.Platforms.Select(p => new PlatformDTO
+            {
+                Id = p.Id,
+                PlatformType = p.PlatformType,
+                Status = p.Status,
+                CreatedAt = p.CreatedAt,
+                ClientId = p.ClientId
+            }).ToList(),
+            Spend = spend,
+            Revenue = revenue,
+            Conversions = conversions,
+            AchievedROAS = achievedRoas,
+            ActualROAS = actualRoas,
+            TargetROAS = targetRoas
         };
     }
+
+
 }

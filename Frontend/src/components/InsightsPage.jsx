@@ -56,7 +56,7 @@ export default function InsightsPage() {
   };
 
   return (
-    <DashboardLayout title="AI Insights & Recommendations | Dasher">
+    <DashboardLayout title="AI Insights & Recommendations | Dasher" pageTitle="Insights & Recommendations">
       <div className="container-fluid px-0">
         {/* Toast Notification */}
         {toastMsg && (
@@ -73,15 +73,23 @@ export default function InsightsPage() {
           </div>
         )}
 
+        {/* ─── Breadcrumb ─── */}
+        <nav aria-label="breadcrumb" className="mb-4">
+          <ol className="breadcrumb mb-0 py-0 bg-transparent small align-items-center">
+            <li className="breadcrumb-item">
+              <Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">
+                Dashboard
+              </Link>
+            </li>
+            <li className="breadcrumb-item active text-success fw-semibold" aria-current="page">
+              Insights
+            </li>
+          </ol>
+        </nav>
+
         {/* Page Header */}
         <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
           <div>
-            <nav aria-label="breadcrumb">
-              <ol className="breadcrumb small mb-1">
-                <li className="breadcrumb-item"><Link to="/">Dashboard</Link></li>
-                <li className="breadcrumb-item active" aria-current="page">Insights</li>
-              </ol>
-            </nav>
             <div className="d-flex align-items-center gap-2">
               <h1 className="h3 mb-0 fw-bold text-body-emphasis">AI Insights &amp; Recommendations</h1>
               <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1 small fw-semibold">

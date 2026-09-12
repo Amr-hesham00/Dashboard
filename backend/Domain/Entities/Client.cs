@@ -19,6 +19,5 @@ public class Client
     public string ManagerId { get; set; } = null!; // FK
     public ICollection<Assignment>? Assignments { get; set; }
     public ICollection<Platform> Platforms { get; set; }
-
-
+    public ClientTarget? Target { get; set; }
 }

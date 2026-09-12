@@ -272,15 +272,14 @@ const compressAndResizeImage = (dataUrl, maxWidth = 300, maxHeight = 300) => {
         )}
 
         {/* Breadcrumb Navigation */}
-        <nav aria-label="breadcrumb" className="mb-3">
-          <ol className="breadcrumb mb-0" style={{ fontSize: '0.86rem' }}>
+        <nav aria-label="breadcrumb" className="mb-4">
+          <ol className="breadcrumb mb-0 py-0 bg-transparent small align-items-center">
             <li className="breadcrumb-item">
-              <Link to="/" className="text-secondary text-decoration-none d-inline-flex align-items-center gap-1">
-                <i className="ti ti-home fs-6"></i>
+              <Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">
                 Dashboard
               </Link>
             </li>
-            <li className="breadcrumb-item active fw-medium text-primary" aria-current="page">
+            <li className="breadcrumb-item active text-success fw-semibold" aria-current="page">
               Account Settings
             </li>
           </ol>

@@ -49,7 +49,7 @@ export default function ReportsPage() {
   };
 
   return (
-    <DashboardLayout title="Performance Reports & Exports | Dasher">
+    <DashboardLayout title="Performance Reports & Exports | Dasher" pageTitle="Reports">
       <div className="container-fluid px-0">
         {/* Toast */}
         {toastMsg && (
@@ -66,15 +66,23 @@ export default function ReportsPage() {
           </div>
         )}
 
+        {/* ─── Breadcrumb ─── */}
+        <nav aria-label="breadcrumb" className="mb-4">
+          <ol className="breadcrumb mb-0 py-0 bg-transparent small align-items-center">
+            <li className="breadcrumb-item">
+              <Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">
+                Dashboard
+              </Link>
+            </li>
+            <li className="breadcrumb-item active text-success fw-semibold" aria-current="page">
+              Reports
+            </li>
+          </ol>
+        </nav>
+
         {/* Header */}
         <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
           <div>
-            <nav aria-label="breadcrumb">
-              <ol className="breadcrumb small mb-1">
-                <li className="breadcrumb-item"><Link to="/">Dashboard</Link></li>
-                <li className="breadcrumb-item active" aria-current="page">Reports</li>
-              </ol>
-            </nav>
             <h1 className="h3 mb-0 fw-bold text-body-emphasis">Performance Reports &amp; Exports</h1>
             <p className="text-secondary small mb-0 mt-1">
               Generate, schedule, and export custom client reports and multi-channel audit files.

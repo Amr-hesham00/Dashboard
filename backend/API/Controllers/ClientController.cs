@@ -1,13 +1,15 @@
 using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces.Services;
 using Dashboard.Domain.Enums;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Dashboard.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-//[Authorize]
+[Authorize]
 public class ClientController : ControllerBase
 {
     private readonly IClientService _clientService;
@@ -18,9 +20,39 @@ public class ClientController : ControllerBase
     }
 
     /// <summary>
-    /// Get list of all clients.
+    ///  Get clients accessible to the current authenticated user.
+    /// Admins receive all clients; Managers & Associates receive their assigned clients.
     /// </summary>
     [HttpGet]
+    public async Task<IActionResult> GetByUser() // Client	Platforms	Spend	Revenue	Conversions	Status	Achieved ROAS	Actions
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var role = User.FindFirstValue(ClaimTypes.Role);
+        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(role))
+        {
+            return Unauthorized(new { message = "User identity or role not found in token." });
+        }
+
+        IEnumerable<ClientDTO> clients = new List<ClientDTO>();
+        switch (role)
+        {
+            case "Admin":
+                clients = await _clientService.GetAdminClientasync(userId);
+                break;
+            case "Manager":
+                clients = await _clientService.GetManagerClientasync(userId);
+                break;
+            default:
+                clients = await _clientService.GetAssociateClientasync(userId);
+                break;
+        }
+        return Ok(clients);
+    }
+
+    /// <summary>
+    /// Get list of all clients.
+    /// </summary>
+    [HttpGet("AllClients")]
     public async Task<IActionResult> GetAll()
     {
         var clients = await _clientService.GetAllClientsAsync();
@@ -101,6 +133,7 @@ public class ClientController : ControllerBase
     /// Get available client status values.
     /// </summary>
     [HttpGet("statuses")]
+    [AllowAnonymous]
     public IActionResult GetStatuses()
     {
         var statuses = Enum.GetNames(typeof(ClientStatus));
@@ -111,6 +144,7 @@ public class ClientController : ControllerBase
     /// Get available currency values.
     /// </summary>
     [HttpGet("currencies")]
+    [AllowAnonymous]
     public IActionResult GetCurrencies()
     {
         var currencies = Enum.GetNames(typeof(Currency));

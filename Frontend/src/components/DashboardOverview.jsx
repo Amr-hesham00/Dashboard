@@ -3,6 +3,8 @@ import HtmlPage from './HtmlPage';
 import indexHtml from '../content/index.html?raw';
 import { useAuth } from '../context/AuthContext';
 import { fetchDashboardSummary } from '../api/dashboard';
+import { getMockDashboardSummary } from '../mock/mockData';
+import { getRoleName } from '../api/auth';
 
 const indexScripts = [
   '/vendor/bootstrap/dist/js/bootstrap.bundle.min.js',
@@ -22,8 +24,8 @@ const indexScripts = [
 
 export default function DashboardOverview() {
   const { user, logout } = useAuth();
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(() => getMockDashboardSummary());
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const wrapperRef = useRef(null);
 
@@ -31,19 +33,14 @@ export default function DashboardOverview() {
     let isMounted = true;
     async function loadData() {
       try {
-        setLoading(true);
         const result = await fetchDashboardSummary();
-        if (isMounted) {
+        if (isMounted && result) {
           setData(result);
           setError(null);
         }
       } catch (err) {
         if (isMounted) {
           setError(err.message || 'Failed to load dashboard data.');
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
         }
       }
     }
@@ -84,11 +81,34 @@ export default function DashboardOverview() {
           containerEl.innerHTML = `<span class="avatar avatar-md rounded-circle d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 40px; height: 40px; background-color: #081615; border: 1.5px solid #10b981;"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-user"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 10m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M6.168 18.849a4 4 0 0 1 3.832 -2.849h4a4 4 0 0 1 3.834 2.855" /></svg></span>`;
         }
       });
+
+      // Topbar user avatar & profile bindings
+      const userRole = getRoleName(user.role);
+      const topbarAvatarContainers = root.querySelectorAll('.topbar-avatar-container');
+      topbarAvatarContainers.forEach((containerEl) => {
+        if (userImage) {
+          containerEl.innerHTML = `<img src="${userImage}" alt="${displayName}" class="rounded-circle" style="width: 38px; height: 38px; object-fit: cover; border: 1.5px solid #10b981;" />`;
+        }
+      });
+
+      const topbarProfilePhotoContainers = root.querySelectorAll('.topbar-profile-photo-container');
+      topbarProfilePhotoContainers.forEach((containerEl) => {
+        if (userImage) {
+          containerEl.innerHTML = `<img src="${userImage}" alt="${displayName}" class="rounded-circle" style="width: 46px; height: 46px; object-fit: cover; border: 1.5px solid #10b981;" />`;
+        }
+      });
+
+      const topbarProfileNames = root.querySelectorAll('.topbar-profile-name');
+      topbarProfileNames.forEach((el) => (el.textContent = displayName));
+
+      const topbarProfileEmails = root.querySelectorAll('.topbar-profile-email');
+      topbarProfileEmails.forEach((el) => (el.textContent = email || (user?.userName ? `@${user.userName}` : '@user')));
+
+      const topbarProfileRoles = root.querySelectorAll('.topbar-profile-role');
+      topbarProfileRoles.forEach((el) => (el.textContent = userRole || 'Manager'));
     }
 
     const toggleHandlers = [];
-
-    // Topbar profile dropdown bindings can be handled here if needed
 
     // Bind Add Client Form
     const addClientForm = root.querySelector('#addClientForm');
@@ -193,25 +213,18 @@ export default function DashboardOverview() {
     }
 
     return () => {
-      toggleHandlers.forEach(({ btn, handler }) => {
-        btn.removeEventListener('click', handler);
+      toggleHandlers.forEach((item) => {
+        if (typeof item.clean === 'function') {
+          item.clean();
+        } else if (item.btn && typeof item.btn.removeEventListener === 'function') {
+          item.btn.removeEventListener('click', item.handler);
+        }
       });
     };
   }, [data, user, logout]);
 
   return (
     <div ref={wrapperRef} className="position-relative min-vh-100 d-flex flex-column">
-      {loading && (
-        <div
-          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-white bg-opacity-75"
-          style={{ zIndex: 9999 }}
-        >
-          <div className="spinner-border text-primary" role="status" style={{ width: '3rem', height: '3rem' }}>
-            <span className="visually-hidden">Loading dashboard data...</span>
-          </div>
-        </div>
-      )}
-
       {error && (
         <div className="alert alert-warning alert-dismissible fade show m-4" role="alert">
           <strong>Backend Data Notice:</strong> {error}

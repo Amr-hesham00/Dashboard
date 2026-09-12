@@ -9,6 +9,8 @@ import SignUpPage from './components/SignUpPage.jsx';
 import DashboardOverview from './components/DashboardOverview.jsx';
 import ClientsPage from './components/ClientsPage.jsx';
 import ClientDetailsPage from './components/ClientDetailsPage.jsx';
+import CampaignDetailPage from './components/CampaignDetailPage.jsx';
+import AdSetDetailPage from './components/AdSetDetailPage.jsx';
 import PlatformsPage from './components/PlatformsPage.jsx';
 import CampaignsPage from './components/CampaignsPage.jsx';
 import AdSetsPage from './components/AdSetsPage.jsx';
@@ -127,6 +129,24 @@ export default function App() {
             element={
               <ProtectedRoute nonAdminOnly>
                 <ClientDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/clients/:clientId/campaigns/:campaignId"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <CampaignDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/clients/:clientId/campaigns/:campaignId/adsets/:adSetId"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <AdSetDetailPage />
               </ProtectedRoute>
             }
           />

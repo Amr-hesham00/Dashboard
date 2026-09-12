@@ -72,7 +72,8 @@ export default function AppBootstrap() {
       const isLogoutText =
         !logoutBtn &&
         (targetTag === 'A' || targetTag === 'BUTTON' || e.target.closest('a, button')) &&
-        e.target.textContent.trim().toLowerCase().includes('logout');
+        (e.target.textContent.trim().toLowerCase().includes('logout') ||
+          e.target.textContent.trim().toLowerCase().includes('sign out'));
 
       if (logoutBtn || isLogoutText) {
         e.preventDefault();
@@ -118,6 +119,50 @@ export default function AppBootstrap() {
           localStorage.setItem('sidebarExpanded', 'false');
         }
         return;
+      }
+
+      // Topbar Profile Dropdown Toggle
+      const topbarProfileBtn = e.target.closest('#topbarProfileBtn, .topbar-avatar-btn');
+      if (topbarProfileBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const wrapper = topbarProfileBtn.closest('#topbarProfileDropdownLi, .topbar-profile-dropdown-wrapper') || topbarProfileBtn.parentElement;
+        const menu = wrapper ? wrapper.querySelector('#topbarProfileMenu, .profile-menu-dropdown') : null;
+        if (menu) {
+          const isClosed = !menu.classList.contains('show') || menu.classList.contains('d-none') || menu.style.display === 'none';
+          if (isClosed) {
+            menu.classList.add('show');
+            menu.classList.remove('d-none');
+            menu.style.display = 'block';
+            topbarProfileBtn.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.35)';
+            topbarProfileBtn.style.transform = 'scale(1.04)';
+            topbarProfileBtn.setAttribute('aria-expanded', 'true');
+          } else {
+            menu.classList.remove('show');
+            menu.classList.add('d-none');
+            menu.style.display = 'none';
+            topbarProfileBtn.style.boxShadow = 'none';
+            topbarProfileBtn.style.transform = 'scale(1)';
+            topbarProfileBtn.setAttribute('aria-expanded', 'false');
+          }
+        }
+        return;
+      }
+
+      // Close Topbar Profile Dropdown if clicked outside or on dropdown items
+      const isInsideProfileWrapper = e.target.closest('#topbarProfileDropdownLi, .topbar-profile-dropdown-wrapper');
+      const isProfileDropdownItem = e.target.closest('.profile-menu-dropdown .dropdown-item');
+      if (!isInsideProfileWrapper || isProfileDropdownItem) {
+        document.querySelectorAll('#topbarProfileMenu').forEach((menu) => {
+          menu.classList.remove('show');
+          menu.classList.add('d-none');
+          menu.style.display = 'none';
+        });
+        document.querySelectorAll('#topbarProfileBtn, .topbar-avatar-btn').forEach((btn) => {
+          btn.style.boxShadow = 'none';
+          btn.style.transform = 'scale(1)';
+          btn.setAttribute('aria-expanded', 'false');
+        });
       }
 
       // Offcanvas Dismiss or Backdrop Click Handling

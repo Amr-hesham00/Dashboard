@@ -44,10 +44,10 @@ const AD_PLATFORMS = [
     bgSubtle: 'rgba(66, 133, 244, 0.08)',
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
-        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
-        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
-        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.97 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
-        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
+        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z" />
+        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.97 0 12s.45 3.82 1.25 5.42l4.03-3.15z" />
+        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
       </svg>
     ),
     defaultAccount: '839-201-9482',
@@ -82,9 +82,9 @@ const AD_PLATFORMS = [
       <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
         <rect width="24" height="24" rx="5.5" fill="#010101" />
         <g transform="translate(1.5, 1.5) scale(0.88)">
-          <path fill="#25F4EE" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-2.09v12.2a2.91 2.91 0 1 1-2.91-2.91c.36 0 .7.07 1.02.19V10.3a5.05 5.05 0 0 0-1.02-.1 5.08 5.08 0 1 0 5.08 5.08V8.71a6.37 6.37 0 0 0 3.73 1.2V7.74a4.28 4.28 0 0 1-2.75-1.92z"/>
-          <path fill="#FE2C55" d="M17.84 5.82A4.28 4.28 0 0 0 15.09 3.9v-.9h-.55v12.2a2.91 2.91 0 0 1-2.91 2.91 2.89 2.89 0 0 1-2.05-.85 2.9 2.9 0 0 0 2.96 2.05 2.91 2.91 0 0 0 2.91-2.91V7.81a6.37 6.37 0 0 0 3.73 1.2V6.84a4.28 4.28 0 0 1-1.34-1.02z"/>
-          <path fill="#FFFFFF" d="M17.24 5.82A4.28 4.28 0 0 0 14.54 3h-1.09v12.2a2.91 2.91 0 1 1-2.91-2.91c.36 0 .7.07 1.02.19V10.3a5.05 5.05 0 0 0-1.02-.1 5.08 5.08 0 1 0 5.08 5.08V8.71a6.37 6.37 0 0 0 3.73 1.2V7.74a4.28 4.28 0 0 1-2.1-1.92z"/>
+          <path fill="#25F4EE" d="M16.6 5.82A4.28 4.28 0 0 1 15.54 3h-2.09v12.2a2.91 2.91 0 1 1-2.91-2.91c.36 0 .7.07 1.02.19V10.3a5.05 5.05 0 0 0-1.02-.1 5.08 5.08 0 1 0 5.08 5.08V8.71a6.37 6.37 0 0 0 3.73 1.2V7.74a4.28 4.28 0 0 1-2.75-1.92z" />
+          <path fill="#FE2C55" d="M17.84 5.82A4.28 4.28 0 0 0 15.09 3.9v-.9h-.55v12.2a2.91 2.91 0 0 1-2.91 2.91 2.89 2.89 0 0 1-2.05-.85 2.9 2.9 0 0 0 2.96 2.05 2.91 2.91 0 0 0 2.91-2.91V7.81a6.37 6.37 0 0 0 3.73 1.2V6.84a4.28 4.28 0 0 1-1.34-1.02z" />
+          <path fill="#FFFFFF" d="M17.24 5.82A4.28 4.28 0 0 0 14.54 3h-1.09v12.2a2.91 2.91 0 1 1-2.91-2.91c.36 0 .7.07 1.02.19V10.3a5.05 5.05 0 0 0-1.02-.1 5.08 5.08 0 1 0 5.08 5.08V8.71a6.37 6.37 0 0 0 3.73 1.2V7.74a4.28 4.28 0 0 1-2.1-1.92z" />
         </g>
       </svg>
     ),
@@ -336,32 +336,42 @@ export default function ClientsPage() {
 
     // Spend
     const campSpend = clientCampaigns.reduce((acc, c) => acc + (Number(c.spend) || 0), 0);
-    const spend = campSpend > 0 ? campSpend : (Number(client.spend) || Number(client.budget) || 0);
+    const spend = client.spend !== undefined && Number(client.spend) > 0
+      ? Number(client.spend)
+      : (campSpend > 0 ? campSpend : (Number(client.budget) || 0));
 
     // Revenue
     const campRevenue = clientCampaigns.reduce((acc, c) => acc + (Number(c.revenue) || 0), 0);
-    const defaultRoas = Number(client.roas) || 3.8;
-    const revenue = campRevenue > 0 ? campRevenue : (Number(client.revenue) || Math.round(spend * defaultRoas));
+    const revenue = client.revenue !== undefined && Number(client.revenue) > 0
+      ? Number(client.revenue)
+      : (campRevenue > 0 ? campRevenue : (spend > 0 ? Math.round(spend * 4.0) : 0));
 
     // Conversions
     const campConversions = clientCampaigns.reduce((acc, c) => acc + (Number(c.conversions) || 0), 0);
-    const conversions = campConversions > 0 ? campConversions : (Number(client.conversions) || (spend > 0 ? Math.round(spend / 65) : 0));
+    const conversions = client.conversions !== undefined && Number(client.conversions) > 0
+      ? Number(client.conversions)
+      : (campConversions > 0 ? campConversions : (spend > 0 ? Math.round(spend / 65) : 0));
 
     // Active Campaigns
     const activeCampaigns = clientCampaigns.filter(
       (c) => c.status === 0 || String(c.status).toLowerCase() === 'active'
     ).length;
 
-    // Achieved ROAS (%) = current ROAS * 100 / target ROAS
+    // Target ROAS
     const targets = getClientTargets(client.id);
-    const targetRoas = Number(targets?.targetRoas) || Number(client.targetRoas) || 4.0;
-    const actualRoas = spend > 0 ? (revenue / spend) : (Number(client.roas) || 3.8);
-    const targetRoasAchieved = targetRoas > 0 ? Math.round((actualRoas * 100) / targetRoas) : 0;
+    const targetRoas = Number(client.targetRoas) || Number(client.target?.targetROAS) || Number(targets?.targetRoas) || 4.0;
+
+    // Actual ROAS
+    const actualRoas = Number(client.actualRoas) || (spend > 0 ? (revenue / spend) : (Number(client.roas) || 4.0));
+
+    // Achieved ROAS (%) = current ROAS * 100 / target ROAS
+    const targetRoasAchieved = Number(client.achievedROAS) || (targetRoas > 0 ? Math.round((actualRoas * 100) / targetRoas) : 0);
 
     // Target/Total Conversions
     const targetConversions =
       Number(targets?.targetConversions) ||
       Number(client.targetConversions) ||
+      Number(client.target?.targetConversions) ||
       Math.max(conversions, Math.round(spend / Math.max(0.1, Number(targets?.targetCpa) || 5.5)) || 500);
 
     return {
@@ -496,7 +506,7 @@ export default function ClientsPage() {
         };
         try {
           localStorage.setItem(`client_platforms_${connectClient.id}`, JSON.stringify(updated));
-        } catch {}
+        } catch { }
         return updated;
       });
 
@@ -523,7 +533,7 @@ export default function ClientsPage() {
         };
         try {
           localStorage.setItem(`client_platforms_${connectClient.id}`, JSON.stringify(updated));
-        } catch {}
+        } catch { }
         return updated;
       });
 
@@ -547,7 +557,7 @@ export default function ClientsPage() {
       };
       try {
         localStorage.setItem(`client_platforms_${connectClient.id}`, JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
   };
@@ -566,31 +576,9 @@ export default function ClientsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  // ─── Top KPI Metrics Computation ────────────────────────────────
-  const totalClientsCount = clients.length;
-  const activeClientsCount = clients.filter(
-    (c) => c.status === 0 || c.status === 'Active'
-  ).length;
-  const clientsAchievedTargetCount = clients.filter((c) => {
-    const metrics = getClientMetrics(c);
-    return metrics.targetRoasAchieved >= 100;
-  }).length;
-  const clientsAtRiskCount = clients.filter((c) => {
-    const metrics = getClientMetrics(c);
-    return metrics.targetRoasAchieved < 75;
-  }).length;
-  const needingAttentionCount = clients.filter(
-    (c) =>
-      c.status === 1 ||
-      c.status === 'Inactive' ||
-      c.status === 2 ||
-      c.status === 'Lead' ||
-      c.status === 3 ||
-      c.status === 'Archived'
-  ).length;
 
   return (
-    <DashboardLayout title="Client Portfolios | Dasher">
+    <DashboardLayout title="Client Portfolios | Dasher" pageTitle="Clients">
       <style>{`
         .kpi-stat-card {
           transition: transform 0.18s ease, box-shadow 0.18s ease;
@@ -704,6 +692,20 @@ export default function ClientsPage() {
       `}</style>
 
       <div className="container-fluid px-0">
+        {/* ─── Breadcrumb ─── */}
+        <nav aria-label="breadcrumb" className="mb-4">
+          <ol className="breadcrumb mb-0 py-0 bg-transparent small align-items-center">
+            <li className="breadcrumb-item">
+              <Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">
+                Dashboard
+              </Link>
+            </li>
+            <li className="breadcrumb-item active text-success fw-semibold" aria-current="page">
+              Clients
+            </li>
+          </ol>
+        </nav>
+
         {/* Header */}
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
           <div>
@@ -713,9 +715,9 @@ export default function ClientsPage() {
           <div>
             <button className="btn btn-primary d-inline-flex align-items-center gap-2 shadow-sm rounded-3 px-3 py-2" onClick={openCreateModal}>
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
+                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
               </svg>
               <span>Add Client</span>
             </button>
@@ -729,110 +731,7 @@ export default function ClientsPage() {
           </div>
         )}
 
-        {/* ─── Top KPI Metric Cards ───────────────────────────────── */}
-        <div className="row g-3 mb-4 mb-xl-5">
-          {/* 1. Total Clients */}
-          <div className="col-12 col-sm-6 col-xl-3">
-            <div className="card border-0 shadow-sm rounded-3 h-100 kpi-stat-card">
-              <div className="card-body p-4 d-flex flex-column justify-content-between">
-                <div className="d-flex align-items-center justify-content-between mb-3">
-                  <span className="kpi-title text-body-emphasis small fw-bold text-uppercase">Total Clients</span>
-                  <div className="avatar bg-primary-subtle text-primary rounded-3 p-2.5 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 44, height: 44 }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-                      <circle cx="9" cy="7" r="4"/>
-                      <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
-                  </div>
-                </div>
-                <div className="fs-2 fw-bold text-body-emphasis mb-3">{totalClientsCount}</div>
-                <div className="d-flex align-items-center justify-content-between">
-                  <span className="badge bg-primary-subtle text-primary-emphasis px-2 py-0.5 rounded-pill fw-semibold">
-                    {totalClientsCount > 0 ? `${Math.round((activeClientsCount / totalClientsCount) * 100)}% active` : '0% active'}
-                  </span>
-                  <span className="text-secondary small fw-medium">{activeClientsCount} of {totalClientsCount}</span>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* 2. Clients Achieved Target */}
-          <div className="col-12 col-sm-6 col-xl-3">
-            <div className="card border-0 shadow-sm rounded-3 h-100 kpi-stat-card">
-              <div className="card-body p-4 d-flex flex-column justify-content-between">
-                <div className="d-flex align-items-center justify-content-between mb-3">
-                  <span className="kpi-title text-body-emphasis small fw-bold text-uppercase">Clients Achieved Target</span>
-                  <div className="avatar bg-success-subtle text-success rounded-3 p-2.5 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 44, height: 44 }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-                      <circle cx="12" cy="12" r="9" />
-                      <circle cx="12" cy="12" r="5" />
-                      <circle cx="12" cy="12" r="1" />
-                    </svg>
-                  </div>
-                </div>
-                <div className="fs-2 fw-bold text-body-emphasis mb-3">{clientsAchievedTargetCount}</div>
-                <div className="d-flex align-items-center justify-content-between">
-                  <span className="badge bg-success-subtle text-success-emphasis px-2 py-0.5 rounded-pill fw-semibold">
-                    {totalClientsCount > 0 ? `${Math.round((clientsAchievedTargetCount / totalClientsCount) * 100)}% achieved` : '0% achieved'}
-                  </span>
-                  <span className="text-secondary small fw-medium">{clientsAchievedTargetCount} of {totalClientsCount}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Clients at Risk */}
-          <div className="col-12 col-sm-6 col-xl-3">
-            <div className="card border-0 shadow-sm rounded-3 h-100 kpi-stat-card">
-              <div className="card-body p-4 d-flex flex-column justify-content-between">
-                <div className="d-flex align-items-center justify-content-between mb-3">
-                  <span className="kpi-title text-body-emphasis small fw-bold text-uppercase">Clients at Risk</span>
-                  <div className="avatar bg-danger-subtle text-danger rounded-3 p-2.5 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 44, height: 44 }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 9v4"/>
-                      <path d="M12 17h.01"/>
-                      <path d="M5 19h14a2 2 0 0 0 1.84 -2.75l-7.1 -12.25a2 2 0 0 0 -3.5 0l-7.1 12.25a2 2 0 0 0 1.75 2.75"/>
-                    </svg>
-                  </div>
-                </div>
-                <div className="fs-2 fw-bold text-body-emphasis mb-3">{clientsAtRiskCount}</div>
-                <div className="d-flex align-items-center justify-content-between">
-                  <span className="badge bg-danger-subtle text-danger-emphasis px-2 py-0.5 rounded-pill fw-semibold">
-                    {totalClientsCount > 0 ? `${Math.round((clientsAtRiskCount / totalClientsCount) * 100)}% at risk` : '0% at risk'}
-                  </span>
-                  <span className="text-secondary small fw-medium">{clientsAtRiskCount} of {totalClientsCount}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 4. Clients Needing Attention */}
-          <div className="col-12 col-sm-6 col-xl-3">
-            <div className="card border-0 shadow-sm rounded-3 h-100 kpi-stat-card">
-              <div className="card-body p-4 d-flex flex-column justify-content-between">
-                <div className="d-flex align-items-center justify-content-between mb-3">
-                  <span className="kpi-title text-body-emphasis small fw-bold text-uppercase">Clients Needing Attention</span>
-                  <div className="avatar bg-warning-subtle text-warning-emphasis rounded-3 p-2.5 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 44, height: 44 }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
-                      <line x1="12" y1="9" x2="12" y2="13"/>
-                      <line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                  </div>
-                </div>
-                <div className="fs-2 fw-bold text-body-emphasis mb-3">{needingAttentionCount}</div>
-                <div className="d-flex align-items-center justify-content-between">
-                  <span className="badge bg-warning-subtle text-warning-emphasis px-2 py-0.5 rounded-pill fw-semibold">
-                    {totalClientsCount > 0 ? `${Math.round((needingAttentionCount / totalClientsCount) * 100)}% attention` : '0% attention'}
-                  </span>
-                  <span className="text-secondary small fw-medium">{needingAttentionCount} of {totalClientsCount}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Search & Filter Controls */}
         <div className="card mb-4 border-0 shadow-sm rounded-3 mt-2 mt-lg-3">
@@ -842,8 +741,8 @@ export default function ClientsPage() {
                 <div className="input-group">
                   <span className="input-group-text bg-transparent border-end-0 text-secondary">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="11" cy="11" r="8"/>
-                      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
                     </svg>
                   </span>
                   <input
@@ -914,8 +813,8 @@ export default function ClientsPage() {
                       statusName === 'Active' || statusName === '0'
                         ? 'badge text-success-emphasis bg-success-subtle'
                         : statusName === 'Inactive' || statusName === '1'
-                        ? 'badge text-secondary-emphasis bg-secondary-subtle'
-                        : 'badge text-info-emphasis bg-info-subtle';
+                          ? 'badge text-secondary-emphasis bg-secondary-subtle'
+                          : 'badge text-info-emphasis bg-info-subtle';
 
                     const clientPlatforms = getClientPlatformsData(client.id);
                     const connectedCount = AD_PLATFORMS.filter(
@@ -1011,8 +910,8 @@ export default function ClientsPage() {
                                 title="Click to connect ad platforms"
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1="12" y1="5" x2="12" y2="19"/>
-                                  <line x1="5" y1="12" x2="19" y2="12"/>
+                                  <line x1="12" y1="5" x2="12" y2="19" />
+                                  <line x1="5" y1="12" x2="19" y2="12" />
                                 </svg>
                                 <span>Connect</span>
                               </button>
@@ -1055,15 +954,14 @@ export default function ClientsPage() {
                         <td>
                           <div className="d-flex flex-column gap-1" style={{ minWidth: 125, maxWidth: 145 }}>
                             <div className="d-flex align-items-center justify-content-between">
-                              <span className={`fw-bold small ${
-                                metrics.targetRoasAchieved >= 100
+                              <span className={`fw-bold small ${metrics.targetRoasAchieved >= 100
                                   ? 'text-success'
                                   : metrics.targetRoasAchieved >= 80
-                                  ? 'text-primary'
-                                  : metrics.targetRoasAchieved >= 60
-                                  ? 'text-warning'
-                                  : 'text-danger'
-                              }`}>
+                                    ? 'text-primary'
+                                    : metrics.targetRoasAchieved >= 60
+                                      ? 'text-warning'
+                                      : 'text-danger'
+                                }`}>
                                 {metrics.targetRoasAchieved}%
                               </span>
                               <span className="text-secondary" style={{ fontSize: '0.72rem' }}>
@@ -1072,15 +970,14 @@ export default function ClientsPage() {
                             </div>
                             <div className="progress" style={{ height: 4, borderRadius: 2 }}>
                               <div
-                                className={`progress-bar ${
-                                  metrics.targetRoasAchieved >= 100
+                                className={`progress-bar ${metrics.targetRoasAchieved >= 100
                                     ? 'bg-success'
                                     : metrics.targetRoasAchieved >= 80
-                                    ? 'bg-primary'
-                                    : metrics.targetRoasAchieved >= 60
-                                    ? 'bg-warning'
-                                    : 'bg-danger'
-                                }`}
+                                      ? 'bg-primary'
+                                      : metrics.targetRoasAchieved >= 60
+                                        ? 'bg-warning'
+                                        : 'bg-danger'
+                                  }`}
                                 role="progressbar"
                                 style={{ width: `${Math.min(100, Math.max(5, metrics.targetRoasAchieved))}%` }}
                               />
@@ -1115,9 +1012,9 @@ export default function ClientsPage() {
                             aria-label="More Options"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                              <circle cx="12" cy="12" r="1.3"/>
-                              <circle cx="12" cy="5" r="1.3"/>
-                              <circle cx="12" cy="19" r="1.3"/>
+                              <circle cx="12" cy="12" r="1.3" />
+                              <circle cx="12" cy="5" r="1.3" />
+                              <circle cx="12" cy="19" r="1.3" />
                             </svg>
                           </button>
                         </td>
@@ -1154,8 +1051,8 @@ export default function ClientsPage() {
             >
               <div className="avatar bg-success-subtle text-success rounded-2 p-1.5 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 28, height: 28 }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                 </svg>
               </div>
               <span className="fw-semibold">Connect</span>
@@ -1172,8 +1069,8 @@ export default function ClientsPage() {
             >
               <div className="avatar bg-primary-subtle text-primary rounded-2 p-1.5 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 28, height: 28 }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="2"/>
-                  <path d="M22 12c-2.667 4.667 -6 7 -10 7s-7.333 -2.333 -10 -7c2.667 -4.667 6 -7 10 -7s7.333 2.333 10 7"/>
+                  <circle cx="12" cy="12" r="2" />
+                  <path d="M22 12c-2.667 4.667 -6 7 -10 7s-7.333 -2.333 -10 -7c2.667 -4.667 6 -7 10 -7s7.333 2.333 10 7" />
                 </svg>
               </div>
               <span className="fw-semibold">View Details</span>
@@ -1190,9 +1087,9 @@ export default function ClientsPage() {
             >
               <div className="avatar bg-success-subtle text-success rounded-2 p-1.5 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 28, height: 28 }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/>
-                  <circle cx="12" cy="12" r="6"/>
-                  <circle cx="12" cy="12" r="2"/>
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="6" />
+                  <circle cx="12" cy="12" r="2" />
                 </svg>
               </div>
               <span className="fw-semibold">Target Settings</span>
@@ -1209,9 +1106,9 @@ export default function ClientsPage() {
             >
               <div className="avatar bg-secondary-subtle text-secondary-emphasis rounded-2 p-1.5 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 28, height: 28 }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-                  <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4"/>
-                  <path d="M13.5 6.5l4 4"/>
+                  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                  <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+                  <path d="M13.5 6.5l4 4" />
                 </svg>
               </div>
               <span className="fw-semibold">Edit Client</span>
@@ -1230,12 +1127,12 @@ export default function ClientsPage() {
             >
               <div className="avatar bg-danger-subtle text-danger rounded-2 p-1.5 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 28, height: 28 }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-                  <line x1="4" y1="7" x2="20" y2="7"/>
-                  <line x1="10" y1="11" x2="10" y2="17"/>
-                  <line x1="14" y1="11" x2="14" y2="17"/>
-                  <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/>
-                  <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/>
+                  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                  <line x1="4" y1="7" x2="20" y2="7" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                  <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" />
+                  <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" />
                 </svg>
               </div>
               <span className="fw-semibold">Delete Client</span>
@@ -1578,8 +1475,8 @@ export default function ClientsPage() {
                                       title="Sync platform metrics now"
                                     >
                                       <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={isSyncing ? 'spin-icon' : ''}>
-                                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-                                        <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/>
+                                        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                                        <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
                                       </svg>
                                       <span className="small">{isSyncing ? 'Syncing...' : 'Sync'}</span>
                                     </button>
@@ -1609,8 +1506,8 @@ export default function ClientsPage() {
                                       style={{ opacity: 0.45 }}
                                     >
                                       <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
-                                        <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/>
+                                        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                                        <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
                                       </svg>
                                       <span className="small">Sync</span>
                                     </button>
@@ -1629,8 +1526,8 @@ export default function ClientsPage() {
                                       ) : (
                                         <>
                                           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                                           </svg>
                                           <span className="small fw-semibold">Connect</span>
                                         </>
@@ -1649,7 +1546,7 @@ export default function ClientsPage() {
 
                 <div className="modal-footer border-top p-3 bg-light d-flex justify-content-between">
                   <span className="text-secondary small">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-1"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="me-1"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></svg>
                     OAuth 2.0 secured API tokens &middot; Auto-sync active
                   </span>
                   <button type="button" className="btn btn-primary btn-sm px-4" onClick={() => setConnectClient(null)}>
@@ -1676,9 +1573,9 @@ export default function ClientsPage() {
                   <div className="d-flex align-items-center gap-3">
                     <div className="avatar bg-primary text-white rounded-3 p-2.5 d-flex align-items-center justify-content-center shadow-sm" style={{ width: 44, height: 44 }}>
                       <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <circle cx="12" cy="12" r="6"/>
-                        <circle cx="12" cy="12" r="2"/>
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="12" r="6" />
+                        <circle cx="12" cy="12" r="2" />
                       </svg>
                     </div>
                     <div>
@@ -2023,7 +1920,7 @@ export default function ClientsPage() {
         {toastMsg && (
           <div className="position-fixed bottom-0 end-0 m-4" style={{ zIndex: 1090 }}>
             <div className="alert alert-success d-flex align-items-center gap-2 shadow-lg mb-0 rounded-3 py-2 px-3 small">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
               <span>{toastMsg}</span>
             </div>
           </div>

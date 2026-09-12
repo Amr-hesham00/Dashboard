@@ -28,12 +28,14 @@ builder.Services.AddScoped<IAssociateTeamRepo, AssociateTeamRepo>();
 builder.Services.AddScoped<IAssignmentRepo, AssignmentRepo>();
 builder.Services.AddScoped<IUserRepo, UserRepo>();
 builder.Services.AddScoped<IRefreshTokenRepo, RefreshTokenRepo>();
+builder.Services.AddScoped<IClientTargetRepo, ClientTargetRepo>();
 #endregion
 //-----------------------------------Services------------------------------------
 #region Services
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 builder.Services.AddScoped<IClientService, ClientService>();
+builder.Services.AddScoped<IClientTargetService, ClientTargetService>();
 builder.Services.AddScoped<ICampaignService, CampaignService>();
 builder.Services.AddScoped<IPlatformService, PlatformService>();
 builder.Services.AddScoped<IAdSetService, AdSetService>();

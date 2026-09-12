@@ -289,6 +289,9 @@ namespace Dashboard.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("BusinessModel")
+                        .HasColumnType("int");
+
                     b.Property<string>("CompanyName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -342,6 +345,46 @@ namespace Dashboard.Infrastructure.Migrations
                     b.HasIndex("ManagerId");
 
                     b.ToTable("Clients", (string)null);
+                });
+
+            modelBuilder.Entity("Dashboard.Domain.Entities.ClientTarget", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ClientId")
+                        .HasColumnType("int");
+
+                    b.Property<double?>("MonthlyBudget")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("TargetCPA")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("TargetCPC")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("TargetCTR")
+                        .HasColumnType("float");
+
+                    b.Property<int?>("TargetConversions")
+                        .HasColumnType("int");
+
+                    b.Property<double?>("TargetROAS")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("TargetRevenue")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId")
+                        .IsUnique();
+
+                    b.ToTable("ClientTargets", (string)null);
                 });
 
             modelBuilder.Entity("Dashboard.Domain.Entities.Platform", b =>
@@ -728,6 +771,17 @@ namespace Dashboard.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Dashboard.Domain.Entities.ClientTarget", b =>
+                {
+                    b.HasOne("Dashboard.Domain.Entities.Client", "Client")
+                        .WithOne("Target")
+                        .HasForeignKey("Dashboard.Domain.Entities.ClientTarget", "ClientId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Client");
+                });
+
             modelBuilder.Entity("Dashboard.Domain.Entities.Platform", b =>
                 {
                     b.HasOne("Dashboard.Domain.Entities.Client", "Client")
@@ -826,6 +880,8 @@ namespace Dashboard.Infrastructure.Migrations
                     b.Navigation("Assignments");
 
                     b.Navigation("Platforms");
+
+                    b.Navigation("Target");
                 });
 
             modelBuilder.Entity("Dashboard.Domain.Entities.Platform", b =>

@@ -158,8 +158,22 @@ export default function PlatformsPage() {
   return (
     <DashboardLayout title="Platforms | Dasher">
       <div className="container-fluid px-0">
+        {/* ─── Breadcrumb ─── */}
+        <nav aria-label="breadcrumb" className="mb-4">
+          <ol className="breadcrumb mb-0 py-0 bg-transparent small align-items-center">
+            <li className="breadcrumb-item">
+              <Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">
+                Dashboard
+              </Link>
+            </li>
+            <li className="breadcrumb-item active text-success fw-semibold" aria-current="page">
+              Platforms
+            </li>
+          </ol>
+        </nav>
+
         {/* Header */}
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-6 gap-3">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
           <div>
             <h1 className="h2 mb-1">Advertising Platforms</h1>
             <p className="text-secondary mb-0">Connect and manage marketing channels for your client portfolios.</p>

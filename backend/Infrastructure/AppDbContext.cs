@@ -21,6 +21,7 @@ public class AppDbContext : IdentityDbContext
     public DbSet<Platform> platform { get; set; }
     public DbSet<Assignment> Assignment { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
+    public DbSet<ClientTarget> ClientTargets { get; set; }
 
     //protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //{

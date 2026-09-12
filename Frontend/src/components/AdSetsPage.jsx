@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import DashboardLayout from './DashboardLayout';
 import {
   getAdSetsApi,
@@ -158,6 +159,20 @@ export default function AdSetsPage() {
   return (
     <DashboardLayout title="AdSets Management | Dasher">
       <div className="container-fluid px-0">
+        {/* ─── Breadcrumb ─── */}
+        <nav aria-label="breadcrumb" className="mb-4">
+          <ol className="breadcrumb mb-0 py-0 bg-transparent small align-items-center">
+            <li className="breadcrumb-item">
+              <Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">
+                Dashboard
+              </Link>
+            </li>
+            <li className="breadcrumb-item active text-success fw-semibold" aria-current="page">
+              Ad Sets
+            </li>
+          </ol>
+        </nav>
+
         {/* Header Title & Actions */}
         <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-4 gap-3">
           <div>
@@ -271,8 +286,24 @@ export default function AdSetsPage() {
                   <tbody>
                     {filteredAdSets.map((adSet) => (
                       <tr key={adSet.id}>
-                        <td className="ps-4 fw-semibold text-dark">{adSet.name}</td>
-                        <td className="text-secondary">{getCampaignName(adSet.campaignId)}</td>
+                        <td className="ps-4">
+                          <Link
+                            to={`/clients/cli-101/campaigns/${adSet.campaignId || 1}/adsets/${adSet.id}`}
+                            className="fw-semibold text-body-emphasis text-decoration-none hover-primary"
+                            title={`View ad set details for ${adSet.name}`}
+                          >
+                            {adSet.name}
+                          </Link>
+                        </td>
+                        <td>
+                          <Link
+                            to={`/clients/cli-101/campaigns/${adSet.campaignId || 1}`}
+                            className="text-secondary text-decoration-none hover-primary small fw-medium"
+                            title={`View campaign details`}
+                          >
+                            {getCampaignName(adSet.campaignId)}
+                          </Link>
+                        </td>
                         <td>
                           <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
                             {adSet.audienceType}

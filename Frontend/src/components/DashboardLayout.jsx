@@ -1,16 +1,50 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getRoleName } from '../api/auth';
+import ClientSwitcher from './ClientSwitcher';
 
-export default function DashboardLayout({ children, title = 'Dasher - Dashboard' }) {
+export default function DashboardLayout({ children, title = 'Dasher - Dashboard', pageTitle, clientSwitcher }) {
   const { user, isAdmin, logout } = useAuth();
   const location = useLocation();
   const currentPath = location.pathname;
 
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setIsProfileOpen(false);
+      }
+    }
+    if (isProfileOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isProfileOpen]);
+
   useEffect(() => {
     document.title = title;
   }, [title]);
+
+  const getFallbackPageTitle = (pathname) => {
+    if (pathname === '/' || !pathname) return 'Home';
+    if (pathname === '/clients') return 'Clients';
+    if (pathname.startsWith('/insights')) return 'Insights & Recommendations';
+    if (pathname.startsWith('/reports')) return 'Reports';
+    if (pathname.startsWith('/team')) return 'Team';
+    if (pathname.startsWith('/campaigns')) return 'Campaigns';
+    if (pathname.startsWith('/adsets')) return 'Ad Sets';
+    if (pathname.startsWith('/platforms')) return 'Platforms';
+    if (pathname.startsWith('/admin')) return 'Admin Management';
+    if (pathname.startsWith('/account')) return 'Account Settings';
+    return '';
+  };
+
+  const resolvedPageTitle = pageTitle !== undefined ? pageTitle : getFallbackPageTitle(currentPath);
 
   const displayName = user?.firstName
     ? `${user.firstName} ${user.lastName || ''}`.trim()
@@ -19,6 +53,25 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
   const userEmail = user?.email || '';
   const userRole = getRoleName(user?.role);
   const userAvatar = user?.profilePicture || user?.imageUrl || user?.avatar || user?.image || user?.photoUrl;
+
+  const getRoleBadge = (role) => {
+    return (
+      <span
+        className="badge rounded-pill flex-shrink-0"
+        style={{
+          backgroundColor: 'rgba(16, 185, 129, 0.18)',
+          color: '#10b981',
+          border: '1px solid rgba(16, 185, 129, 0.35)',
+          fontSize: '0.7rem',
+          fontWeight: 600,
+          padding: '2px 8px',
+          lineHeight: '1.2',
+        }}
+      >
+        {role || 'Manager'}
+      </span>
+    );
+  };
 
   const navItems = isAdmin
     ? [
@@ -59,18 +112,6 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
               <path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
               <path d="M21 21v-2a4 4 0 0 0 -3 -3.85" />
-            </svg>
-          ),
-        },
-        {
-          to: '/campaigns',
-          label: 'Campaigns',
-          icon: (
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="icon icon-tabler icons-tabler-outline icon-tabler-speakerphone">
-              <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-              <path d="M18 8a3 3 0 0 1 0 6" />
-              <path d="M10 8v11a1 1 0 0 1 -1 1h-1a1 1 0 0 1 -1 -1v-5" />
-              <path d="M12 8h0l4.524 -3.77a.9 .9 0 0 1 1.476 .692v12.156a.9 .9 0 0 1 -1.476 .692l-4.524 -3.77h-8a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h8" />
             </svg>
           ),
         },
@@ -128,7 +169,7 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
 
       <ul className="navbar-nav flex-column flex-grow-1">
         <li className="nav-item">
-          <div className="nav-heading">{isAdmin ? 'Administration' : 'Management'}</div>
+          <div className="nav-heading" style={{ color: '#c4cdd5' }}>{isAdmin ? 'Administration' : 'Management'}</div>
           <hr className="mx-4 nav-line mb-2" />
         </li>
         {navItems.map((item) => {
@@ -139,9 +180,6 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
                 className={`nav-link ${isActive ? 'active' : ''}`}
                 to={item.to}
                 title={item.label}
-                data-bs-toggle="tooltip"
-                data-bs-placement="right"
-                data-bs-title={item.label}
               >
                 <span className="nav-icon">{item.icon}</span>
                 <span className="text">{item.label}</span>
@@ -158,9 +196,6 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
             to="/account-settings"
             className="card border-0 shadow-sm rounded-4 overflow-hidden sidebar-account-card text-decoration-none"
             title="Account Settings"
-            data-bs-toggle="tooltip"
-            data-bs-placement="right"
-            data-bs-title="Account Settings"
             style={{
               background: 'rgba(15, 23, 42, 0.75)',
               border: currentPath === '/account-settings' ? '1.5px solid #10b981' : '1px solid rgba(255, 255, 255, 0.08)',
@@ -269,14 +304,18 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
               </li>
               <li><hr className="dropdown-divider bg-secondary opacity-25 my-1" /></li>
               <li>
-                <button type="button" className="dropdown-item d-flex align-items-center gap-2 py-2 px-3 text-danger rounded-2 sidebar-logout-btn w-100 text-start bg-transparent border-0">
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="dropdown-item d-flex align-items-center gap-2 py-2 px-3 text-danger rounded-2 sidebar-logout-btn w-100 text-start bg-transparent border-0"
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path stroke="none" d="M0 0h24v24H0z" fill="none" />
                     <path d="M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2" />
                     <path d="M9 12h12l-3 -3" />
                     <path d="M18 15l3 -3" />
                   </svg>
-                  Logout
+                  Sign out
                 </button>
               </li>
             </ul>
@@ -304,8 +343,8 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
       <div id="content" className="position-relative d-flex flex-column min-vh-100">
         {/* Top Navbar */}
         <div className="navbar-glass navbar navbar-expand-lg px-0 px-lg-4">
-          <div className="container-fluid px-lg-0">
-            <div className="d-flex align-items-center gap-4">
+          <div className="container-fluid px-lg-0" style={{ position: 'relative' }}>
+            <div className="d-flex align-items-center gap-3">
               {/* Mobile Menu Toggle */}
               <div className="d-block d-lg-none">
                 <a className="text-inherit" data-bs-toggle="offcanvas" href="#offcanvasExample" role="button" aria-controls="offcanvasExample">
@@ -343,8 +382,60 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
               </div>
             </div>
 
+            {/* Centered Top Navigation Bar Page Title or Client Switcher */}
+            {clientSwitcher ? (
+              <div
+                className="d-flex align-items-center justify-content-center text-center"
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  maxWidth: 'min(580px, 52vw)',
+                  pointerEvents: 'none',
+                  zIndex: 1040,
+                }}
+              >
+                <div style={{ pointerEvents: 'auto' }}>
+                  <ClientSwitcher
+                    currentClientId={clientSwitcher.currentClientId}
+                    currentClientName={clientSwitcher.currentClientName || resolvedPageTitle}
+                    variant="topbar"
+                  />
+                </div>
+              </div>
+            ) : resolvedPageTitle ? (
+              <div
+                className="d-flex align-items-center justify-content-center text-center"
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  maxWidth: 'min(580px, 52vw)',
+                  pointerEvents: 'none',
+                  zIndex: 1,
+                }}
+              >
+                <h1
+                  className="mb-0 fw-bold text-truncate topbar-page-title"
+                  style={{
+                    letterSpacing: '-0.025em',
+                    fontSize: '1.5rem',
+                    fontWeight: 700,
+                    lineHeight: 1.2,
+                    pointerEvents: 'auto',
+                    color: '#c4cdd5',
+                  }}
+                  title={resolvedPageTitle}
+                >
+                  {resolvedPageTitle}
+                </h1>
+              </div>
+            ) : null}
+
             {/* Navbar Controls */}
-            <ul className="list-unstyled d-flex align-items-center mb-0 gap-2">
+            <ul className="list-unstyled d-flex align-items-center mb-0 gap-2 ms-auto">
               {/* Search button (⌘K) */}
               <li>
                 <button type="button" className="btn btn-white" data-bs-toggle="modal" data-bs-target="#searchModal">
@@ -396,6 +487,270 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
                     <span className="visually-hidden">unread messages</span>
                   </span>
                 </a>
+              </li>
+
+              {/* Avatar / Profile Menu */}
+              <li className="ms-2 me-1 position-relative" ref={profileDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="btn p-0 border-0 bg-transparent rounded-circle d-flex align-items-center justify-content-center"
+                  style={{
+                    cursor: 'pointer',
+                    outline: 'none',
+                    boxShadow: isProfileOpen ? '0 0 0 3px rgba(16, 185, 129, 0.35)' : 'none',
+                    transition: 'box-shadow 0.15s ease, transform 0.15s ease',
+                    transform: isProfileOpen ? 'scale(1.04)' : 'scale(1)',
+                  }}
+                  aria-expanded={isProfileOpen}
+                  aria-label="User profile and settings menu"
+                >
+                  {userAvatar ? (
+                    <img
+                      src={userAvatar}
+                      alt={displayName}
+                      className="rounded-circle"
+                      style={{ width: '38px', height: '38px', objectFit: 'cover', border: '1.5px solid #10b981' }}
+                    />
+                  ) : (
+                    <span
+                      className="rounded-circle d-flex align-items-center justify-content-center shadow-sm"
+                      style={{ width: '38px', height: '38px', backgroundColor: '#0f172a', border: '1.5px solid #10b981' }}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#10b981"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                        <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+                        <path d="M12 10m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+                        <path d="M6.168 18.849a4 4 0 0 1 3.832 -2.849h4a4 4 0 0 1 3.834 2.855" />
+                      </svg>
+                    </span>
+                  )}
+                </button>
+
+                {/* Dropdown Menu */}
+                {isProfileOpen && (
+                  <>
+                    <style>{`
+                      .profile-menu-dropdown {
+                        background-color: #1c252e !important;
+                        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+                        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.55), 0 6px 16px rgba(0, 0, 0, 0.35) !important;
+                        border-radius: 14px !important;
+                        padding: 8px !important;
+                        backdrop-filter: blur(14px);
+                      }
+                      .profile-menu-item {
+                        color: #94a3b8 !important;
+                        border-radius: 8px !important;
+                        padding: 10px 16px !important;
+                        font-size: 0.92rem !important;
+                        font-weight: 500 !important;
+                        gap: 16px !important;
+                        transition: background-color 0.15s ease, color 0.15s ease;
+                        background: transparent;
+                        cursor: pointer !important;
+                      }
+                      .profile-menu-item:hover, .profile-menu-item:focus {
+                        background-color: rgba(255, 255, 255, 0.08) !important;
+                        color: #ffffff !important;
+                      }
+                      .profile-menu-item svg {
+                        color: #94a3b8;
+                        transition: color 0.15s ease;
+                        flex-shrink: 0;
+                      }
+                      .profile-menu-item:hover svg, .profile-menu-item:focus svg {
+                        color: #ffffff;
+                      }
+                      .profile-menu-danger {
+                        color: #f87171 !important;
+                        border-radius: 8px !important;
+                        padding: 10px 16px !important;
+                        font-size: 0.92rem !important;
+                        font-weight: 500 !important;
+                        gap: 16px !important;
+                        transition: all 0.15s ease;
+                        background: transparent;
+                        cursor: pointer !important;
+                      }
+                      .profile-menu-danger:hover, .profile-menu-danger:focus {
+                        background-color: rgba(239, 68, 68, 0.12) !important;
+                        color: #ef4444 !important;
+                      }
+                      .profile-menu-danger svg {
+                        color: #f87171 !important;
+                        transition: color 0.15s ease;
+                        flex-shrink: 0;
+                      }
+                      .profile-menu-danger:hover svg, .profile-menu-danger:focus svg {
+                        color: #ef4444 !important;
+                      }
+                    `}</style>
+
+                    <div
+                      className="dropdown-menu show profile-menu-dropdown shadow-lg"
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 12px)',
+                        right: 0,
+                        left: 'auto',
+                        minWidth: '295px',
+                        maxWidth: '335px',
+                        zIndex: 1060,
+                      }}
+                    >
+                      {/* Header: Photo on left, Name + Role Badge on right, Email underneath */}
+                      <div
+                        className="d-flex gap-3 align-items-center px-3 py-3 rounded-3"
+                        style={{
+                          borderBottom: '1px dashed rgba(255, 255, 255, 0.12)',
+                          marginBottom: '4px',
+                        }}
+                      >
+                        <div className="flex-shrink-0">
+                          {userAvatar ? (
+                            <img
+                              src={userAvatar}
+                              alt={displayName}
+                              className="rounded-circle"
+                              style={{ width: '46px', height: '46px', objectFit: 'cover', border: '1.5px solid #10b981' }}
+                            />
+                          ) : (
+                            <span
+                              className="rounded-circle d-flex align-items-center justify-content-center"
+                              style={{ width: '46px', height: '46px', backgroundColor: '#0f172a', border: '1.5px solid #10b981' }}
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="#10b981"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                                <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
+                                <path d="M12 10m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+                                <path d="M6.168 18.849a4 4 0 0 1 3.832 -2.849h4a4 4 0 0 1 3.834 2.855" />
+                              </svg>
+                            </span>
+                          )}
+                        </div>
+                        <div className="overflow-hidden flex-grow-1 text-start">
+                          <div className="d-flex align-items-center gap-2 flex-wrap mb-1">
+                            <span className="fw-bold text-white text-truncate" style={{ fontSize: '0.98rem' }} title={displayName}>
+                              {displayName}
+                            </span>
+                            {getRoleBadge(userRole)}
+                          </div>
+                          <small className="text-truncate d-block" style={{ fontSize: '0.82rem', color: '#94a3b8' }} title={userEmail}>
+                            {userEmail || (user?.userName ? `@${user.userName}` : '@user')}
+                          </small>
+                        </div>
+                      </div>
+
+                      {/* Section 1: Profile settings & Notifications */}
+                      <div className="d-flex flex-column gap-1">
+                        <Link
+                          to="/account-settings"
+                          onClick={() => setIsProfileOpen(false)}
+                          className="dropdown-item profile-menu-item d-flex align-items-center rounded-2 text-decoration-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                            <path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z" />
+                            <path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+                          </svg>
+                          <span>Profile settings</span>
+                        </Link>
+
+                        <a
+                          href="#offcanvasNotification"
+                          data-bs-toggle="offcanvas"
+                          role="button"
+                          onClick={() => setIsProfileOpen(false)}
+                          className="dropdown-item profile-menu-item d-flex align-items-center rounded-2 text-decoration-none"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                            <path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6" />
+                            <path d="M9 17v1a3 3 0 0 0 6 0v-1" />
+                          </svg>
+                          <span>Notifications</span>
+                          <span className="badge rounded-pill bg-danger ms-auto" style={{ fontSize: '0.72rem', padding: '2px 7px' }}>
+                            2
+                          </span>
+                        </a>
+                      </div>
+
+                      {/* Dashed Divider above Sign out */}
+                      <div style={{ borderTop: '1px dashed rgba(255, 255, 255, 0.12)', margin: '4px 6px' }} />
+
+                      {/* Section 2: Sign out in danger */}
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsProfileOpen(false);
+                            logout();
+                          }}
+                          className="dropdown-item profile-menu-danger d-flex align-items-center rounded-2 w-100 text-start bg-transparent border-0"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                            <path d="M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2" />
+                            <path d="M9 12h12l-3 -3" />
+                            <path d="M18 15l3 -3" />
+                          </svg>
+                          <span>Sign out</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </li>
             </ul>
           </div>

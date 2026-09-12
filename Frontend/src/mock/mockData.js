@@ -904,8 +904,12 @@ export const mockClientPlatformPerformance = {
  * If specific data isn't pre-defined, dynamically generates tailored campaigns.
  */
 export function getClientPlatformPerformance(clientId, clientName = '', category = '', multiplier = 1) {
+  const clientKey = String(clientId).startsWith('cli-') ? clientId : `cli-${100 + Number(clientId)}`;
   if (mockClientPlatformPerformance[clientId]) {
     return mockClientPlatformPerformance[clientId];
+  }
+  if (mockClientPlatformPerformance[clientKey]) {
+    return mockClientPlatformPerformance[clientKey];
   }
 
   const name = clientName || `Client ${clientId}`;
@@ -1280,3 +1284,416 @@ export function getMockDashboardSummary() {
   };
 }
 
+/**
+ * Resolves a campaign by ID for a specific client ID, verifying relationship integrity.
+ */
+export function resolveClientAndCampaign(clientId, campaignId) {
+  const clientKey = String(clientId).startsWith('cli-') ? clientId : `cli-${100 + Number(clientId)}`;
+  const client = mockClients.find((c) => String(c.id) === String(clientId) || c.companyId === clientKey) || {
+    id: clientId,
+    companyName: 'Acme Corporation',
+    email: 'contact@acmeglobal.com',
+  };
+
+  const clientPlatforms =
+    mockClientPlatformPerformance[clientId] ||
+    mockClientPlatformPerformance[clientKey] ||
+    mockClientPlatformPerformance['cli-101'];
+
+  const matchId = (candId, targetId) => {
+    if (!candId || !targetId) return false;
+    const c = String(candId).toLowerCase();
+    const t = String(targetId).toLowerCase();
+    if (c === t) return true;
+    const cSuffix = c.includes('-') ? c.slice(c.lastIndexOf('-')) : c;
+    const tSuffix = t.includes('-') ? t.slice(t.lastIndexOf('-')) : t;
+    if (cSuffix === tSuffix) return true;
+    return false;
+  };
+
+  let foundCampaign = null;
+  let foundPlatformKey = 'meta';
+
+  if (clientPlatforms) {
+    for (const [pKey, pData] of Object.entries(clientPlatforms)) {
+      const match = (pData.campaigns || []).find((c) => matchId(c.id, campaignId));
+      if (match) {
+        foundCampaign = {
+          ...match,
+          platformKey: pKey,
+          platformLabel: pData.label || pKey,
+        };
+        foundPlatformKey = pKey;
+        break;
+      }
+    }
+  }
+
+  if (!foundCampaign) {
+    // Check all mock client platform campaigns
+    for (const pGroup of Object.values(mockClientPlatformPerformance)) {
+      for (const [pKey, pData] of Object.entries(pGroup)) {
+        const match = (pData.campaigns || []).find((c) => matchId(c.id, campaignId));
+        if (match) {
+          foundCampaign = {
+            ...match,
+            platformKey: pKey,
+            platformLabel: pData.label || pKey,
+          };
+          foundPlatformKey = pKey;
+          break;
+        }
+      }
+      if (foundCampaign) break;
+    }
+  }
+
+  if (!foundCampaign) {
+    const globalMatch = mockCampaigns.find((c) => matchId(c.id, campaignId));
+    if (globalMatch) {
+      const pKey = globalMatch.platformId === 1 ? 'meta' : globalMatch.platformId === 2 ? 'google' : globalMatch.platformId === 3 ? 'snapchat' : 'tiktok';
+      foundCampaign = {
+        ...globalMatch,
+        platformKey: pKey,
+        platformLabel: pKey === 'meta' ? 'Meta Ads' : pKey === 'google' ? 'Google Ads' : pKey === 'snapchat' ? 'Snapchat Ads' : 'TikTok Ads',
+      };
+      foundPlatformKey = pKey;
+    }
+  }
+
+  // Safe fallback if still not matched so detail pages never break
+  if (!foundCampaign) {
+    const isGoogle = String(campaignId).includes('g');
+    const isSnap = String(campaignId).includes('s');
+    const isTiktok = String(campaignId).includes('t');
+    const pKey = isGoogle ? 'google' : isSnap ? 'snapchat' : isTiktok ? 'tiktok' : 'meta';
+    const pLabel = isGoogle ? 'Google Ads' : isSnap ? 'Snapchat Ads' : isTiktok ? 'TikTok Ads' : 'Meta Ads';
+    foundCampaign = {
+      id: campaignId,
+      name: `${client.companyName || 'Client'} — Performance Campaign`,
+      status: 'Active',
+      platformKey: pKey,
+      platformLabel: pLabel,
+      spend: 7500,
+      revenue: 30000,
+      roas: 4.0,
+      impressions: 1100000,
+      clicks: 44000,
+      ctr: 4.0,
+      conversions: 1500,
+      cpa: 5.0,
+    };
+    foundPlatformKey = pKey;
+  }
+
+  return {
+    client,
+    campaign: foundCampaign,
+    platformKey: foundPlatformKey,
+  };
+}
+
+/**
+ * Gets Ad Sets for a campaign. Returns existing mockAdSets or generates contextual ones.
+ */
+export function getCampaignAdSets(campaignId, campaign) {
+  const existing = mockAdSets.filter((a) => String(a.campaignId) === String(campaignId));
+  if (existing.length > 0) {
+    return existing.map((adSet, idx) => ({
+      ...adSet,
+      id: adSet.id || `as-${campaignId}-${idx + 1}`,
+      spend: adSet.spend || Math.round((campaign?.spend || 8000) * (0.45 - idx * 0.15)),
+      revenue: adSet.revenue || Math.round((campaign?.revenue || 32000) * (0.45 - idx * 0.15)),
+      roas: adSet.roas || campaign?.roas || 4.0,
+      impressions: adSet.impressions || Math.round((campaign?.impressions || 500000) * (0.45 - idx * 0.15)),
+      clicks: adSet.clicks || Math.round((campaign?.clicks || 20000) * (0.45 - idx * 0.15)),
+      conversions: adSet.conversions || Math.round((campaign?.conversions || 1200) * (0.45 - idx * 0.15)),
+      cpa: adSet.cpa || campaign?.cpa || 4.5,
+      ctr: adSet.ctr || campaign?.ctr || 3.8,
+    }));
+  }
+
+  const campSpend = Number(campaign?.spend) || 8400;
+  const campRevenue = Number(campaign?.revenue) || 33600;
+  const campImpr = Number(campaign?.impressions) || 1200000;
+  const campClicks = Number(campaign?.clicks) || 48000;
+  const campConv = Number(campaign?.conversions) || 1800;
+  const campRoas = Number(campaign?.roas) || 4.0;
+  const campCtr = Number(campaign?.ctr) || 4.0;
+
+  return [
+    {
+      id: `as-${campaignId}-1`,
+      name: `${campaign?.name ? campaign.name.split('—')[0].trim() : 'Core'} — Lookalike 1% High LTV`,
+      campaignId,
+      status: 'Active',
+      audienceType: 'Lookalike',
+      ageRange: '25-54',
+      gender: 'All',
+      location: 'United States, Canada',
+      placements: 'Feeds, Stories, Reels',
+      dailyBudget: Math.round((campSpend / 30) * 0.45),
+      spend: Math.round(campSpend * 0.48),
+      revenue: Math.round(campRevenue * 0.50),
+      roas: Number((campRoas * 1.05).toFixed(2)),
+      impressions: Math.round(campImpr * 0.46),
+      clicks: Math.round(campClicks * 0.48),
+      conversions: Math.round(campConv * 0.50),
+      cpa: Number((campSpend * 0.48 / (campConv * 0.50 || 1)).toFixed(2)),
+      ctr: Number((campCtr * 1.04).toFixed(2)),
+    },
+    {
+      id: `as-${campaignId}-2`,
+      name: `${campaign?.name ? campaign.name.split('—')[0].trim() : 'Core'} — High Intent Interest Stack`,
+      campaignId,
+      status: 'Active',
+      audienceType: 'Interests',
+      ageRange: '21-45',
+      gender: 'All',
+      location: 'US Tier 1 Metros',
+      placements: 'All Placements',
+      dailyBudget: Math.round((campSpend / 30) * 0.35),
+      spend: Math.round(campSpend * 0.32),
+      revenue: Math.round(campRevenue * 0.32),
+      roas: Number((campRoas * 1.0).toFixed(2)),
+      impressions: Math.round(campImpr * 0.34),
+      clicks: Math.round(campClicks * 0.32),
+      conversions: Math.round(campConv * 0.32),
+      cpa: Number((campSpend * 0.32 / (campConv * 0.32 || 1)).toFixed(2)),
+      ctr: Number((campCtr * 0.95).toFixed(2)),
+    },
+    {
+      id: `as-${campaignId}-3`,
+      name: `${campaign?.name ? campaign.name.split('—')[0].trim() : 'Core'} — 14-Day Engaged Retargeting`,
+      campaignId,
+      status: 'Active',
+      audienceType: 'Custom Retargeting',
+      ageRange: '18-65+',
+      gender: 'All',
+      location: 'Global (Engaged)',
+      placements: 'Feeds, Search, Stories',
+      dailyBudget: Math.round((campSpend / 30) * 0.20),
+      spend: Math.round(campSpend * 0.20),
+      revenue: Math.round(campRevenue * 0.18),
+      roas: Number((campRoas * 0.90).toFixed(2)),
+      impressions: Math.round(campImpr * 0.20),
+      clicks: Math.round(campClicks * 0.20),
+      conversions: Math.round(campConv * 0.18),
+      cpa: Number((campSpend * 0.20 / (campConv * 0.18 || 1)).toFixed(2)),
+      ctr: Number((campCtr * 1.0).toFixed(2)),
+    },
+  ];
+}
+
+/**
+ * Gets Ads for an Ad Set. Returns existing mockAds or generates contextual ones with media previews.
+ */
+export function getAdSetAds(adSetId, adSet, campaign) {
+  const existing = mockAds.filter((a) => String(a.adSetId) === String(adSetId));
+  if (existing.length > 0) {
+    return existing;
+  }
+
+  const asSpend = Number(adSet?.spend) || 3500;
+  const asRevenue = Number(adSet?.revenue) || 14000;
+  const asImpr = Number(adSet?.impressions) || 450000;
+  const asClicks = Number(adSet?.clicks) || 18000;
+  const asConv = Number(adSet?.conversions) || 680;
+
+  return [
+    {
+      id: `ad-${adSetId}-1`,
+      name: 'Dynamic Product Carousel — Summer Hero Showcase',
+      headline: 'Discover The Next-Gen Enterprise Collection',
+      description: 'Streamline your operations with our award-winning tech stack. Fast shipping & 24/7 dedicated support.',
+      cta: 'Shop Now',
+      mediaURL: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80',
+      mediaType: 'Carousel Image',
+      status: 'Active',
+      spend: Math.round(asSpend * 0.55),
+      revenue: Math.round(asRevenue * 0.58),
+      roas: Number(((asRevenue * 0.58) / (asSpend * 0.55 || 1)).toFixed(2)),
+      impressions: Math.round(asImpr * 0.55),
+      reach: Math.round(asImpr * 0.44),
+      clicks: Math.round(asClicks * 0.56),
+      ctr: Number(((asClicks * 0.56 / (asImpr * 0.55 || 1)) * 100).toFixed(2)),
+      cpc: Number(((asSpend * 0.55) / (asClicks * 0.56 || 1)).toFixed(2)),
+      conversions: Math.round(asConv * 0.58),
+      cpa: Number(((asSpend * 0.55) / (asConv * 0.58 || 1)).toFixed(2)),
+      createdAt: '2026-06-01T10:00:00Z',
+      adSetId,
+    },
+    {
+      id: `ad-${adSetId}-2`,
+      name: 'Direct UGC Video — Customer Transformation Story (15s)',
+      headline: 'How We Scaled Revenue by 340% in 60 Days',
+      description: 'See why over 10,000 businesses switched to Acme Global. Watch the case study walkthrough.',
+      cta: 'Learn More',
+      mediaURL: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=800&q=80',
+      mediaType: 'Video Reel',
+      status: 'Active',
+      spend: Math.round(asSpend * 0.30),
+      revenue: Math.round(asRevenue * 0.28),
+      roas: Number(((asRevenue * 0.28) / (asSpend * 0.30 || 1)).toFixed(2)),
+      impressions: Math.round(asImpr * 0.30),
+      reach: Math.round(asImpr * 0.25),
+      clicks: Math.round(asClicks * 0.30),
+      ctr: Number(((asClicks * 0.30 / (asImpr * 0.30 || 1)) * 100).toFixed(2)),
+      cpc: Number(((asSpend * 0.30) / (asClicks * 0.30 || 1)).toFixed(2)),
+      conversions: Math.round(asConv * 0.28),
+      cpa: Number(((asSpend * 0.30) / (asConv * 0.28 || 1)).toFixed(2)),
+      createdAt: '2026-06-15T12:00:00Z',
+      adSetId,
+    },
+    {
+      id: `ad-${adSetId}-3`,
+      name: 'Single Image — Limited Time Promotion 20% Off',
+      headline: 'Special Offer: Claim Your 20% Discount Today',
+      description: 'Instant onboarding with zero friction. Use code TECH20 at checkout.',
+      cta: 'Claim Offer',
+      mediaURL: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=800&q=80',
+      mediaType: 'Single Image',
+      status: 'Active',
+      spend: Math.round(asSpend * 0.15),
+      revenue: Math.round(asRevenue * 0.14),
+      roas: Number(((asRevenue * 0.14) / (asSpend * 0.15 || 1)).toFixed(2)),
+      impressions: Math.round(asImpr * 0.15),
+      reach: Math.round(asImpr * 0.12),
+      clicks: Math.round(asClicks * 0.14),
+      ctr: Number(((asClicks * 0.14 / (asImpr * 0.15 || 1)) * 100).toFixed(2)),
+      cpc: Number(((asSpend * 0.15) / (asClicks * 0.14 || 1)).toFixed(2)),
+      conversions: Math.round(asConv * 0.14),
+      cpa: Number(((asSpend * 0.15) / (asConv * 0.14 || 1)).toFixed(2)),
+      createdAt: '2026-07-01T14:30:00Z',
+      adSetId,
+    },
+  ];
+}
+
+// ─── Campaign-Level KPI Definitions ─────────────────────────────────
+export const availableCampaignKPIs = [
+  { key: 'spend', label: 'Spend', format: 'currency', color: 'danger' },
+  { key: 'revenue', label: 'Revenue', format: 'currency', color: 'success' },
+  { key: 'roas', label: 'ROAS', format: 'multiplier', color: 'primary' },
+  { key: 'impressions', label: 'Impressions', format: 'number', color: 'info' },
+  { key: 'clicks', label: 'Clicks', format: 'number', color: 'primary' },
+  { key: 'ctr', label: 'CTR', format: 'percent', color: 'info' },
+  { key: 'conversions', label: 'Conversions', format: 'number', color: 'success' },
+  { key: 'cpa', label: 'CPA', format: 'currency', color: 'warning' },
+  { key: 'cpc', label: 'CPC', format: 'currency', color: 'warning' },
+];
+
+export const defaultCampaignPinnedKPIs = ['spend', 'revenue', 'roas', 'conversions', 'cpa'];
+
+// ─── Ad Set-Level KPI Definitions ────────────────────────────────────
+export const availableAdSetKPIs = [
+  { key: 'spend', label: 'Spend', format: 'currency', color: 'danger' },
+  { key: 'revenue', label: 'Revenue', format: 'currency', color: 'success' },
+  { key: 'roas', label: 'ROAS', format: 'multiplier', color: 'primary' },
+  { key: 'reach', label: 'Reach', format: 'number', color: 'info' },
+  { key: 'frequency', label: 'Frequency', format: 'decimal', color: 'secondary' },
+  { key: 'ctr', label: 'CTR', format: 'percent', color: 'info' },
+  { key: 'conversions', label: 'Conversions', format: 'number', color: 'success' },
+  { key: 'cpa', label: 'CPA', format: 'currency', color: 'warning' },
+];
+
+export const defaultAdSetPinnedKPIs = ['spend', 'revenue', 'roas', 'conversions', 'cpa'];
+
+// ─── Time-Series Generator for Campaign Charts ──────────────────────
+export function generateCampaignTimeSeries(campaign, days = 30) {
+  const totalSpend = Number(campaign?.spend) || 8000;
+  const totalRevenue = Number(campaign?.revenue) || 32000;
+  const totalImpressions = Number(campaign?.impressions) || 500000;
+  const totalClicks = Number(campaign?.clicks) || 20000;
+  const totalConversions = Number(campaign?.conversions) || 1200;
+
+  const endDate = campaign?.endDate ? new Date(campaign.endDate) : new Date();
+  const startDate = campaign?.startDate ? new Date(campaign.startDate) : new Date(endDate.getTime() - days * 86400000);
+  const actualDays = Math.min(days, Math.max(7, Math.round((endDate - startDate) / 86400000)));
+
+  const series = [];
+  // Use a seeded-ish random based on campaign id for consistency
+  const seed = Number(campaign?.id) || 1;
+  function pseudoRandom(i, offset) {
+    const x = Math.sin((seed * 9301 + i * 4973 + offset * 1997)) * 10000;
+    return x - Math.floor(x);
+  }
+
+  for (let i = 0; i < actualDays; i++) {
+    const date = new Date(endDate.getTime() - (actualDays - 1 - i) * 86400000);
+    const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    // Create natural-looking daily variation around daily average
+    const baseFactor = 1 / actualDays;
+    const variation = 0.5 + pseudoRandom(i, 1) * 1.0; // 0.5x to 1.5x
+    const trend = 0.85 + (i / actualDays) * 0.30; // slight upward trend
+
+    const daySpend = Math.round(totalSpend * baseFactor * variation * trend);
+    const dayRevenue = Math.round(totalRevenue * baseFactor * variation * trend * (0.9 + pseudoRandom(i, 2) * 0.2));
+    const dayImpr = Math.round(totalImpressions * baseFactor * variation * trend);
+    const dayClicks = Math.round(totalClicks * baseFactor * variation * trend);
+    const dayConv = Math.max(1, Math.round(totalConversions * baseFactor * variation * trend));
+
+    series.push({
+      date: label,
+      spend: daySpend,
+      revenue: dayRevenue,
+      roas: daySpend > 0 ? Number((dayRevenue / daySpend).toFixed(2)) : 0,
+      impressions: dayImpr,
+      clicks: dayClicks,
+      conversions: dayConv,
+      cpa: dayConv > 0 ? Number((daySpend / dayConv).toFixed(2)) : 0,
+      ctr: dayImpr > 0 ? Number(((dayClicks / dayImpr) * 100).toFixed(2)) : 0,
+      cpc: dayClicks > 0 ? Number((daySpend / dayClicks).toFixed(2)) : 0,
+    });
+  }
+  return series;
+}
+
+// ─── Time-Series Generator for Ad Set Charts ────────────────────────
+export function generateAdSetTimeSeries(adSet, days = 30) {
+  const totalSpend = Number(adSet?.spend) || 3000;
+  const totalRevenue = Number(adSet?.revenue) || 12000;
+  const totalImpressions = Number(adSet?.impressions) || 200000;
+  const totalClicks = Number(adSet?.clicks) || 8000;
+  const totalConversions = Number(adSet?.conversions) || 500;
+
+  const seed = typeof adSet?.id === 'string' ? adSet.id.split('').reduce((a, c) => a + c.charCodeAt(0), 0) : Number(adSet?.id) || 7;
+  function pseudoRandom(i, offset) {
+    const x = Math.sin((seed * 7919 + i * 6271 + offset * 3571)) * 10000;
+    return x - Math.floor(x);
+  }
+
+  const series = [];
+  for (let i = 0; i < days; i++) {
+    const date = new Date(Date.now() - (days - 1 - i) * 86400000);
+    const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    const baseFactor = 1 / days;
+    const variation = 0.5 + pseudoRandom(i, 1) * 1.0;
+    const trend = 0.85 + (i / days) * 0.30;
+
+    const daySpend = Math.round(totalSpend * baseFactor * variation * trend);
+    const dayRevenue = Math.round(totalRevenue * baseFactor * variation * trend * (0.9 + pseudoRandom(i, 2) * 0.2));
+    const dayImpr = Math.round(totalImpressions * baseFactor * variation * trend);
+    const dayClicks = Math.round(totalClicks * baseFactor * variation * trend);
+    const dayConv = Math.max(1, Math.round(totalConversions * baseFactor * variation * trend));
+    const dayReach = Math.round(dayImpr * (0.65 + pseudoRandom(i, 3) * 0.15));
+
+    series.push({
+      date: label,
+      spend: daySpend,
+      revenue: dayRevenue,
+      roas: daySpend > 0 ? Number((dayRevenue / daySpend).toFixed(2)) : 0,
+      impressions: dayImpr,
+      clicks: dayClicks,
+      conversions: dayConv,
+      cpa: dayConv > 0 ? Number((daySpend / dayConv).toFixed(2)) : 0,
+      ctr: dayImpr > 0 ? Number(((dayClicks / dayImpr) * 100).toFixed(2)) : 0,
+      reach: dayReach,
+      frequency: dayReach > 0 ? Number((dayImpr / dayReach).toFixed(2)) : 1,
+      cpc: dayClicks > 0 ? Number((daySpend / dayClicks).toFixed(2)) : 0,
+    });
+  }
+  return series;
+}
