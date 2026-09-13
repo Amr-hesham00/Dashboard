@@ -13,9 +13,11 @@ import {
   availableAdSetKPIs,
   defaultAdSetPinnedKPIs,
   generateAdSetTimeSeries,
+  aggregateTimeSeriesByMonth,
 } from '../mock/mockData';
 import metaIcon from '../assets/meta-icon.webp';
 import KpiMetricBadge from './KpiMetricBadge';
+import PeriodSelector from './PeriodSelector';
 
 // ─── ApexCharts React Wrapper ───────────────────────────────────────
 function ApexChart({ options, series, type, height = 310 }) {
@@ -24,7 +26,7 @@ function ApexChart({ options, series, type, height = 310 }) {
   useEffect(() => {
     if (!chartRef.current) return;
     if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; }
-    const mergedOptions = { ...options, chart: { ...(options.chart || {}), type, height, toolbar: { show: false }, fontFamily: 'inherit' }, series };
+    const mergedOptions = { ...options, legend: { ...(options.legend || {}), show: false }, chart: { ...(options.chart || {}), type, height, toolbar: { show: false }, fontFamily: 'inherit' }, series };
     chartInstance.current = new ApexCharts(chartRef.current, mergedOptions);
     chartInstance.current.render();
     return () => { if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; } };
@@ -92,6 +94,10 @@ function formatDateRange(startDate, endDate) {
   return `${fmt(startDate)} — ${fmt(endDate)}`;
 }
 
+const IconCheck = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+);
+
 // ─── Ad Thumbnail ───────────────────────────────────────────────────
 function AdThumbnail({ src, name, mediaType }) {
   const [error, setError] = useState(false);
@@ -114,6 +120,7 @@ function AdThumbnail({ src, name, mediaType }) {
 
 // ─── Ad Details Modal ───────────────────────────────────────────────
 function AdDetailsModal({ ad, onClose }) {
+  const [imgError, setImgError] = useState(false);
   useEffect(() => {
     const handleKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handleKeyDown);
@@ -121,6 +128,7 @@ function AdDetailsModal({ ad, onClose }) {
     document.body.style.overflow = 'hidden';
     return () => { window.removeEventListener('keydown', handleKeyDown); document.body.style.overflow = orig; };
   }, [onClose]);
+  useEffect(() => { setImgError(false); }, [ad?.mediaURL]);
 
   if (!ad) return null;
   const normStatus = normalizeStatus(ad.status);
@@ -136,49 +144,112 @@ function AdDetailsModal({ ad, onClose }) {
   const cpa = Number(ad.cpa) || (conversions > 0 ? spend / conversions : 0);
   const roas = Number(ad.roas) || (spend > 0 ? revenue / spend : 0);
 
-  const metrics = [
-    { label: 'Spend', value: `$${spend.toLocaleString()}`, color: 'danger' },
-    { label: 'Revenue', value: `$${revenue.toLocaleString()}`, color: 'success' },
-    { label: 'ROAS', value: `${roas.toFixed(2)}x`, color: 'primary' },
-    { label: 'Impressions', value: impressions >= 1000 ? `${(impressions / 1000).toFixed(1)}K` : impressions.toLocaleString(), color: 'info' },
-    { label: 'Clicks', value: clicks >= 1000 ? `${(clicks / 1000).toFixed(1)}K` : clicks.toLocaleString(), color: 'primary' },
-    { label: 'CTR', value: `${ctr.toFixed(2)}%`, color: 'info' },
-    { label: 'CPC', value: `$${cpc.toFixed(2)}`, color: 'warning' },
-    { label: 'Conversions', value: conversions.toLocaleString(), color: 'success' },
-    { label: 'CPA', value: `$${cpa.toFixed(2)}`, color: 'warning' },
-    { label: 'Reach', value: reach >= 1000 ? `${(reach / 1000).toFixed(1)}K` : reach.toLocaleString(), color: 'secondary' },
+  const heroMetrics = [
+    { label: 'Spend', value: `$${spend.toLocaleString()}`, icon: '↗', accent: '#e11d48', bg: 'rgba(225,29,72,0.08)' },
+    { label: 'Revenue', value: `$${revenue.toLocaleString()}`, icon: '↗', accent: '#00a76f', bg: 'rgba(0,167,111,0.08)' },
+    { label: 'ROAS', value: `${roas.toFixed(2)}x`, icon: '⚡', accent: '#6366f1', bg: 'rgba(99,102,241,0.08)' },
   ];
 
+  const detailMetrics = [
+    { label: 'Impressions', value: impressions >= 1000 ? `${(impressions / 1000).toFixed(1)}K` : impressions.toLocaleString() },
+    { label: 'Clicks', value: clicks >= 1000 ? `${(clicks / 1000).toFixed(1)}K` : clicks.toLocaleString() },
+    { label: 'CTR', value: `${ctr.toFixed(2)}%` },
+    { label: 'CPC', value: `$${cpc.toFixed(2)}` },
+    { label: 'Conversions', value: conversions.toLocaleString() },
+    { label: 'CPA', value: `$${cpa.toFixed(2)}` },
+    { label: 'Reach', value: reach >= 1000 ? `${(reach / 1000).toFixed(1)}K` : reach.toLocaleString() },
+  ];
+
+  const hasMedia = ad.mediaURL && !imgError;
+
   return (
-    <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', zIndex: 1060 }} tabIndex="-1" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="modal-dialog modal-dialog-centered modal-lg" style={{ maxWidth: 700 }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
-          <div className="modal-header border-bottom px-4 py-3 bg-body-tertiary align-items-center">
-            <div className="d-flex align-items-center gap-2 flex-grow-1 overflow-hidden me-2">
-              <span className="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-2.5 py-1 fw-semibold small">Ad Details</span>
-              <h5 className="modal-title fw-bold text-body-emphasis mb-0 text-truncate" title={ad.name} style={{ fontSize: '1.1rem' }}>{ad.name}</h5>
-              <span className="badge bg-body-secondary text-secondary border rounded-pill px-2.5 py-0.5 small fw-medium ms-auto flex-shrink-0">{normMediaType}</span>
-              <span className={`badge rounded-pill border px-2.5 py-0.5 fw-semibold flex-shrink-0 ${normStatus === 'Active' ? 'bg-success-subtle text-success-emphasis border-success-subtle' : 'bg-secondary-subtle text-secondary'}`} style={{ fontSize: '0.75rem' }}>{normStatus}</span>
+    <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', zIndex: 1060 }} tabIndex="-1" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+
+          {/* ── Header ── */}
+          <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid var(--bs-border-color-translucent)' }}>
+            <div className="d-flex align-items-start justify-content-between mb-1">
+              <h5 className="fw-bold text-body-emphasis mb-0 text-truncate pe-3" title={ad.name} style={{ fontSize: '1.05rem', lineHeight: 1.4 }}>{ad.name}</h5>
+              <button type="button" className="btn-close flex-shrink-0 mt-1" onClick={onClose} aria-label="Close" />
             </div>
-            <button type="button" className="btn-close" onClick={onClose} aria-label="Close"></button>
+            <div className="d-flex align-items-center gap-1.5 pb-2">
+              <span className={`badge rounded-pill border px-2 py-0.5 fw-semibold ${normStatus === 'Active' ? 'bg-success-subtle text-success-emphasis border-success-subtle' : normStatus === 'Paused' ? 'bg-warning-subtle text-warning-emphasis border-warning-subtle' : 'bg-secondary-subtle text-secondary'}`} style={{ fontSize: '0.7rem' }}>
+                <span className="d-inline-block rounded-circle me-1" style={{ width: 6, height: 6, backgroundColor: normStatus === 'Active' ? '#00a76f' : normStatus === 'Paused' ? '#f59e0b' : '#94a3b8', verticalAlign: 'middle' }} />{normStatus}
+              </span>
+              <span className="badge bg-body-secondary text-secondary border rounded-pill px-2 py-0.5 fw-medium" style={{ fontSize: '0.7rem' }}>{normMediaType}</span>
+            </div>
           </div>
-          <div className="modal-body p-4">
-            {ad.headline && (<div className="p-3 bg-body-tertiary rounded-3 border mb-3"><span className="text-secondary small d-block mb-1 fw-semibold text-uppercase" style={{ fontSize: '0.72rem' }}>Headline</span><p className="fw-semibold text-body-emphasis mb-0" style={{ fontSize: '0.98rem' }}>{ad.headline}</p></div>)}
-            {ad.description && (<div className="p-3 bg-body-tertiary rounded-3 border mb-3"><span className="text-secondary small d-block mb-1 fw-semibold text-uppercase" style={{ fontSize: '0.72rem' }}>Description</span><p className="text-body small mb-0" style={{ fontSize: '0.88rem', lineHeight: 1.6 }}>{ad.description}</p></div>)}
-            <div className="d-flex align-items-center justify-content-between p-2.5 px-3 bg-body-tertiary rounded-3 border mb-3">
-              <span className="text-secondary small fw-semibold" style={{ fontSize: '0.78rem' }}>CTA</span>
-              <span className="badge bg-primary text-white px-3 py-1.5 rounded-pill fw-semibold small shadow-xs">{ad.cta || 'Learn More'}</span>
-            </div>
-            {ad.mediaURL && (<div className="mb-3"><img src={ad.mediaURL} alt={ad.name} className="w-100 rounded-3 border" style={{ maxHeight: 260, objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} /></div>)}
-            <div className="row g-2">
-              {metrics.map((m, i) => (
-                <div key={i} className="col-6 col-md-4">
-                  <div className="p-2.5 bg-body-tertiary rounded-3 border text-center">
-                    <span className="text-secondary d-block small fw-semibold" style={{ fontSize: '0.72rem' }}>{m.label}</span>
-                    <span className={`fw-bold text-${m.color}-emphasis`} style={{ fontSize: '0.95rem' }}>{m.value}</span>
-                  </div>
+
+          {/* ── Scrollable Body ── */}
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+
+            {/* ── Hero Metrics Strip ── */}
+            <div className="d-flex border-bottom" style={{ gap: 0 }}>
+              {heroMetrics.map((m, i) => (
+                <div key={i} className="flex-fill text-center py-3 px-2" style={{ borderRight: i < 2 ? '1px solid var(--bs-border-color-translucent)' : 'none' }}>
+                  <div className="text-secondary text-uppercase fw-semibold" style={{ fontSize: '0.65rem', letterSpacing: '0.04em', marginBottom: 2 }}>{m.label}</div>
+                  <div className="fw-bold" style={{ fontSize: '1.15rem', color: m.accent }}>{m.value}</div>
                 </div>
               ))}
+            </div>
+
+            {/* ── Creative + Copy Section ── */}
+            <div className="p-4 pb-3">
+              <div className="d-flex gap-3" style={{ alignItems: 'flex-start' }}>
+                {/* Media Preview */}
+                {hasMedia && (
+                  <div className="flex-shrink-0" style={{ width: 180, minHeight: 140 }}>
+                    <img
+                      src={ad.mediaURL}
+                      alt={ad.name}
+                      className="rounded-3 border w-100"
+                      style={{ height: 160, objectFit: 'cover' }}
+                      onError={() => setImgError(true)}
+                    />
+                  </div>
+                )}
+                {/* Ad Copy */}
+                <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                  {ad.headline && (
+                    <div className="mb-2">
+                      <div className="text-secondary text-uppercase fw-semibold" style={{ fontSize: '0.62rem', letterSpacing: '0.05em', marginBottom: 3 }}>Headline</div>
+                      <p className="fw-semibold text-body-emphasis mb-0" style={{ fontSize: '0.92rem', lineHeight: 1.45 }}>{ad.headline}</p>
+                    </div>
+                  )}
+                  {ad.description && (
+                    <div className="mb-2">
+                      <div className="text-secondary text-uppercase fw-semibold" style={{ fontSize: '0.62rem', letterSpacing: '0.05em', marginBottom: 3 }}>Description</div>
+                      <p className="text-body-secondary mb-0" style={{ fontSize: '0.82rem', lineHeight: 1.55 }}>{ad.description}</p>
+                    </div>
+                  )}
+                  <div className="d-flex align-items-center gap-2 mt-2">
+                    <span className="text-secondary text-uppercase fw-semibold" style={{ fontSize: '0.62rem', letterSpacing: '0.05em' }}>CTA</span>
+                    <span className="badge bg-primary text-white px-2.5 py-1 rounded-pill fw-semibold" style={{ fontSize: '0.72rem' }}>{ad.cta || 'Learn More'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Detailed Metrics ── */}
+            <div className="px-4 pb-4">
+              <div className="text-secondary text-uppercase fw-semibold mb-2" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>Performance Breakdown</div>
+              <div className="rounded-3 border overflow-hidden">
+                {detailMetrics.map((m, i) => (
+                  <div
+                    key={i}
+                    className="d-flex align-items-center justify-content-between px-3 py-2"
+                    style={{
+                      borderBottom: i < detailMetrics.length - 1 ? '1px solid var(--bs-border-color-translucent)' : 'none',
+                      backgroundColor: i % 2 === 0 ? 'var(--bs-tertiary-bg)' : 'transparent',
+                      fontSize: '0.84rem',
+                    }}
+                  >
+                    <span className="text-body-secondary fw-medium">{m.label}</span>
+                    <span className="fw-bold text-body-emphasis">{m.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -223,12 +294,21 @@ export default function AdSetDetailPage() {
   });
   const [showKPISelector, setShowKPISelector] = useState(false);
   const [selectedMetrics, setSelectedMetrics] = useState(['spend', 'revenue']);
+  const [periodConfig, setPeriodConfig] = useState({
+    label: 'Last 30 Days',
+    days: 30,
+    isCustom: false,
+    startDate: '2026-08-02',
+    endDate: '2026-08-31',
+  });
 
   useEffect(() => { localStorage.setItem(kpiStorageKey, JSON.stringify(pinnedKPIs)); }, [pinnedKPIs, kpiStorageKey]);
 
   useEffect(() => {
     if (!showKPISelector) return;
-    const handler = (e) => { if (!e.target.closest('.kpi-selector-container')) setShowKPISelector(false); };
+    const handler = (e) => {
+      if (!e.target.closest('.kpi-selector-container')) setShowKPISelector(false);
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showKPISelector]);
@@ -297,20 +377,30 @@ export default function AdSetDetailPage() {
 
   const handleRefresh = useCallback(() => { setRefreshing(true); setTimeout(() => setRefreshing(false), 1200); }, []);
 
-  // Compute metrics
-  const asSpend = Number(adSet?.spend) || 0;
-  const asRevenue = Number(adSet?.revenue) || 0;
+  // Generate time series data for charts based on selected period
+  const timeSeries = adSet
+    ? generateAdSetTimeSeries(
+        adSet,
+        periodConfig.days,
+        periodConfig.endDate || null,
+        periodConfig.startDate || null
+      )
+    : [];
+
+  // Compute metrics scaled to selected period
+  const asSpend = timeSeries.length ? timeSeries.reduce((s, d) => s + d.spend, 0) : (Number(adSet?.spend) || 0);
+  const asRevenue = timeSeries.length ? timeSeries.reduce((s, d) => s + d.revenue, 0) : (Number(adSet?.revenue) || 0);
   const asRoas = asSpend > 0 ? asRevenue / asSpend : 0;
-  const asImpressions = Number(adSet?.impressions) || 0;
-  const asClicks = Number(adSet?.clicks) || 0;
+  const asImpressions = timeSeries.length ? timeSeries.reduce((s, d) => s + d.impressions, 0) : (Number(adSet?.impressions) || 0);
+  const asClicks = timeSeries.length ? timeSeries.reduce((s, d) => s + d.clicks, 0) : (Number(adSet?.clicks) || 0);
   const asCtr = asImpressions > 0 ? (asClicks / asImpressions) * 100 : 0;
-  const asConversions = Number(adSet?.conversions) || 0;
+  const asConversions = timeSeries.length ? timeSeries.reduce((s, d) => s + d.conversions, 0) : (Number(adSet?.conversions) || 0);
   const asCpa = asConversions > 0 ? asSpend / asConversions : 0;
-  const asReach = Math.round(asImpressions * 0.72);
+  const asReach = timeSeries.length ? timeSeries.reduce((s, d) => s + (d.reach || 0), 0) : Math.round(asImpressions * 0.72);
   const asFrequency = asReach > 0 ? asImpressions / asReach : 1;
   const asCpm = asImpressions > 0 ? (asSpend / asImpressions) * 1000 : 0;
-  const asDailyBudget = Number(adSet?.dailyBudget) || Math.round(asSpend / 30);
-  const asTotalBudget = asDailyBudget * 30;
+  const asDailyBudget = Number(adSet?.dailyBudget) || Math.round(asSpend / Math.max(1, periodConfig.days));
+  const asTotalBudget = asDailyBudget * periodConfig.days;
   const budgetUtil = asTotalBudget > 0 ? Math.min(100, (asSpend / asTotalBudget) * 100) : 0;
 
   const kpiDataMap = {
@@ -323,8 +413,6 @@ export default function AdSetDetailPage() {
     conversions: { value: asConversions, change: 11.9 },
     cpa: { value: asCpa, change: -4.7 },
   };
-
-  const timeSeries = adSet ? generateAdSetTimeSeries(adSet, 30) : [];
 
   // Filter & sort ads
   const filteredAds = ads.filter((ad) => {
@@ -361,12 +449,47 @@ export default function AdSetDetailPage() {
   const campObjective = OBJECTIVES_MAP[campaign?.objective] || 'Campaign';
   const platformLabel = PLATFORMS_MAP[campaign?.platformId] || campaign?.platformLabel || 'Platform';
   const platformKey = PLATFORM_KEYS_MAP[campaign?.platformId] || campaign?.platformKey || 'meta';
-  const dateRange = formatDateRange(campaign?.startDate, campaign?.endDate);
+  const campaignLifetime = formatDateRange(campaign?.startDate, campaign?.endDate);
+
+  // Period-aware chart data: Aggregate by month if period > 31 days
+  const isMoreThanMonth = periodConfig.days > 31;
+  const chartData = isMoreThanMonth ? aggregateTimeSeriesByMonth(timeSeries) : timeSeries;
+  const hasMultipleMonths = new Set(timeSeries.map((d) => d.monthShort)).size > 1;
 
   // Performance chart
-  const perfChartSeries = selectedMetrics.map((key) => ({ name: PERF_CHART_METRICS[key]?.label || key, data: timeSeries.map((d) => d[key] || 0) }));
+  const perfChartSeries = selectedMetrics.map((key) => ({ name: PERF_CHART_METRICS[key]?.label || key, data: chartData.map((d) => d[key] || 0) }));
   const perfChartColors = selectedMetrics.map((key) => PERF_CHART_METRICS[key]?.color || '#00a76f');
-  const perfChartCategories = timeSeries.map((d) => d.date);
+
+  const getMonthBadgeText = () => {
+    if (isMoreThanMonth) {
+      if (periodConfig.label === 'This Year') return '2026';
+      if (chartData.length > 0) {
+        const first = chartData[0];
+        const last = chartData[chartData.length - 1];
+        if (first.year === last.year) {
+          return `${first.monthShort} – ${last.monthShort} ${last.year}`;
+        }
+        return `${first.monthShort} ${first.year} – ${last.monthShort} ${last.year}`;
+      }
+      return '2026';
+    }
+    if (!timeSeries || !timeSeries.length) return 'August 2026';
+    const target = timeSeries[timeSeries.length - 1] || timeSeries[0];
+    const m = target.month || 'August';
+    const y = target.year || 2026;
+    if (hasMultipleMonths) {
+      const first = timeSeries[0];
+      return `${first.monthShort} – ${target.monthShort} ${y}`;
+    }
+    return `${m} ${y}`;
+  };
+  const monthBadgeText = getMonthBadgeText();
+
+  // Horizontal axis categories: Months if > 31 days, else days corresponding to selected period
+  const perfChartCategories = isMoreThanMonth
+    ? chartData.map((d) => d.monthShort)
+    : chartData.map((d) => (hasMultipleMonths ? `${d.day}/${d.monthNum || '08'}` : d.day));
+
   const primaryMetric = selectedMetrics[0] || 'spend';
   const metricType = PERF_CHART_METRICS[primaryMetric]?.type || 'currency';
 
@@ -376,7 +499,12 @@ export default function AdSetDetailPage() {
     stroke: { curve: 'smooth', width: 2.5 },
     fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 95, 100] } },
     dataLabels: { enabled: false },
-    xaxis: { categories: perfChartCategories, labels: { style: { fontSize: '11px', colors: '#94a3b8' } }, axisBorder: { show: false }, axisTicks: { show: false } },
+    xaxis: {
+      categories: perfChartCategories,
+      labels: { style: { fontSize: '11px', colors: '#94a3b8' } },
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+    },
     yaxis: {
       labels: {
         style: { fontSize: '11px', colors: '#94a3b8' }, formatter: (val) => {
@@ -390,6 +518,15 @@ export default function AdSetDetailPage() {
     },
     grid: { borderColor: 'rgba(0,0,0,0.06)', strokeDashArray: 4 },
     tooltip: {
+      x: {
+        formatter: (val, opts) => {
+          const idx = opts?.dataPointIndex;
+          const point = chartData[idx];
+          if (point?.fullDate) return point.fullDate;
+          if (point?.date) return `${point.date}, 2026`;
+          return val;
+        },
+      },
       y: {
         formatter: (val) => {
           if (metricType === 'currency') return '$' + val.toLocaleString();
@@ -400,7 +537,7 @@ export default function AdSetDetailPage() {
         }
       }
     },
-    legend: { show: selectedMetrics.length > 1 },
+    legend: { show: false },
   };
 
   // Sort arrow helper
@@ -461,6 +598,12 @@ export default function AdSetDetailPage() {
 
           {/* Right: action buttons */}
           <div className="d-flex align-items-center gap-2 flex-wrap">
+            {/* Period / Date Range Dropdown */}
+            <PeriodSelector
+              value={periodConfig.label}
+              onChange={(cfg) => setPeriodConfig(cfg)}
+            />
+
             <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={() => navigator.clipboard?.writeText(window.location.href)}>
               <IconShare /> <span className="d-none d-md-inline">Share</span>
             </button>
@@ -517,7 +660,7 @@ export default function AdSetDetailPage() {
                 </span>
                 <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
                 <span className="d-inline-flex align-items-center gap-1.5 text-body-secondary">
-                  <IconCalendar /> {dateRange}
+                  <IconCalendar /> {campaignLifetime}
                 </span>
               </div>
             </div>
@@ -527,7 +670,7 @@ export default function AdSetDetailPage() {
         {/* ─── 3. KPI Cards ─── */}
         <div className="mb-4">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <span className="d-inline-flex align-items-center gap-1.5 text-secondary small fw-semibold"><IconCalendar /> <span>{dateRange}</span></span>
+            <span className="d-inline-flex align-items-center gap-1.5 text-secondary small fw-semibold"><IconCalendar /> <span>{periodConfig.label}</span></span>
             <div className="position-relative no-print kpi-selector-container">
               <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-2" onClick={() => setShowKPISelector(!showKPISelector)}><IconGear /> <span className="fw-semibold">Customize KPIs</span></button>
               {showKPISelector && (
@@ -578,6 +721,9 @@ export default function AdSetDetailPage() {
           <div className="card-header bg-transparent border-bottom p-4">
             <div className="d-flex justify-content-between align-items-center mb-2">
               <div><h5 className="mb-1 fw-bold">Performance Over Time</h5><small className="text-secondary">Ad set trend by selected metric</small></div>
+              <span className="badge bg-primary-subtle text-primary-emphasis px-2.5 py-1.5 rounded-pill fw-semibold shadow-xs" style={{ fontSize: '0.8rem' }}>
+                {monthBadgeText}
+              </span>
             </div>
             <div className="d-flex flex-wrap align-items-center gap-2">
               {Object.entries(PERF_CHART_METRICS).map(([key, cfg]) => {

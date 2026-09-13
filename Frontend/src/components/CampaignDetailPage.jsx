@@ -11,9 +11,11 @@ import {
   availableCampaignKPIs,
   defaultCampaignPinnedKPIs,
   generateCampaignTimeSeries,
+  aggregateTimeSeriesByMonth,
 } from '../mock/mockData';
 import metaIcon from '../assets/meta-icon.webp';
 import KpiMetricBadge from './KpiMetricBadge';
+import PeriodSelector from './PeriodSelector';
 
 // ─── ApexCharts React Wrapper ───────────────────────────────────────
 function ApexChart({ options, series, type, height = 310 }) {
@@ -28,6 +30,7 @@ function ApexChart({ options, series, type, height = 310 }) {
     }
     const mergedOptions = {
       ...options,
+      legend: { ...(options.legend || {}), show: false },
       chart: { ...(options.chart || {}), type, height, toolbar: { show: false }, fontFamily: 'inherit' },
       series,
     };
@@ -97,6 +100,9 @@ const IconBack = () => (
 const IconRefresh = ({ spinning }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={spinning ? 'spin-icon' : ''}><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" /><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" /></svg>
 );
+const IconCheck = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+);
 
 // ─── Helpers ────────────────────────────────────────────────────────
 const OBJECTIVES_MAP = { 0: 'Awareness', 1: 'Traffic', 2: 'Engagement', 3: 'Leads', 4: 'Sales' };
@@ -161,6 +167,13 @@ export default function CampaignDetailPage() {
     try { const saved = localStorage.getItem(kpiStorageKey); return saved ? JSON.parse(saved) : defaultCampaignPinnedKPIs; } catch { return defaultCampaignPinnedKPIs; }
   });
   const [showKPISelector, setShowKPISelector] = useState(false);
+  const [periodConfig, setPeriodConfig] = useState({
+    label: 'Last 30 Days',
+    days: 30,
+    isCustom: false,
+    startDate: '2026-08-02',
+    endDate: '2026-08-31',
+  });
 
   // Chart State
   const [selectedMetrics, setSelectedMetrics] = useState(['spend', 'revenue']);
@@ -242,14 +255,24 @@ export default function CampaignDetailPage() {
     return matchSearch && matchStatus;
   });
 
-  // Compute campaign metrics
-  const cSpend = Number(campaign?.spend) || 0;
-  const cRevenue = Number(campaign?.revenue) || 0;
+  // Generate time series data for charts based on selected period
+  const timeSeries = campaign
+    ? generateCampaignTimeSeries(
+        campaign,
+        periodConfig.days,
+        periodConfig.endDate || null,
+        periodConfig.startDate || null
+      )
+    : [];
+
+  // Compute campaign metrics scaled to selected period
+  const cSpend = timeSeries.length ? timeSeries.reduce((s, d) => s + d.spend, 0) : (Number(campaign?.spend) || 0);
+  const cRevenue = timeSeries.length ? timeSeries.reduce((s, d) => s + d.revenue, 0) : (Number(campaign?.revenue) || 0);
   const cRoas = cSpend > 0 ? cRevenue / cSpend : 0;
-  const cImpressions = Number(campaign?.impressions) || 0;
-  const cClicks = Number(campaign?.clicks) || 0;
+  const cImpressions = timeSeries.length ? timeSeries.reduce((s, d) => s + d.impressions, 0) : (Number(campaign?.impressions) || 0);
+  const cClicks = timeSeries.length ? timeSeries.reduce((s, d) => s + d.clicks, 0) : (Number(campaign?.clicks) || 0);
   const cCtr = cImpressions > 0 ? (cClicks / cImpressions) * 100 : 0;
-  const cConversions = Number(campaign?.conversions) || 0;
+  const cConversions = timeSeries.length ? timeSeries.reduce((s, d) => s + d.conversions, 0) : (Number(campaign?.conversions) || 0);
   const cCpa = cConversions > 0 ? cSpend / cConversions : 0;
   const cCpc = cClicks > 0 ? cSpend / cClicks : 0;
 
@@ -265,9 +288,6 @@ export default function CampaignDetailPage() {
     cpa: { value: cCpa, change: -5.8 },
     cpc: { value: cCpc, change: -3.4 },
   };
-
-  // Time series data for charts
-  const timeSeries = campaign ? generateCampaignTimeSeries(campaign, 30) : [];
 
   // ─── Loading ──────────────────────────────────────────────────────
   if (loading) {
@@ -303,15 +323,49 @@ export default function CampaignDetailPage() {
   const campObjective = OBJECTIVES_MAP[campaign.objective] || 'Campaign';
   const platformLabel = PLATFORMS_MAP[campaign.platformId] || campaign.platformLabel || 'Platform';
   const platformKey = PLATFORM_KEYS_MAP[campaign.platformId] || campaign.platformKey || 'meta';
-  const dateRange = formatDateRange(campaign.startDate, campaign.endDate);
+  const campaignLifetime = formatDateRange(campaign.startDate, campaign.endDate);
+
+  // Period-aware chart data: Aggregate by month if period > 31 days
+  const isMoreThanMonth = periodConfig.days > 31;
+  const chartData = isMoreThanMonth ? aggregateTimeSeriesByMonth(timeSeries) : timeSeries;
+  const hasMultipleMonths = new Set(timeSeries.map((d) => d.monthShort)).size > 1;
+
+  // Horizontal axis categories: Months if > 31 days, else days corresponding to selected period
+  const perfChartCategories = isMoreThanMonth
+    ? chartData.map((d) => d.monthShort)
+    : chartData.map((d) => (hasMultipleMonths ? `${d.day}/${d.monthNum || '08'}` : d.day));
+
+  const getMonthBadgeText = () => {
+    if (isMoreThanMonth) {
+      if (periodConfig.label === 'This Year') return '2026';
+      if (chartData.length > 0) {
+        const first = chartData[0];
+        const last = chartData[chartData.length - 1];
+        if (first.year === last.year) {
+          return `${first.monthShort} – ${last.monthShort} ${last.year}`;
+        }
+        return `${first.monthShort} ${first.year} – ${last.monthShort} ${last.year}`;
+      }
+      return '2026';
+    }
+    if (!timeSeries || !timeSeries.length) return 'August 2026';
+    const target = timeSeries[timeSeries.length - 1] || timeSeries[0];
+    const m = target.month || 'August';
+    const y = target.year || 2026;
+    if (hasMultipleMonths) {
+      const first = timeSeries[0];
+      return `${first.monthShort} – ${target.monthShort} ${y}`;
+    }
+    return `${m} ${y}`;
+  };
+  const monthBadgeText = getMonthBadgeText();
 
   // Performance Chart
   const perfChartSeries = selectedMetrics.map((key) => ({
     name: PERF_CHART_METRICS[key]?.label || key,
-    data: timeSeries.map((d) => d[key] || 0),
+    data: chartData.map((d) => d[key] || 0),
   }));
   const perfChartColors = selectedMetrics.map((key) => PERF_CHART_METRICS[key]?.color || '#00a76f');
-  const perfChartCategories = timeSeries.map((d) => d.date);
   const primaryMetric = selectedMetrics[0] || 'spend';
   const metricType = PERF_CHART_METRICS[primaryMetric]?.type || 'currency';
 
@@ -321,7 +375,12 @@ export default function CampaignDetailPage() {
     stroke: { curve: 'smooth', width: 2.5 },
     fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 95, 100] } },
     dataLabels: { enabled: false },
-    xaxis: { categories: perfChartCategories, labels: { style: { fontSize: '11px', colors: '#94a3b8' } }, axisBorder: { show: false }, axisTicks: { show: false } },
+    xaxis: {
+      categories: perfChartCategories,
+      labels: { style: { fontSize: '11px', colors: '#94a3b8' } },
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+    },
     yaxis: {
       labels: {
         style: { fontSize: '11px', colors: '#94a3b8' },
@@ -335,6 +394,15 @@ export default function CampaignDetailPage() {
     },
     grid: { borderColor: 'rgba(0,0,0,0.06)', strokeDashArray: 4 },
     tooltip: {
+      x: {
+        formatter: (val, opts) => {
+          const idx = opts?.dataPointIndex;
+          const point = chartData[idx];
+          if (point?.fullDate) return point.fullDate;
+          if (point?.date) return `${point.date}, 2026`;
+          return val;
+        },
+      },
       y: {
         formatter: (val) => {
           if (metricType === 'currency') return '$' + val.toLocaleString();
@@ -344,7 +412,7 @@ export default function CampaignDetailPage() {
         },
       },
     },
-    legend: { show: selectedMetrics.length > 1 },
+    legend: { show: false },
   };
 
   // Spend vs Revenue Bar Chart
@@ -353,15 +421,31 @@ export default function CampaignDetailPage() {
     colors: ['#e11d48', '#00a76f'],
     plotOptions: { bar: { borderRadius: 4, columnWidth: '55%', dataLabels: { position: 'top' } } },
     dataLabels: { enabled: false },
-    xaxis: { categories: perfChartCategories, labels: { style: { fontSize: '10px', colors: '#94a3b8' }, rotate: -45, rotateAlways: timeSeries.length > 15 } },
+    xaxis: {
+      categories: perfChartCategories,
+      labels: {
+        style: { fontSize: '10px', colors: '#94a3b8' },
+        rotate: isMoreThanMonth ? 0 : -45,
+        rotateAlways: !isMoreThanMonth && perfChartCategories.length > 15,
+      },
+    },
     yaxis: { labels: { style: { fontSize: '11px', colors: '#94a3b8' }, formatter: (val) => '$' + (val >= 1000 ? (val / 1000).toFixed(1) + 'K' : val.toFixed(0)) } },
     grid: { borderColor: 'rgba(0,0,0,0.06)', strokeDashArray: 4 },
-    tooltip: { y: { formatter: (val) => '$' + val.toLocaleString() } },
-    legend: { position: 'top', horizontalAlign: 'right', fontSize: '12px', markers: { size: 6, shape: 'circle' } },
+    tooltip: {
+      x: {
+        formatter: (val, opts) => {
+          const idx = opts?.dataPointIndex;
+          const point = chartData[idx];
+          return point?.fullDate || (point?.date ? `${point.date}, 2026` : val);
+        },
+      },
+      y: { formatter: (val) => '$' + val.toLocaleString() },
+    },
+    legend: { show: false },
   };
   const barChartSeries = [
-    { name: 'Spend', data: timeSeries.map((d) => d.spend) },
-    { name: 'Revenue', data: timeSeries.map((d) => d.revenue) },
+    { name: 'Spend', data: chartData.map((d) => d.spend) },
+    { name: 'Revenue', data: chartData.map((d) => d.revenue) },
   ];
 
   return (
@@ -414,6 +498,12 @@ export default function CampaignDetailPage() {
 
           {/* Right: action buttons */}
           <div className="d-flex align-items-center gap-2 flex-wrap">
+            {/* Period / Date Range Dropdown */}
+            <PeriodSelector
+              value={periodConfig.label}
+              onChange={(cfg) => setPeriodConfig(cfg)}
+            />
+
             <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={() => navigator.clipboard?.writeText(window.location.href)}>
               <IconShare /> <span className="d-none d-md-inline">Share</span>
             </button>
@@ -470,7 +560,7 @@ export default function CampaignDetailPage() {
                 </span>
                 <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
                 <span className="d-inline-flex align-items-center gap-1.5 text-body-secondary">
-                  <IconCalendar /> {dateRange}
+                  <IconCalendar /> {campaignLifetime}
                 </span>
               </div>
             </div>
@@ -482,7 +572,7 @@ export default function CampaignDetailPage() {
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <div className="d-flex align-items-center gap-2 flex-wrap">
               <span className="d-inline-flex align-items-center gap-1.5 text-secondary small fw-semibold">
-                <IconCalendar /> <span>{dateRange}</span>
+                <IconCalendar /> <span>{periodConfig.label}</span>
               </span>
             </div>
             <div className="position-relative no-print kpi-selector-container">
@@ -550,6 +640,9 @@ export default function CampaignDetailPage() {
                 <h5 className="mb-1 fw-bold">Performance Over Time</h5>
                 <small className="text-secondary">Campaign trend by selected metric</small>
               </div>
+              <span className="badge bg-primary-subtle text-primary-emphasis px-2.5 py-1.5 rounded-pill fw-semibold shadow-xs" style={{ fontSize: '0.8rem' }}>
+                {monthBadgeText}
+              </span>
             </div>
             <div className="d-flex flex-wrap align-items-center gap-2">
               {Object.entries(PERF_CHART_METRICS).map(([key, cfg]) => {

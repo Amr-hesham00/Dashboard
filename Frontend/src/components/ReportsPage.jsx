@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import DashboardLayout from './DashboardLayout.jsx';
-import { mockClients, mockReports } from '../mock/mockData.js';
+import DashboardLayout from './DashboardLayout';
+import { mockClients, mockReports } from '../mock/mockData';
+import { formatDDMMYY } from './PeriodSelector';
 
 export default function ReportsPage() {
   const [reports, setReports] = useState(mockReports);
@@ -14,16 +15,22 @@ export default function ReportsPage() {
     period: 'Last 30 Days',
     format: 'PDF',
   });
+  const [customStartDate, setCustomStartDate] = useState('2026-08-01');
+  const [customEndDate, setCustomEndDate] = useState('2026-08-31');
 
   const handleGenerate = (e) => {
     e.preventDefault();
     if (!newReport.title.trim()) return;
 
+    const periodDisplay = newReport.period === 'Custom Range' && customStartDate && customEndDate
+      ? (customStartDate === customEndDate ? formatDDMMYY(customStartDate) : `${formatDDMMYY(customStartDate)} – ${formatDDMMYY(customEndDate)}`)
+      : newReport.period;
+
     const rep = {
       id: `rep-${Date.now()}`,
       title: newReport.title.trim(),
       client: newReport.client,
-      period: newReport.period,
+      period: periodDisplay,
       generatedDate: 'Just now',
       format: newReport.format,
       size: newReport.format === 'PDF' ? '2.8 MB' : '650 KB',
@@ -285,9 +292,9 @@ export default function ReportsPage() {
                         >
                           <option value="Last 7 Days">Last 7 Days</option>
                           <option value="Last 30 Days">Last 30 Days</option>
-                          <option value="Last 90 Days">Last 90 Days</option>
                           <option value="This Month">This Month</option>
-                          <option value="Year to Date">Year to Date</option>
+                          <option value="This Year">This Year</option>
+                          <option value="Custom Range">Custom Range</option>
                         </select>
                       </div>
                       <div className="col-6">
@@ -303,6 +310,34 @@ export default function ReportsPage() {
                         </select>
                       </div>
                     </div>
+                    {newReport.period === 'Custom Range' && (
+                      <div className="row g-3 mb-3 p-2.5 bg-body-tertiary border rounded-3 mx-0">
+                        <div className="col-6">
+                          <label className="form-label text-secondary small mb-1 fw-semibold">
+                            From
+                          </label>
+                          <input
+                            type="date"
+                            className="form-control form-control-sm"
+                            value={customStartDate}
+                            onChange={(e) => setCustomStartDate(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="col-6">
+                          <label className="form-label text-secondary small mb-1 fw-semibold">
+                            To
+                          </label>
+                          <input
+                            type="date"
+                            className="form-control form-control-sm"
+                            value={customEndDate}
+                            onChange={(e) => setCustomEndDate(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="modal-footer border-top p-3 d-flex justify-content-end gap-2">
                     <button type="button" className="btn btn-outline-secondary px-3" onClick={() => setShowGenerateModal(false)}>

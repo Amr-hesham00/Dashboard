@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import ApexCharts from 'apexcharts';
 import DashboardLayout from './DashboardLayout';
@@ -22,9 +22,12 @@ import {
   mockClientInsights,
   mockClientNotes,
   defaultClientTargets,
+  generateClientTimeSeries,
+  aggregateTimeSeriesByMonth,
 } from '../mock/mockData';
 import metaIcon from '../assets/meta-icon.webp';
 import KpiMetricBadge from './KpiMetricBadge';
+import PeriodSelector from './PeriodSelector';
 
 // ─── ApexCharts React Wrapper ───────────────────────────────────────
 function ApexChart({ options, series, type, height = 310 }) {
@@ -41,6 +44,7 @@ function ApexChart({ options, series, type, height = 310 }) {
 
     const mergedOptions = {
       ...options,
+      legend: { ...(options.legend || {}), show: false },
       chart: {
         ...(options.chart || {}),
         type,
@@ -276,7 +280,7 @@ const TABS = [
   },
 ];
 
-const DATE_RANGES = ['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'This Month', 'This Quarter', 'Year to Date'];
+const DATE_RANGES = ['Last 7 Days', 'Last 30 Days', 'This Month', 'This Year'];
 
 // ════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -324,8 +328,14 @@ export default function ClientDetailsPage() {
       setActiveTab(qTab);
     }
   }, [location.search]);
-  const [dateRange, setDateRange] = useState('Last 30 Days');
-  const [showDateDropdown, setShowDateDropdown] = useState(false);
+  const [periodConfig, setPeriodConfig] = useState({
+    label: 'Last 30 Days',
+    days: 30,
+    isCustom: false,
+    startDate: '2026-08-02',
+    endDate: '2026-08-31',
+  });
+  const dateRange = periodConfig.label;
   const [refreshing, setRefreshing] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
 
@@ -663,11 +673,6 @@ export default function ClientDetailsPage() {
   // Click outside handlers for main page dropdowns
   useEffect(() => {
     const handleDocumentClick = (e) => {
-      // Check Date dropdown
-      if (showDateDropdown) {
-        const dateBtn = e.target.closest('.date-dropdown-container');
-        if (!dateBtn) setShowDateDropdown(false);
-      }
       // Check KPI selector
       if (showKPISelector) {
         const kpiBtn = e.target.closest('.kpi-selector-container');
@@ -676,53 +681,75 @@ export default function ClientDetailsPage() {
     };
     document.addEventListener('click', handleDocumentClick);
     return () => document.removeEventListener('click', handleDocumentClick);
-  }, [showDateDropdown, showKPISelector]);
+  }, [showKPISelector]);
 
   // ─── Persist pinned KPIs ────────────────────────────────────────
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(pinnedKPIs)); }, [pinnedKPIs, storageKey]);
 
   // ─── Get KPI values & Trend Data for this client ─────────────────
   const clientKPIs = mockClientKPIs[id] || mockClientKPIs['cli-101'];
-  const trendData = mockClientTrends[id] || mockClientTrends['cli-101'];
 
   // ─── Spend vs Revenue Chart Config ──────────────────────────────
-  const getTrendMetricData = (metricKey) => {
-    if (trendData[metricKey] && Array.isArray(trendData[metricKey])) {
-      return trendData[metricKey];
-    }
-    const spendArr = trendData.spend || [];
-    const revArr = trendData.revenue || [];
-    if (metricKey === 'roas') {
-      return spendArr.map((s, idx) => (s > 0 ? Number(((revArr[idx] || 0) / s).toFixed(2)) : 0));
-    }
-    if (metricKey === 'conversions') return spendArr.map((s) => Math.round(s / 5.2));
-    if (metricKey === 'impressions') return spendArr.map((s) => Math.round(s * 140));
-    if (metricKey === 'clicks') return spendArr.map((s) => Math.round(s * 5.4));
-    return spendArr;
-  };
+  const isMoreThanMonth = periodConfig.days > 31;
+  const timeSeries = useMemo(() => {
+    return generateClientTimeSeries(
+      id,
+      clientKPIs,
+      periodConfig.days,
+      periodConfig.endDate || null,
+      periodConfig.startDate || null
+    );
+  }, [id, clientKPIs, periodConfig.days, periodConfig.endDate, periodConfig.startDate]);
 
-  const spendVsRevenueSeries = selectedMetrics.map((key) => ({
-    name: CHART_METRICS[key]?.label || key,
-    data: getTrendMetricData(key),
-  }));
+  const chartData = useMemo(() => {
+    return isMoreThanMonth ? aggregateTimeSeriesByMonth(timeSeries) : timeSeries;
+  }, [isMoreThanMonth, timeSeries]);
+
+  const hasMultipleMonths = useMemo(() => {
+    return new Set(timeSeries.map((d) => d.monthShort)).size > 1;
+  }, [timeSeries]);
+
+  // Horizontal axis categories: Months if > 31 days, else days corresponding to selected period
+  const chartCategories = useMemo(() => {
+    return isMoreThanMonth
+      ? chartData.map((d) => d.monthShort)
+      : chartData.map((d) => (hasMultipleMonths ? `${d.day}/${d.monthNum || '08'}` : d.day));
+  }, [isMoreThanMonth, chartData, hasMultipleMonths]);
+
+  const fullMonthText = useMemo(() => {
+    if (isMoreThanMonth) {
+      if (periodConfig.label === 'This Year') return '2026';
+      if (chartData.length > 0) {
+        const first = chartData[0];
+        const last = chartData[chartData.length - 1];
+        if (first.year === last.year) {
+          return `${first.monthShort} – ${last.monthShort} ${last.year}`;
+        }
+        return `${first.monthShort} ${first.year} – ${last.monthShort} ${last.year}`;
+      }
+      return '2026';
+    }
+    if (!timeSeries || !timeSeries.length) return 'August 2026';
+    const target = timeSeries[timeSeries.length - 1] || timeSeries[0];
+    const m = target.month || 'August';
+    const y = target.year || 2026;
+    if (hasMultipleMonths) {
+      const first = timeSeries[0];
+      return `${first.monthShort} – ${target.monthShort} ${y}`;
+    }
+    return `${m} ${y}`;
+  }, [isMoreThanMonth, periodConfig.label, chartData, timeSeries, hasMultipleMonths]);
+
+  const spendVsRevenueSeries = useMemo(() => {
+    return selectedMetrics.map((key) => ({
+      name: CHART_METRICS[key]?.label || key,
+      data: chartData.map((d) => d[key] || 0),
+    }));
+  }, [selectedMetrics, chartData]);
 
   const activeColors = selectedMetrics.map((key) => CHART_METRICS[key]?.color || '#00a76f');
   const primaryMetric = selectedMetrics[0] || 'revenue';
   const metricType = CHART_METRICS[primaryMetric]?.type || 'currency';
-
-  const getFullMonthText = (dates) => {
-    if (!dates || !dates.length) return 'August 2026';
-    const match = dates[0].match(/^([A-Za-z]+)/);
-    if (!match) return 'August 2026';
-    const m = match[1];
-    const months = {
-      Jan: 'January', Feb: 'February', Mar: 'March', Apr: 'April',
-      May: 'May', Jun: 'June', Jul: 'July', Aug: 'August',
-      Sep: 'September', Oct: 'October', Nov: 'November', Dec: 'December'
-    };
-    return `${months[m] || m} 2026`;
-  };
-  const fullMonthText = getFullMonthText(trendData.dates);
 
   const spendVsRevenueOptions = {
     chart: {
@@ -745,10 +772,14 @@ export default function ClientDetailsPage() {
       },
     },
     xaxis: {
-      categories: trendData.dates.map((d) => d.replace(/^[A-Za-z]+\s*/, '')),
+      categories: chartCategories,
       axisBorder: { show: false },
       axisTicks: { show: false },
-      labels: { style: { colors: '#64748b', fontSize: '11px' } },
+      labels: {
+        style: { colors: '#64748b', fontSize: '11px' },
+        rotate: isMoreThanMonth ? 0 : -45,
+        rotateAlways: !isMoreThanMonth && chartCategories.length > 15,
+      },
     },
     yaxis: {
       labels: {
@@ -766,8 +797,8 @@ export default function ClientDetailsPage() {
       x: {
         formatter: (val, opts) => {
           const idx = opts?.dataPointIndex;
-          const orig = trendData.dates[idx];
-          return orig ? `${orig}, 2026` : val;
+          const point = chartData[idx];
+          return point?.fullDate || (point?.date ? `${point.date}, 2026` : val);
         },
       },
       y: {
@@ -1316,22 +1347,11 @@ export default function ClientDetailsPage() {
 
           {/* Right: action buttons */}
           <div className="d-flex align-items-center gap-2 flex-wrap">
-            {/* Date Range Dropdown / Filter */}
-            <div className="position-relative date-dropdown-container">
-              <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={() => setShowDateDropdown(!showDateDropdown)}>
-                <IconCalendar /> <span className="d-none d-md-inline">{dateRange}</span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
-              </button>
-              {showDateDropdown && (
-                <div className="position-absolute end-0 mt-1 bg-white border rounded-3 shadow-lg py-1" style={{ zIndex: 1050, minWidth: 180 }}>
-                  {DATE_RANGES.map((r) => (
-                    <button key={r} className={`dropdown-item small px-3 py-2 ${r === dateRange ? 'fw-bold text-primary' : ''}`} onClick={() => { setDateRange(r); setShowDateDropdown(false); }}>
-                      {r === dateRange && <IconCheck />} {r}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Period / Date Range Dropdown */}
+            <PeriodSelector
+              value={periodConfig.label}
+              onChange={(cfg) => setPeriodConfig(cfg)}
+            />
 
             <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleShareReport}>
               <IconShare /> <span className="d-none d-md-inline">Share</span>
@@ -1788,7 +1808,9 @@ export default function ClientDetailsPage() {
                       <h5 className="mb-1 fw-bold">Metrics Chart</h5>
                       <small className="text-secondary">Performance trend comparison over time</small>
                     </div>
-                    <span className="badge bg-primary-subtle text-primary-emphasis px-2.5 py-1">{fullMonthText}</span>
+                    <span className="badge bg-primary-subtle text-primary-emphasis px-2.5 py-1.5 rounded-pill fw-semibold shadow-xs" style={{ fontSize: '0.8rem' }}>
+                      {fullMonthText}
+                    </span>
                   </div>
                   <div className="card-body p-4">
                     {/* Selectable Metric Legend Buttons */}

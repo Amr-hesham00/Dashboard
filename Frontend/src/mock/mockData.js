@@ -1600,16 +1600,29 @@ export const availableAdSetKPIs = [
 export const defaultAdSetPinnedKPIs = ['spend', 'revenue', 'roas', 'conversions', 'cpa'];
 
 // ─── Time-Series Generator for Campaign Charts ──────────────────────
-export function generateCampaignTimeSeries(campaign, days = 30) {
+export function generateCampaignTimeSeries(campaign, days = 30, customEndDate = null, customStartDate = null) {
   const totalSpend = Number(campaign?.spend) || 8000;
   const totalRevenue = Number(campaign?.revenue) || 32000;
   const totalImpressions = Number(campaign?.impressions) || 500000;
   const totalClicks = Number(campaign?.clicks) || 20000;
   const totalConversions = Number(campaign?.conversions) || 1200;
 
-  const endDate = campaign?.endDate ? new Date(campaign.endDate) : new Date();
-  const startDate = campaign?.startDate ? new Date(campaign.startDate) : new Date(endDate.getTime() - days * 86400000);
-  const actualDays = Math.min(days, Math.max(7, Math.round((endDate - startDate) / 86400000)));
+  let startDate, endDate;
+  const actualDays = Math.max(1, Math.min(days, 365));
+
+  if (customStartDate && customEndDate) {
+    startDate = new Date(String(customStartDate).includes('T') ? customStartDate : `${customStartDate}T00:00:00`);
+    endDate = new Date(String(customEndDate).includes('T') ? customEndDate : `${customEndDate}T23:59:59`);
+  } else if (customEndDate) {
+    endDate = new Date(String(customEndDate).includes('T') ? customEndDate : `${customEndDate}T23:59:59`);
+    startDate = new Date(endDate.getTime() - (actualDays - 1) * 86400000);
+  } else if (campaign?.endDate) {
+    endDate = new Date(campaign.endDate);
+    startDate = new Date(endDate.getTime() - (actualDays - 1) * 86400000);
+  } else {
+    endDate = new Date(2026, 7, 31, 23, 59, 59);
+    startDate = new Date(endDate.getTime() - (actualDays - 1) * 86400000);
+  }
 
   const series = [];
   // Use a seeded-ish random based on campaign id for consistency
@@ -1620,8 +1633,14 @@ export function generateCampaignTimeSeries(campaign, days = 30) {
   }
 
   for (let i = 0; i < actualDays; i++) {
-    const date = new Date(endDate.getTime() - (actualDays - 1 - i) * 86400000);
+    const date = new Date(startDate.getTime() + i * 86400000);
     const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = date.toLocaleDateString('en-US', { month: 'long' });
+    const monthShort = date.toLocaleDateString('en-US', { month: 'short' });
+    const monthNum = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const fullDate = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
     // Create natural-looking daily variation around daily average
     const baseFactor = 1 / actualDays;
@@ -1636,6 +1655,12 @@ export function generateCampaignTimeSeries(campaign, days = 30) {
 
     series.push({
       date: label,
+      day,
+      month,
+      monthShort,
+      monthNum,
+      year,
+      fullDate,
       spend: daySpend,
       revenue: dayRevenue,
       roas: daySpend > 0 ? Number((dayRevenue / daySpend).toFixed(2)) : 0,
@@ -1651,7 +1676,7 @@ export function generateCampaignTimeSeries(campaign, days = 30) {
 }
 
 // ─── Time-Series Generator for Ad Set Charts ────────────────────────
-export function generateAdSetTimeSeries(adSet, days = 30) {
+export function generateAdSetTimeSeries(adSet, days = 30, customEndDate = null, customStartDate = null) {
   const totalSpend = Number(adSet?.spend) || 3000;
   const totalRevenue = Number(adSet?.revenue) || 12000;
   const totalImpressions = Number(adSet?.impressions) || 200000;
@@ -1664,10 +1689,30 @@ export function generateAdSetTimeSeries(adSet, days = 30) {
     return x - Math.floor(x);
   }
 
+  const actualDays = Math.max(1, Math.min(days, 365));
+  let startDate, endDate;
+
+  if (customStartDate && customEndDate) {
+    startDate = new Date(String(customStartDate).includes('T') ? customStartDate : `${customStartDate}T00:00:00`);
+    endDate = new Date(String(customEndDate).includes('T') ? customEndDate : `${customEndDate}T23:59:59`);
+  } else if (customEndDate) {
+    endDate = new Date(String(customEndDate).includes('T') ? customEndDate : `${customEndDate}T23:59:59`);
+    startDate = new Date(endDate.getTime() - (actualDays - 1) * 86400000);
+  } else {
+    endDate = new Date(2026, 7, 31, 23, 59, 59);
+    startDate = new Date(endDate.getTime() - (actualDays - 1) * 86400000);
+  }
+
   const series = [];
-  for (let i = 0; i < days; i++) {
-    const date = new Date(Date.now() - (days - 1 - i) * 86400000);
+  for (let i = 0; i < actualDays; i++) {
+    const date = new Date(startDate.getTime() + i * 86400000);
     const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = date.toLocaleDateString('en-US', { month: 'long' });
+    const monthShort = date.toLocaleDateString('en-US', { month: 'short' });
+    const monthNum = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const fullDate = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
     const baseFactor = 1 / days;
     const variation = 0.5 + pseudoRandom(i, 1) * 1.0;
@@ -1682,6 +1727,12 @@ export function generateAdSetTimeSeries(adSet, days = 30) {
 
     series.push({
       date: label,
+      day,
+      month,
+      monthShort,
+      monthNum,
+      year,
+      fullDate,
       spend: daySpend,
       revenue: dayRevenue,
       roas: daySpend > 0 ? Number((dayRevenue / daySpend).toFixed(2)) : 0,
@@ -1696,4 +1747,143 @@ export function generateAdSetTimeSeries(adSet, days = 30) {
     });
   }
   return series;
+}
+
+// ─── Time-Series Generator for Client Trend Charts ──────────────────
+export function generateClientTimeSeries(clientId, clientKPIs, days = 30, customEndDate = null, customStartDate = null) {
+  const kpiSpend = Number(clientKPIs?.totalSpend?.value);
+  const totalSpend = !isNaN(kpiSpend) && kpiSpend > 0 ? kpiSpend : 45200;
+  const kpiRev = Number(clientKPIs?.totalRevenue?.value);
+  const totalRevenue = !isNaN(kpiRev) && kpiRev > 0 ? kpiRev : 186400;
+  const kpiImpr = Number(clientKPIs?.impressions?.value);
+  const totalImpressions = !isNaN(kpiImpr) && kpiImpr > 0 ? kpiImpr : 6150000;
+  const kpiClicks = Number(clientKPIs?.clicks?.value);
+  const totalClicks = !isNaN(kpiClicks) && kpiClicks > 0 ? kpiClicks : 242000;
+  const kpiConv = Number(clientKPIs?.conversions?.value);
+  const totalConversions = !isNaN(kpiConv) && kpiConv > 0 ? kpiConv : 8420;
+
+  const seed = typeof clientId === 'string' ? clientId.split('').reduce((a, c) => a + c.charCodeAt(0), 0) : Number(clientId) || 101;
+  function pseudoRandom(i, offset) {
+    const x = Math.sin((seed * 8191 + i * 5381 + offset * 2137)) * 10000;
+    return x - Math.floor(x);
+  }
+
+  const actualDays = Math.max(1, Math.min(days, 365));
+  let startDate, endDate;
+
+  if (customStartDate && customEndDate) {
+    startDate = new Date(String(customStartDate).includes('T') ? customStartDate : `${customStartDate}T00:00:00`);
+    endDate = new Date(String(customEndDate).includes('T') ? customEndDate : `${customEndDate}T23:59:59`);
+  } else if (customEndDate) {
+    endDate = new Date(String(customEndDate).includes('T') ? customEndDate : `${customEndDate}T23:59:59`);
+    startDate = new Date(endDate.getTime() - (actualDays - 1) * 86400000);
+  } else {
+    endDate = new Date(2026, 7, 31, 23, 59, 59);
+    startDate = new Date(endDate.getTime() - (actualDays - 1) * 86400000);
+  }
+
+  const series = [];
+  for (let i = 0; i < actualDays; i++) {
+    const date = new Date(startDate.getTime() + i * 86400000);
+    const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = date.toLocaleDateString('en-US', { month: 'long' });
+    const monthShort = date.toLocaleDateString('en-US', { month: 'short' });
+    const monthNum = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const fullDate = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    // Normalize daily base factor
+    const baseFactor = 1 / 30;
+    const variation = 0.65 + pseudoRandom(i, 1) * 0.70;
+    const trend = 0.90 + (i / actualDays) * 0.20;
+
+    const daySpend = Math.round(totalSpend * baseFactor * variation * trend);
+    const dayRevenue = Math.round(totalRevenue * baseFactor * variation * trend * (0.92 + pseudoRandom(i, 2) * 0.16));
+    const dayImpr = Math.round(totalImpressions * baseFactor * variation * trend);
+    const dayClicks = Math.round(totalClicks * baseFactor * variation * trend);
+    const dayConv = Math.max(1, Math.round(totalConversions * baseFactor * variation * trend));
+
+    series.push({
+      date: label,
+      day,
+      month,
+      monthShort,
+      monthNum,
+      year,
+      fullDate,
+      spend: daySpend,
+      revenue: dayRevenue,
+      roas: daySpend > 0 ? Number((dayRevenue / daySpend).toFixed(2)) : 0,
+      impressions: dayImpr,
+      clicks: dayClicks,
+      conversions: dayConv,
+      cpa: dayConv > 0 ? Number((daySpend / dayConv).toFixed(2)) : 0,
+      ctr: dayImpr > 0 ? Number(((dayClicks / dayImpr) * 100).toFixed(2)) : 0,
+      cpc: dayClicks > 0 ? Number((daySpend / dayClicks).toFixed(2)) : 0,
+    });
+  }
+  return series;
+}
+
+// ─── Monthly Aggregation Helper ─────────────────────────────────────
+export function aggregateTimeSeriesByMonth(dailySeries) {
+  if (!dailySeries || !dailySeries.length) return [];
+
+  const monthsMap = new Map();
+
+  for (const item of dailySeries) {
+    const key = `${item.year}-${item.monthShort}`;
+    if (!monthsMap.has(key)) {
+      monthsMap.set(key, {
+        monthShort: item.monthShort,
+        month: item.month,
+        year: item.year,
+        label: item.monthShort,
+        fullDate: `${item.month} ${item.year}`,
+        date: `${item.monthShort} ${item.year}`,
+        spend: 0,
+        revenue: 0,
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+        reach: 0,
+        daysCount: 0,
+      });
+    }
+    const m = monthsMap.get(key);
+    m.spend += item.spend || 0;
+    m.revenue += item.revenue || 0;
+    m.impressions += item.impressions || 0;
+    m.clicks += item.clicks || 0;
+    m.conversions += item.conversions || 0;
+    m.reach += item.reach || 0;
+    m.daysCount += 1;
+  }
+
+  const result = [];
+  for (const m of monthsMap.values()) {
+    const roas = m.spend > 0 ? Number((m.revenue / m.spend).toFixed(2)) : 0;
+    const ctr = m.impressions > 0 ? Number(((m.clicks / m.impressions) * 100).toFixed(2)) : 0;
+    const cpa = m.conversions > 0 ? Number((m.spend / m.conversions).toFixed(2)) : 0;
+    const cpc = m.clicks > 0 ? Number((m.spend / m.clicks).toFixed(2)) : 0;
+    const frequency = m.reach > 0 ? Number((m.impressions / m.reach).toFixed(2)) : 1;
+
+    result.push({
+      ...m,
+      spend: Math.round(m.spend),
+      revenue: Math.round(m.revenue),
+      impressions: Math.round(m.impressions),
+      clicks: Math.round(m.clicks),
+      conversions: Math.round(m.conversions),
+      reach: Math.round(m.reach),
+      roas,
+      ctr,
+      cpa,
+      cpc,
+      frequency,
+    });
+  }
+
+  return result;
 }

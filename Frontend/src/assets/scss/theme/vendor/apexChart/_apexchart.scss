@@ -54,10 +54,10 @@
 }
 
 .apexcharts-legend {
+  display: none !important;
   overflow: hidden !important;
 }
 
 .apexcharts-legend-text {
   color: var(--#{$prefix}gray-800) !important;
-
 }
