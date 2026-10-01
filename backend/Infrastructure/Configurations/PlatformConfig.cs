@@ -17,6 +17,10 @@ public class PlatformConfig : IEntityTypeConfiguration<Platform>
         builder.Property(p => p.Status)
                .HasConversion<string>();
 
+        builder.Property(p => p.Currency)
+               .IsRequired()
+               .HasConversion<string>();
+
         // Clients has many Platforms
         builder.HasOne(p => p.Client)
                .WithMany(c => c.Platforms)

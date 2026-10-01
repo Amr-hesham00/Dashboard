@@ -1,4 +1,4 @@
-﻿using Dashboard.Application.Interfaces.Repositories;
+using Dashboard.Application.Interfaces.Repositories;
 using Dashboard.Domain.Entities;
 
 namespace Dashboard.Infrastructure.Repositories;

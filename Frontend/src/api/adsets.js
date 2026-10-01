@@ -16,6 +16,32 @@ export async function getAdSetsApi() {
   return mockAdSets;
 }
 
+export async function getAdSetsByCampaignIdApi(campId) {
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/AdSet/Campaigns/${campId}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data)) return data;
+    }
+  } catch {
+    // Fall through
+  }
+  return mockAdSets.filter((a) => String(a.campaignId) === String(campId));
+}
+
+export async function getAdSetsByClientIdApi(clientId) {
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/AdSet/Clients/${clientId}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data)) return data;
+    }
+  } catch {
+    // Fall through
+  }
+  return mockAdSets.filter((a) => String(a.clientId) === String(clientId));
+}
+
 export async function getAdSetByIdApi(id) {
   try {
     const response = await apiFetch(`${API_BASE_URL}/AdSet/${id}`);

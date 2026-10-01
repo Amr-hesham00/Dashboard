@@ -31,6 +31,60 @@
   <link rel="stylesheet" href="/vendor/jsvectormap/dist/css/jsvectormap.min.css" />
   <link rel="stylesheet" href="/assets/css/theme.css" />
   <style>
+    /* ApexCharts Tooltip - Date header & container styled with #1C252E and enhanced transparency */
+    .apexcharts-tooltip.apexcharts-theme-dark,
+    .apexcharts-tooltip {
+      background: rgba(28, 37, 46, 0.72) !important;
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45) !important;
+      border-radius: 8px !important;
+      color: #f1f5f9 !important;
+    }
+
+    .apexcharts-tooltip.apexcharts-theme-dark .apexcharts-tooltip-title,
+    .apexcharts-tooltip .apexcharts-tooltip-title {
+      background: rgba(28, 37, 46, 0.75) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
+      color: #f8fafc !important;
+      font-family: inherit !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      padding: 8px 12px 7px 12px !important;
+      margin-bottom: 0 !important;
+    }
+
+    .apexcharts-tooltip.apexcharts-theme-dark .apexcharts-tooltip-series-group,
+    .apexcharts-tooltip .apexcharts-tooltip-series-group {
+      background: transparent !important;
+      color: #f1f5f9 !important;
+      padding: 6px 12px !important;
+    }
+
+    .apexcharts-tooltip.apexcharts-theme-dark .apexcharts-tooltip-text,
+    .apexcharts-tooltip .apexcharts-tooltip-text {
+      color: #f1f5f9 !important;
+      font-family: inherit !important;
+      font-size: 13px !important;
+    }
+
+    .apexcharts-tooltip.apexcharts-theme-dark .apexcharts-tooltip-marker,
+    .apexcharts-tooltip .apexcharts-tooltip-marker {
+      width: 8px !important;
+      height: 8px !important;
+      border-radius: 50% !important;
+      margin-right: 8px !important;
+    }
+
+    /* Hide x-axis crosshairs tooltip (white date bubble below) */
+    .apexcharts-xaxistooltip {
+      display: none !important;
+      background: rgba(28, 37, 46, 0.9) !important;
+      color: #f8fafc !important;
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    }
+
     /* Sidebar Account Section - Fixed position, Hover Flyout to Right */
     .sidebar-account-footer {
       position: relative !important;

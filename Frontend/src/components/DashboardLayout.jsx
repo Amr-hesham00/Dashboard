@@ -32,12 +32,12 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
 
   const getFallbackPageTitle = (pathname) => {
     if (pathname === '/' || !pathname) return 'Home';
-    if (pathname === '/clients') return 'Clients';
+    if (pathname.startsWith('/clients')) return 'Clients';
     if (pathname.startsWith('/insights')) return 'Insights & Recommendations';
     if (pathname.startsWith('/reports')) return 'Reports';
     if (pathname.startsWith('/team')) return 'Team';
-    if (pathname.startsWith('/campaigns')) return 'Campaigns';
-    if (pathname.startsWith('/adsets')) return 'Ad Sets';
+    if (pathname.startsWith('/campaigns') || pathname.startsWith('/Campaigns')) return 'Campaigns';
+    if (pathname.startsWith('/adsets') || pathname.startsWith('/Adsets')) return 'Ad Sets';
     if (pathname.startsWith('/platforms')) return 'Platforms';
     if (pathname.startsWith('/admin')) return 'Admin Management';
     if (pathname.startsWith('/account')) return 'Account Settings';

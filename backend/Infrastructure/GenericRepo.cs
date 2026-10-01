@@ -1,4 +1,4 @@
-﻿using Dashboard.Application.Interfaces;
+using Dashboard.Application.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.Infrastructure;
@@ -34,7 +34,7 @@ public class GenericRepo<T> : IGenericRepo<T> where T : class//, IHasUserId, IHa
         return await dbset.ToListAsync();
     }
 
-    public async Task<T?> GetById(int id)
+    public virtual async Task<T?> GetById(int id)
     {
         return await dbset.FindAsync(id); // return entity or null
     }

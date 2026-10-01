@@ -10,6 +10,14 @@ public class ClientRepo : GenericRepo<Client>, IClientRepo
     {
     }
 
+    public override async Task<Client?> GetById(int clientId)
+    {
+        return await dbset
+            .AsNoTracking()
+            .Include(client => client.Target)
+            .Include(client => client.Platforms)
+            .FirstOrDefaultAsync(client => client.Id == clientId);
+    }
     /// <summary>
     /// returns a list of clients based on the user's role.
     /// </summary>
@@ -17,6 +25,7 @@ public class ClientRepo : GenericRepo<Client>, IClientRepo
     {
         var query = dbset
             .Include(c => c.Platforms)
+                .ThenInclude(p => p.Campaigns)
             .Include(c => c.Target)
             .Include(c => c.Assignments)
             .AsQueryable();
@@ -38,6 +47,7 @@ public class ClientRepo : GenericRepo<Client>, IClientRepo
     {
         return await dbset
             .Include(c => c.Platforms)
+                .ThenInclude(p => p.Campaigns)
             .Include(c => c.Target)
             .Include(c => c.Assignments)
             .ToListAsync();
@@ -47,6 +57,7 @@ public class ClientRepo : GenericRepo<Client>, IClientRepo
     {
         return await dbset
             .Include(c => c.Platforms)
+                .ThenInclude(p => p.Campaigns)
             .Include(c => c.Target)
             .Include(c => c.Assignments)
             .FirstOrDefaultAsync(c => c.Id == id);

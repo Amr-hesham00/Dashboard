@@ -16,6 +16,19 @@ export async function getCampaignsApi() {
   return mockCampaigns;
 }
 
+export async function getCampaignsByClientIdApi(clientId) {
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/Campaign/Clients/${clientId}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data)) return data;
+    }
+  } catch {
+    // Fall through
+  }
+  return mockCampaigns.filter((c) => String(c.clientId) === String(clientId));
+}
+
 export async function getCampaignByIdApi(id) {
   try {
     const response = await apiFetch(`${API_BASE_URL}/Campaign/${id}`);

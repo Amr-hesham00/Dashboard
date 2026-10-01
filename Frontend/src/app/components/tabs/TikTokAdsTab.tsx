@@ -160,7 +160,7 @@ export default function TikTokAdsTab({ client }: { client: Client }) {
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                {['Campaign', 'Status', 'Objective', 'Spend', 'Revenue', 'ROAS', 'Impressions', 'CTR', 'Conversions', 'CPA'].map(h => (
+                {['Campaign', 'Status', 'Objective', 'Spend', 'Revenue', 'ROAS', 'Start Date'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs text-slate-500 whitespace-nowrap" style={{ fontWeight: 600 }}>{h}</th>
                 ))}
               </tr>
@@ -184,14 +184,7 @@ export default function TikTokAdsTab({ client }: { client: Client }) {
                       {client.targetROAS === 0 ? 'N/A' : `${camp.roas.toFixed(1)}×`}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-500 text-sm">{formatNumber(camp.impressions, true)}</td>
-                  <td className="px-4 py-3 text-slate-500 text-sm">{formatPercent(camp.ctr)}</td>
-                  <td className="px-4 py-3 text-slate-700 text-sm" style={{ fontWeight: 500 }}>{camp.conversions}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-md ${getCPABg(camp.cpa, client.targetCPA)}`} style={{ fontWeight: 600 }}>
-                      {formatCurrency(camp.cpa, sym)}
-                    </span>
-                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{camp.startDate || '01/07/26'}</td>
                 </tr>
               ))}
             </tbody>

@@ -30,6 +30,7 @@ function MetricIcon({ iconKey, size = 18 }) {
     case 'cart':
     case 'conversions':
     case 'orders':
+    case 'aov':
       return (
         <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="6" cy="19" r="2" />
@@ -207,22 +208,24 @@ function MetricIcon({ iconKey, size = 18 }) {
  * Metric metadata definitions mapping each key to icon, color, and label.
  */
 const METRIC_CONFIG = {
-  totalspend: { icon: 'wallet', color: 'danger', label: 'Total Spend' },
+  totalspend: { icon: 'wallet', color: 'danger', label: 'Spend' },
+  adspend: { icon: 'wallet', color: 'danger', label: 'Spend' },
   spend: { icon: 'wallet', color: 'danger', label: 'Spend' },
-  totalrevenue: { icon: 'coin', color: 'success', label: 'Total Revenue' },
+  totalrevenue: { icon: 'coin', color: 'success', label: 'Revenue' },
   revenue: { icon: 'coin', color: 'success', label: 'Revenue' },
-  roas: { icon: 'roas', color: 'primary', label: 'Return On Ad Spend' },
-  conversions: { icon: 'cart', color: 'warning', label: 'Conversions / Purchases' },
+  roas: { icon: 'roas', color: 'primary', label: 'ROAS' },
+  conversions: { icon: 'cart', color: 'warning', label: 'Conversions' },
   purchases: { icon: 'cart', color: 'warning', label: 'Purchases' },
   orders: { icon: 'cart', color: 'warning', label: 'Orders' },
-  cpa: { icon: 'user', color: 'info', label: 'Cost Per Acquisition' },
-  ctr: { icon: 'pointer', color: 'info', label: 'Click-Through Rate' },
-  linkctr: { icon: 'pointer', color: 'info', label: 'Link CTR' },
+  cpa: { icon: 'user', color: 'info', label: 'CPA' },
+  ctr: { icon: 'pointer', color: 'info', label: 'CTR' },
+  linkctr: { icon: 'pointer', color: 'info', label: 'CTR' },
   clicks: { icon: 'mouse', color: 'primary', label: 'Clicks' },
   impressions: { icon: 'eye', color: 'info', label: 'Impressions' },
   reach: { icon: 'eye', color: 'info', label: 'Reach' },
-  cpc: { icon: 'tag', color: 'warning', label: 'Cost Per Click' },
-  cpm: { icon: 'stack', color: 'secondary', label: 'Cost Per Mille' },
+  cpc: { icon: 'tag', color: 'warning', label: 'CPC' },
+  aov: { icon: 'aov', color: 'primary', label: 'Average Order Value' },
+  cpm: { icon: 'stack', color: 'secondary', label: 'CPM' },
   conversionrate: { icon: 'percent', color: 'success', label: 'Conversion Rate' },
   frequency: { icon: 'repeat', color: 'secondary', label: 'Frequency' },
   videoviews: { icon: 'play', color: 'danger', label: 'Video Views' },

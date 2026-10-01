@@ -1,6 +1,4 @@
-using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces.Services;
-using Dashboard.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dashboard.API.Controllers;
@@ -18,12 +16,24 @@ public class AdSetController : ControllerBase
     }
 
     /// <summary>
-    /// Get list of all ad sets.
+    /// Get all ad sets belonging to a specific campaign.
     /// </summary>
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
+    /// <param name="campId">The campaign ID.</param>
+    [HttpGet("Campaigns/{campId:int}")]
+
+    public async Task<IActionResult> GetByClient(int clientId)
     {
-        var adSets = await _adSetService.GetAllAdSetsAsync();
+        if (clientId <= 0)
+        {
+            return BadRequest(new { message = "Client ID must be a positive integer." });
+        }
+
+        var adSets = await _adSetService.GetAdSetsByClientIdAsync(clientId);
+        if (adSets == null)
+        {
+            return NotFound(new { message = $"Client with ID '{clientId}' not found." });
+        }
+
         return Ok(adSets);
     }
 
@@ -33,53 +43,13 @@ public class AdSetController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var adSet = await _adSetService.GetAdSetByIdAsync(id);
+        var adSet = await _adSetService.GetByIdAsync(id);
         if (adSet == null)
         {
             return NotFound(new { message = $"AdSet with ID '{id}' not found." });
         }
 
         return Ok(adSet);
-    }
-
-    /// <summary>
-    /// Create a new ad set.
-    /// </summary>
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateAdSetDTO dto)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-
-        var (success, message, adSet) = await _adSetService.CreateAdSetAsync(dto);
-        if (!success)
-        {
-            return BadRequest(new { message });
-        }
-
-        return CreatedAtAction(nameof(GetById), new { id = adSet!.Id }, adSet);
-    }
-
-    /// <summary>
-    /// Update an existing ad set's information.
-    /// </summary>
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateAdSetDTO dto)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-
-        var (success, message) = await _adSetService.UpdateAdSetAsync(id, dto);
-        if (!success)
-        {
-            return BadRequest(new { message });
-        }
-
-        return Ok(new { message });
     }
 
     /// <summary>
@@ -97,23 +67,25 @@ public class AdSetController : ControllerBase
         return Ok(new { message });
     }
 
+    // done
     /// <summary>
-    /// Get available ad set status values.
+    /// Get all ad sets belonging to a specific client.
     /// </summary>
-    [HttpGet("statuses")]
-    public IActionResult GetStatuses()
+    /// <param name="clientId">The client ID.</param>
+    [HttpGet("Clients/{clientId:int}")]
+    public async Task<IActionResult> GetByCampaign(int campId, DateOnly startDate, DateOnly endDate)
     {
-        var statuses = Enum.GetNames(typeof(AdSetStatus));
-        return Ok(statuses);
-    }
+        if (campId <= 0)
+        {
+            return BadRequest(new { message = "Campaign ID must be a positive integer." });
+        }
 
-    /// <summary>
-    /// Get available ad set gender values.
-    /// </summary>
-    [HttpGet("genders")]
-    public IActionResult GetGenders()
-    {
-        var genders = Enum.GetNames(typeof(AdSetGender));
-        return Ok(genders);
+        var adSets = await _adSetService.GetByCampaignIdAsync(campId, startDate, endDate);
+        if (adSets == null)
+        {
+            return NotFound(new { message = $"Campaign with ID '{campId}' not found." });
+        }
+
+        return Ok(adSets);
     }
 }

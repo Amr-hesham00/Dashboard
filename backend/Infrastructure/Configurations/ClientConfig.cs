@@ -36,6 +36,7 @@ public class ClientConfig : IEntityTypeConfiguration<Client>
                .HasMaxLength(100);
 
         builder.Property(c => c.Currency)
+               .IsRequired()
                .HasConversion<string>();
 
         builder.Property(c => c.Status)
@@ -51,3 +52,4 @@ public class ClientConfig : IEntityTypeConfiguration<Client>
                .OnDelete(DeleteBehavior.Cascade);
     }
 }
+

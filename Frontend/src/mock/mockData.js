@@ -135,6 +135,7 @@ export const mockPlatforms = [
     id: 1,
     name: "Meta Ads",
     code: "META",
+    currency: "USD",
     status: "Active",
     activeCampaignsCount: 14,
     monthlySpend: 62500
@@ -143,6 +144,7 @@ export const mockPlatforms = [
     id: 2,
     name: "Google Ads",
     code: "GOOG",
+    currency: "EUR",
     status: "Active",
     activeCampaignsCount: 18,
     monthlySpend: 84000
@@ -151,6 +153,7 @@ export const mockPlatforms = [
     id: 3,
     name: "Snapchat Ads",
     code: "SNAP",
+    currency: "SAR",
     status: "Active",
     activeCampaignsCount: 8,
     monthlySpend: 19500
@@ -159,6 +162,7 @@ export const mockPlatforms = [
     id: 4,
     name: "TikTok Ads",
     code: "TT",
+    currency: "EGP",
     status: "Active",
     activeCampaignsCount: 9,
     monthlySpend: 28000
@@ -314,18 +318,24 @@ export const mockAdSets = [
     bidStrategy: "Target CPA",
     dailyBudget: 600,
     targetAudience: "Exact Match Keywords (Fashion, Apparel)",
-    status: "Active"
+    status: "Active",
+    searchTerms: [
+      { id: 'st-103-1', adSetId: 'ads-103', term: 'black friday clothing discounts online', matchType: 'Exact', impressions: 28400, clicks: 2560, ctr: 9.01, avgCpc: 1.15, conversions: 240, convRate: 9.38, spend: 2944.00 },
+      { id: 'st-103-2', adSetId: 'ads-103', term: 'buy luxury streetwear apparel fast shipping', matchType: 'Phrase', impressions: 46200, clicks: 2772, ctr: 6.00, avgCpc: 1.30, conversions: 185, convRate: 6.67, spend: 3603.60 },
+      { id: 'st-103-3', adSetId: 'ads-103', term: 'high end graphic hoodies shop', matchType: 'Exact', impressions: 19800, clicks: 1980, ctr: 10.00, avgCpc: 0.95, conversions: 190, convRate: 9.60, spend: 1881.00 },
+      { id: 'st-103-4', adSetId: 'ads-103', term: 'best designer clothing brands online', matchType: 'Broad', impressions: 64000, clicks: 2240, ctr: 3.50, avgCpc: 1.40, conversions: 110, convRate: 4.91, spend: 3136.00 },
+    ]
   }
 ];
 
 export const mockAds = [
   {
     id: 1,
-    name: "Video Ad - 15s Summer Product Showcase",
+    name: "Video Ad - Summer Product Showcase",
     headline: "Unleash Summer Fashion - Up to 40% Off",
     description: "Discover our premium seasonal collection with fast express delivery.",
     cta: "Shop Now",
-    mediaURL: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800",
+    mediaURL: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
     mediaType: 1,
     status: 0,
     impressions: 245000,
@@ -432,8 +442,8 @@ export const mockAssignments = [
  * Each KPI has: key, label, format, icon color.
  */
 export const availableKPIs = [
-  { key: 'totalSpend', label: 'Total Spend', format: 'currency', color: 'danger' },
-  { key: 'totalRevenue', label: 'Total Revenue', format: 'currency', color: 'success' },
+  { key: 'spend', label: 'Spend', format: 'currency', color: 'danger' },
+  { key: 'revenue', label: 'Revenue', format: 'currency', color: 'success' },
   { key: 'roas', label: 'ROAS', format: 'multiplier', color: 'primary' },
   { key: 'ctr', label: 'CTR', format: 'percent', color: 'info' },
   { key: 'cpc', label: 'CPC', format: 'currency', color: 'warning' },
@@ -443,11 +453,10 @@ export const availableKPIs = [
   { key: 'conversions', label: 'Conversions', format: 'number', color: 'success' },
   { key: 'cpa', label: 'CPA', format: 'currency', color: 'warning' },
   { key: 'conversionRate', label: 'Conversion Rate', format: 'percent', color: 'success' },
-  { key: 'frequency', label: 'Frequency', format: 'decimal', color: 'secondary' },
 ];
 
 /** Default pinned KPI keys (5 cards) */
-export const defaultPinnedKPIs = ['totalSpend', 'totalRevenue', 'roas', 'ctr', 'conversions'];
+export const defaultPinnedKPIs = ['spend', 'revenue', 'roas', 'ctr', 'conversions'];
 
 /**
  * Per-client KPI values (keyed by client ID).
@@ -656,6 +665,7 @@ export const mockClientPlatformPerformance = {
   'cli-101': {
     meta: {
       label: 'Meta Ads',
+      currency: 'USD',
       campaigns: [
         { id: 'c101-m1', name: 'Acme Cloud Suite — Lookalike 1% High LTV', status: 'Active', spend: 8400, revenue: 33600, roas: 4.0, impressions: 1240000, clicks: 52080, ctr: 4.20, conversions: 1890, cpa: 4.44 },
         { id: 'c101-m2', name: 'Acme Pro Hardware — DPA Dynamic Catalog Feed', status: 'Active', spend: 6800, revenue: 28560, roas: 4.2, impressions: 920000, clicks: 38640, ctr: 4.20, conversions: 1580, cpa: 4.30 },
@@ -671,6 +681,7 @@ export const mockClientPlatformPerformance = {
     },
     google: {
       label: 'Google Ads',
+      currency: 'EUR',
       campaigns: [
         { id: 'c101-g1', name: 'Acme Search — High-Intent Brand & Product Keywords', status: 'Active', spend: 5800, revenue: 34800, roas: 6.0, impressions: 410000, clicks: 28700, ctr: 7.00, conversions: 1620, cpa: 3.58, qualityScore: 9.4 },
         { id: 'c101-g2', name: 'Google Shopping — Enterprise Cloud Devices', status: 'Active', spend: 5400, revenue: 27000, roas: 5.0, impressions: 440000, clicks: 17600, ctr: 4.00, conversions: 1320, cpa: 4.09, qualityScore: 8.4 },
@@ -679,15 +690,16 @@ export const mockClientPlatformPerformance = {
       ],
       kpis: { spend: 19200, revenue: 88660, roas: 4.62, impressions: 1520000, clicks: 71550, ctr: 4.71, conversions: 4400, cpa: 4.36, avgQualityScore: 8.2, searchImprShare: 72.4 },
       searchTerms: [
-        { id: 'st1', term: 'acme global tech buy online', matchType: 'Exact', impressions: 45200, clicks: 3840, ctr: 8.50, avgCpc: 1.15, conversions: 345, convRate: 8.98, spend: 4416.00 },
-        { id: 'st2', term: 'best enterprise cloud automation 2026', matchType: 'Phrase', impressions: 92400, clicks: 5082, ctr: 5.50, avgCpc: 1.42, conversions: 294, convRate: 5.78, spend: 7216.44 },
-        { id: 'st3', term: 'acme corporation customer support', matchType: 'Exact', impressions: 31000, clicks: 2790, ctr: 9.00, avgCpc: 0.65, conversions: 195, convRate: 6.99, spend: 1813.50 },
-        { id: 'st4', term: 'top b2b software solutions', matchType: 'Broad', impressions: 148000, clicks: 4736, ctr: 3.20, avgCpc: 1.85, conversions: 142, convRate: 3.00, spend: 8761.60 },
-        { id: 'st5', term: 'acme global official website', matchType: 'Exact', impressions: 28900, clicks: 3612, ctr: 12.50, avgCpc: 0.48, conversions: 410, convRate: 11.35, spend: 1733.76 },
+        { id: 'st1', adSetId: 'as-c101-g1-1', term: 'acme global tech buy online', matchType: 'Exact', impressions: 45200, clicks: 3840, ctr: 8.50, avgCpc: 1.15, conversions: 345, convRate: 8.98, spend: 4416.00 },
+        { id: 'st2', adSetId: 'as-c101-g1-2', term: 'best enterprise cloud automation 2026', matchType: 'Phrase', impressions: 92400, clicks: 5082, ctr: 5.50, avgCpc: 1.42, conversions: 294, convRate: 5.78, spend: 7216.44 },
+        { id: 'st3', adSetId: 'as-c101-g1-1', term: 'acme corporation customer support', matchType: 'Exact', impressions: 31000, clicks: 2790, ctr: 9.00, avgCpc: 0.65, conversions: 195, convRate: 6.99, spend: 1813.50 },
+        { id: 'st4', adSetId: 'as-c101-g1-2', term: 'top b2b software solutions', matchType: 'Broad', impressions: 148000, clicks: 4736, ctr: 3.20, avgCpc: 1.85, conversions: 142, convRate: 3.00, spend: 8761.60 },
+        { id: 'st5', adSetId: 'as-c101-g1-1', term: 'acme global official website', matchType: 'Exact', impressions: 28900, clicks: 3612, ctr: 12.50, avgCpc: 0.48, conversions: 410, convRate: 11.35, spend: 1733.76 },
       ],
     },
     snapchat: {
       label: 'Snapchat Ads',
+      currency: 'SAR',
       campaigns: [
         { id: 'c101-s1', name: 'Snap Ads — Acme Annual Tech Summit 2026', status: 'Active', spend: 3200, revenue: 9600, roas: 3.0, impressions: 1820000, clicks: 54600, swipeUps: 41200, storyViews: 980000, ctr: 3.00, conversions: 620, cpa: 5.16 },
         { id: 'c101-s2', name: 'Story Ads — Enterprise Customer Success Stories', status: 'Active', spend: 2400, revenue: 6480, roas: 2.7, impressions: 1420000, clicks: 28400, swipeUps: 24200, storyViews: 1120000, ctr: 2.00, conversions: 390, cpa: 6.15 },
@@ -697,6 +709,7 @@ export const mockClientPlatformPerformance = {
     },
     tiktok: {
       label: 'TikTok Ads',
+      currency: 'EGP',
       campaigns: [
         { id: 'c101-t1', name: 'Spark Ads — Engineering Hacks & Desk Setup UGC', status: 'Active', spend: 4800, revenue: 16800, roas: 3.5, impressions: 3240000, clicks: 97200, videoViews: 2860000, engagementRate: 8.4, ctr: 3.00, conversions: 1240, cpa: 3.87 },
         { id: 'c101-t2', name: 'In-Feed — Acme Workflow Speed Comparison', status: 'Active', spend: 3600, revenue: 11520, roas: 3.2, impressions: 2680000, clicks: 64320, videoViews: 2140000, engagementRate: 7.2, ctr: 2.40, conversions: 860, cpa: 4.19 },
@@ -709,6 +722,7 @@ export const mockClientPlatformPerformance = {
   'cli-102': {
     meta: {
       label: 'Meta Ads',
+      currency: 'USD',
       campaigns: [
         { id: 'c102-m1', name: 'Nexus Summer Drop — Lookalike 2% Fashion Buyers', status: 'Active', spend: 7200, revenue: 28800, roas: 4.0, impressions: 1080000, clicks: 43200, ctr: 4.00, conversions: 1440, cpa: 5.00 },
         { id: 'c102-m2', name: 'Abandoned Cart & Wishlist Retargeting 7D', status: 'Active', spend: 4600, revenue: 19320, roas: 4.2, impressions: 620000, clicks: 24800, ctr: 4.00, conversions: 920, cpa: 5.00 },
@@ -723,6 +737,7 @@ export const mockClientPlatformPerformance = {
     },
     google: {
       label: 'Google Ads',
+      currency: 'GBP',
       campaigns: [
         { id: 'c102-g1', name: 'Google Shopping — Smart Bidding Apparel Collection', status: 'Active', spend: 5100, revenue: 22950, roas: 4.5, impressions: 460000, clicks: 23000, ctr: 5.00, conversions: 1020, cpa: 5.00, qualityScore: 8.8 },
         { id: 'c102-g2', name: 'Search — Nexus Wear Official Brand & Trademark', status: 'Active', spend: 3400, revenue: 17680, roas: 5.2, impressions: 280000, clicks: 19600, ctr: 7.00, conversions: 850, cpa: 4.00, qualityScore: 9.6 },
@@ -738,6 +753,7 @@ export const mockClientPlatformPerformance = {
     },
     snapchat: {
       label: 'Snapchat Ads',
+      currency: 'AED',
       campaigns: [
         { id: 'c102-s1', name: 'AR Lens — 3D Virtual Try-On Sunglasses & Hats', status: 'Active', spend: 2900, revenue: 8700, roas: 3.0, impressions: 2450000, clicks: 49000, swipeUps: 38200, storyViews: 1680000, ctr: 2.00, conversions: 580, cpa: 5.00 },
         { id: 'c102-s2', name: 'Snap Ads — Flash Weekend Sale 30% Off Swipe Up', status: 'Active', spend: 2100, revenue: 5880, roas: 2.8, impressions: 1620000, clicks: 35640, swipeUps: 28900, storyViews: 1100000, ctr: 2.20, conversions: 380, cpa: 5.53 },
@@ -747,6 +763,7 @@ export const mockClientPlatformPerformance = {
     },
     tiktok: {
       label: 'TikTok Ads',
+      currency: 'USD',
       campaigns: [
         { id: 'c102-t1', name: 'Viral OOTD Street Style Lookbook Series', status: 'Active', spend: 4100, revenue: 14760, roas: 3.6, impressions: 3820000, clicks: 114600, videoViews: 3240000, engagementRate: 9.2, ctr: 3.00, conversions: 980, cpa: 4.18 },
         { id: 'c102-t2', name: 'Spark Ads — Micro-Influencer Unboxing & Hauls', status: 'Active', spend: 3200, revenue: 10560, roas: 3.3, impressions: 2940000, clicks: 76440, videoViews: 2480000, engagementRate: 8.1, ctr: 2.60, conversions: 710, cpa: 4.51 },
@@ -918,6 +935,7 @@ export function getClientPlatformPerformance(clientId, clientName = '', category
   return {
     meta: {
       label: 'Meta Ads',
+      currency: 'USD',
       campaigns: [
         { id: `${clientId}-m1`, name: `${name} — High-Value Prospecting | LAL 1%`, status: 'Active', spend: Math.round(7500 * m), revenue: Math.round(30000 * m), roas: 4.0, impressions: Math.round(1100000 * m), clicks: Math.round(44000 * m), ctr: 4.00, conversions: Math.round(1500 * m), cpa: 5.00 },
         { id: `${clientId}-m2`, name: `${name} — DPA Catalog & Retargeting 14D`, status: 'Active', spend: Math.round(4800 * m), revenue: Math.round(19200 * m), roas: 4.0, impressions: Math.round(720000 * m), clicks: Math.round(28800 * m), ctr: 4.00, conversions: Math.round(960 * m), cpa: 5.00 },
@@ -941,6 +959,7 @@ export function getClientPlatformPerformance(clientId, clientName = '', category
     },
     google: {
       label: 'Google Ads',
+      currency: 'EUR',
       campaigns: [
         { id: `${clientId}-g1`, name: `${name} — Official Search & Trademark`, status: 'Active', spend: Math.round(5200 * m), revenue: Math.round(28600 * m), roas: 5.5, impressions: Math.round(380000 * m), clicks: Math.round(26600 * m), ctr: 7.00, conversions: Math.round(1100 * m), cpa: 4.73, qualityScore: 9.2 },
         { id: `${clientId}-g2`, name: `${name} — High-Intent Product Shopping`, status: 'Active', spend: Math.round(4400 * m), revenue: Math.round(19800 * m), roas: 4.5, impressions: Math.round(420000 * m), clicks: Math.round(18900 * m), ctr: 4.50, conversions: Math.round(920 * m), cpa: 4.78, qualityScore: 8.5 },
@@ -965,6 +984,7 @@ export function getClientPlatformPerformance(clientId, clientName = '', category
     },
     snapchat: {
       label: 'Snapchat Ads',
+      currency: 'SAR',
       campaigns: [
         { id: `${clientId}-s1`, name: `${name} — Interactive AR Lens & Try-On`, status: 'Active', spend: Math.round(2800 * m), revenue: Math.round(8400 * m), roas: 3.0, impressions: Math.round(2100000 * m), clicks: Math.round(42000 * m), swipeUps: Math.round(33600 * m), storyViews: Math.round(1450000 * m), ctr: 2.00, conversions: Math.round(560 * m), cpa: 5.00 },
         { id: `${clientId}-s2`, name: `${name} — Story Ads Direct Swipe-Up Promo`, status: 'Active', spend: Math.round(1900 * m), revenue: Math.round(5130 * m), roas: 2.7, impressions: Math.round(1350000 * m), clicks: Math.round(27000 * m), swipeUps: Math.round(21600 * m), storyViews: Math.round(920000 * m), ctr: 2.00, conversions: Math.round(380 * m), cpa: 5.00 },
@@ -984,6 +1004,7 @@ export function getClientPlatformPerformance(clientId, clientName = '', category
     },
     tiktok: {
       label: 'TikTok Ads',
+      currency: 'EGP',
       campaigns: [
         { id: `${clientId}-t1`, name: `${name} — Spark Ads Creator Collaboration UGC`, status: 'Active', spend: Math.round(3800 * m), revenue: Math.round(13300 * m), roas: 3.5, impressions: Math.round(3200000 * m), clicks: Math.round(96000 * m), videoViews: Math.round(2800000 * m), engagementRate: 8.8, ctr: 3.00, conversions: Math.round(890 * m), cpa: 4.27 },
         { id: `${clientId}-t2`, name: `${name} — In-Feed Viral Product Spotlight`, status: 'Active', spend: Math.round(2600 * m), revenue: Math.round(8320 * m), roas: 3.2, impressions: Math.round(2200000 * m), clicks: Math.round(57200 * m), videoViews: Math.round(1850000 * m), engagementRate: 7.6, ctr: 2.60, conversions: Math.round(620 * m), cpa: 4.19 },
@@ -1289,16 +1310,15 @@ export function getMockDashboardSummary() {
  */
 export function resolveClientAndCampaign(clientId, campaignId) {
   const clientKey = String(clientId).startsWith('cli-') ? clientId : `cli-${100 + Number(clientId)}`;
-  const client = mockClients.find((c) => String(c.id) === String(clientId) || c.companyId === clientKey) || {
-    id: clientId,
+  let client = (clientId && mockClients.find((c) => String(c.id) === String(clientId) || c.companyId === clientKey)) || {
+    id: clientId || 'cli-101',
     companyName: 'Acme Corporation',
     email: 'contact@acmeglobal.com',
   };
 
-  const clientPlatforms =
-    mockClientPlatformPerformance[clientId] ||
-    mockClientPlatformPerformance[clientKey] ||
-    mockClientPlatformPerformance['cli-101'];
+  const clientPlatforms = clientId
+    ? (mockClientPlatformPerformance[clientId] || mockClientPlatformPerformance[clientKey] || mockClientPlatformPerformance['cli-101'])
+    : null;
 
   const matchId = (candId, targetId) => {
     if (!candId || !targetId) return false;
@@ -1322,6 +1342,7 @@ export function resolveClientAndCampaign(clientId, campaignId) {
           ...match,
           platformKey: pKey,
           platformLabel: pData.label || pKey,
+          currency: pData.currency || 'USD',
         };
         foundPlatformKey = pKey;
         break;
@@ -1331,7 +1352,7 @@ export function resolveClientAndCampaign(clientId, campaignId) {
 
   if (!foundCampaign) {
     // Check all mock client platform campaigns
-    for (const pGroup of Object.values(mockClientPlatformPerformance)) {
+    for (const [cId, pGroup] of Object.entries(mockClientPlatformPerformance)) {
       for (const [pKey, pData] of Object.entries(pGroup)) {
         const match = (pData.campaigns || []).find((c) => matchId(c.id, campaignId));
         if (match) {
@@ -1339,8 +1360,13 @@ export function resolveClientAndCampaign(clientId, campaignId) {
             ...match,
             platformKey: pKey,
             platformLabel: pData.label || pKey,
+            currency: pData.currency || 'USD',
           };
           foundPlatformKey = pKey;
+          if (!clientId) {
+            const matchedClient = mockClients.find((c) => String(c.id) === String(cId) || c.companyId === cId);
+            if (matchedClient) client = matchedClient;
+          }
           break;
         }
       }
@@ -1352,12 +1378,18 @@ export function resolveClientAndCampaign(clientId, campaignId) {
     const globalMatch = mockCampaigns.find((c) => matchId(c.id, campaignId));
     if (globalMatch) {
       const pKey = globalMatch.platformId === 1 ? 'meta' : globalMatch.platformId === 2 ? 'google' : globalMatch.platformId === 3 ? 'snapchat' : 'tiktok';
+      const pCurr = pKey === 'google' ? 'EUR' : pKey === 'snapchat' ? 'SAR' : pKey === 'tiktok' ? 'EGP' : 'USD';
       foundCampaign = {
         ...globalMatch,
         platformKey: pKey,
         platformLabel: pKey === 'meta' ? 'Meta Ads' : pKey === 'google' ? 'Google Ads' : pKey === 'snapchat' ? 'Snapchat Ads' : 'TikTok Ads',
+        currency: pCurr,
       };
       foundPlatformKey = pKey;
+      if (!clientId && globalMatch.clientId) {
+        const matchedClient = mockClients.find((c) => String(c.id) === String(globalMatch.clientId) || c.companyId === globalMatch.clientId);
+        if (matchedClient) client = matchedClient;
+      }
     }
   }
 
@@ -1368,12 +1400,14 @@ export function resolveClientAndCampaign(clientId, campaignId) {
     const isTiktok = String(campaignId).includes('t');
     const pKey = isGoogle ? 'google' : isSnap ? 'snapchat' : isTiktok ? 'tiktok' : 'meta';
     const pLabel = isGoogle ? 'Google Ads' : isSnap ? 'Snapchat Ads' : isTiktok ? 'TikTok Ads' : 'Meta Ads';
+    const pCurr = pKey === 'google' ? 'EUR' : pKey === 'snapchat' ? 'SAR' : pKey === 'tiktok' ? 'EGP' : 'USD';
     foundCampaign = {
       id: campaignId,
       name: `${client.companyName || 'Client'} — Performance Campaign`,
       status: 'Active',
       platformKey: pKey,
       platformLabel: pLabel,
+      currency: pCurr,
       spend: 7500,
       revenue: 30000,
       roas: 4.0,
@@ -1390,6 +1424,65 @@ export function resolveClientAndCampaign(clientId, campaignId) {
     client,
     campaign: foundCampaign,
     platformKey: foundPlatformKey,
+  };
+}
+
+/**
+ * Resolves Ad Set, parent Campaign, and Client by adSetId.
+ */
+export function resolveAdSetAndCampaignAndClient(adSetId, fallbackCampaignId, fallbackClientId) {
+  let campaignId = fallbackCampaignId;
+  let adSet = null;
+
+  // 1. Look in mockAdSets
+  const directAdSet = mockAdSets.find((a) => String(a.id).toLowerCase() === String(adSetId).toLowerCase());
+  if (directAdSet) {
+    adSet = directAdSet;
+    campaignId = directAdSet.campaignId || campaignId;
+  }
+
+  // 2. Parse from adSetId pattern: as-<campaignId>-<index>
+  if (!campaignId && String(adSetId).startsWith('as-')) {
+    const parts = String(adSetId).split('-');
+    if (parts.length >= 3) {
+      campaignId = parts.slice(1, -1).join('-');
+    }
+  }
+
+  // 3. Fallback campaignId if still empty
+  if (!campaignId) {
+    campaignId = 'c101-m1';
+  }
+
+  const { client, campaign, platformKey } = resolveClientAndCampaign(fallbackClientId, campaignId);
+
+  // 4. Resolve the ad set details
+  if (!adSet) {
+    const campaignAdSets = getCampaignAdSets(campaignId, campaign);
+    adSet = campaignAdSets.find((a) => String(a.id).toLowerCase() === String(adSetId).toLowerCase()) || campaignAdSets[0] || {
+      id: adSetId,
+      name: 'Ad Set',
+      campaignId,
+      status: 'Active',
+      bidStrategy: 'Lowest Cost',
+      dailyBudget: 400,
+      spend: 3200,
+      revenue: 12800,
+      roas: 4.0,
+      impressions: 400000,
+      clicks: 16000,
+      conversions: 600,
+      cpa: 5.33,
+      ctr: 4.0,
+    };
+  }
+
+  return {
+    client,
+    campaign,
+    adSet,
+    platformKey,
+    campaignId,
   };
 }
 
@@ -1525,12 +1618,12 @@ export function getAdSetAds(adSetId, adSet, campaign) {
     },
     {
       id: `ad-${adSetId}-2`,
-      name: 'Direct UGC Video — Customer Transformation Story (15s)',
+      name: 'Direct UGC Video — Customer Transformation Story',
       headline: 'How We Scaled Revenue by 340% in 60 Days',
       description: 'See why over 10,000 businesses switched to Acme Global. Watch the case study walkthrough.',
       cta: 'Learn More',
-      mediaURL: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=800&q=80',
-      mediaType: 'Video Reel',
+      mediaURL: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+      mediaType: 'video',
       status: 'Active',
       spend: Math.round(asSpend * 0.30),
       revenue: Math.round(asRevenue * 0.28),
@@ -1570,34 +1663,124 @@ export function getAdSetAds(adSetId, adSet, campaign) {
   ];
 }
 
+/**
+ * Gets Search Terms for a Google Ads Ad Set.
+ */
+export function getAdSetSearchTerms(adSetId, adSet, campaign, client) {
+  // 1. Direct search terms on adSet object
+  if (Array.isArray(adSet?.searchTerms) && adSet.searchTerms.length > 0) {
+    return adSet.searchTerms;
+  }
+
+  // 2. Direct search terms in mockAdSets
+  const directAdSet = mockAdSets.find((a) => String(a.id).toLowerCase() === String(adSetId).toLowerCase());
+  if (Array.isArray(directAdSet?.searchTerms) && directAdSet.searchTerms.length > 0) {
+    return directAdSet.searchTerms;
+  }
+
+  // 3. Platform search terms matching this specific adSetId
+  const clientId = client?.id || 'cli-101';
+  const clientKey = String(clientId).startsWith('cli-') ? clientId : `cli-${100 + Number(clientId)}`;
+  const platPerf = mockClientPlatformPerformance[clientId] || mockClientPlatformPerformance[clientKey];
+  const googleTerms = platPerf?.google?.searchTerms || [];
+
+  const matched = googleTerms.filter((st) => String(st.adSetId).toLowerCase() === String(adSetId).toLowerCase());
+  if (matched.length > 0) {
+    return matched;
+  }
+
+  // 4. Partition terms if available so each Ad Set gets its specific subset
+  if (googleTerms.length > 0) {
+    const idStr = String(adSetId || '1');
+    let hash = 0;
+    for (let i = 0; i < idStr.length; i++) hash = (hash * 31 + idStr.charCodeAt(i)) & 0xffffffff;
+    const startIndex = Math.abs(hash) % googleTerms.length;
+    const count = Math.min(googleTerms.length, Math.max(2, Math.floor(googleTerms.length / 2)));
+    const subset = [];
+    for (let i = 0; i < count; i++) {
+      subset.push(googleTerms[(startIndex + i) % googleTerms.length]);
+    }
+    return subset.map((t, idx) => ({
+      ...t,
+      id: `${t.id || 'st'}-${adSetId}-${idx}`,
+      adSetId,
+    }));
+  }
+
+  // 5. Contextual search terms tailored specifically to this Ad Set
+  const asName = adSet?.name || 'Search Keywords';
+  const asSpend = Number(adSet?.spend) || 3200;
+  const asClicks = Number(adSet?.clicks) || 2200;
+  const asImpr = Number(adSet?.impressions) || 35000;
+  const asConv = Number(adSet?.conversions) || 160;
+  const clientName = client?.companyName || 'Acme Global';
+  const cleanName = asName.replace(/[-—|]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+
+  const generatedSeeds = [
+    { term: `${cleanName} buy online`, matchType: 'Exact', share: 0.42 },
+    { term: `best ${cleanName} 2026`, matchType: 'Phrase', share: 0.35 },
+    { term: `${clientName.toLowerCase()} ${cleanName.split(' ')[0]} official`, matchType: 'Exact', share: 0.23 },
+  ];
+
+  return generatedSeeds.map((seed, idx) => {
+    const sSpend = Math.round(asSpend * seed.share);
+    const sClicks = Math.round(asClicks * seed.share);
+    const sImpr = Math.round(asImpr * seed.share);
+    const sConv = Math.round(asConv * seed.share);
+    const ctr = sImpr > 0 ? Number(((sClicks / sImpr) * 100).toFixed(2)) : 6.0;
+    const avgCpc = sClicks > 0 ? Number((sSpend / sClicks).toFixed(2)) : 1.25;
+    const convRate = sClicks > 0 ? Number(((sConv / sClicks) * 100).toFixed(2)) : 7.2;
+
+    return {
+      id: `st-${adSetId}-${idx + 1}`,
+      adSetId,
+      term: seed.term,
+      matchType: seed.matchType,
+      impressions: sImpr,
+      clicks: sClicks,
+      ctr,
+      avgCpc,
+      conversions: sConv,
+      convRate,
+      spend: sSpend,
+      cpa: sConv > 0 ? Number((sSpend / sConv).toFixed(2)) : 0,
+    };
+  });
+}
+
 // ─── Campaign-Level KPI Definitions ─────────────────────────────────
 export const availableCampaignKPIs = [
   { key: 'spend', label: 'Spend', format: 'currency', color: 'danger' },
   { key: 'revenue', label: 'Revenue', format: 'currency', color: 'success' },
   { key: 'roas', label: 'ROAS', format: 'multiplier', color: 'primary' },
+  { key: 'ctr', label: 'CTR', format: 'percent', color: 'info' },
+  { key: 'cpc', label: 'CPC', format: 'currency', color: 'warning' },
+  { key: 'cpm', label: 'CPM', format: 'currency', color: 'secondary' },
   { key: 'impressions', label: 'Impressions', format: 'number', color: 'info' },
   { key: 'clicks', label: 'Clicks', format: 'number', color: 'primary' },
-  { key: 'ctr', label: 'CTR', format: 'percent', color: 'info' },
   { key: 'conversions', label: 'Conversions', format: 'number', color: 'success' },
   { key: 'cpa', label: 'CPA', format: 'currency', color: 'warning' },
-  { key: 'cpc', label: 'CPC', format: 'currency', color: 'warning' },
+  { key: 'conversionRate', label: 'Conversion Rate', format: 'percent', color: 'success' },
 ];
 
-export const defaultCampaignPinnedKPIs = ['spend', 'revenue', 'roas', 'conversions', 'cpa'];
+export const defaultCampaignPinnedKPIs = ['spend', 'revenue', 'roas', 'ctr', 'conversions'];
 
 // ─── Ad Set-Level KPI Definitions ────────────────────────────────────
 export const availableAdSetKPIs = [
   { key: 'spend', label: 'Spend', format: 'currency', color: 'danger' },
   { key: 'revenue', label: 'Revenue', format: 'currency', color: 'success' },
   { key: 'roas', label: 'ROAS', format: 'multiplier', color: 'primary' },
-  { key: 'reach', label: 'Reach', format: 'number', color: 'info' },
-  { key: 'frequency', label: 'Frequency', format: 'decimal', color: 'secondary' },
   { key: 'ctr', label: 'CTR', format: 'percent', color: 'info' },
+  { key: 'cpc', label: 'CPC', format: 'currency', color: 'warning' },
+  { key: 'cpm', label: 'CPM', format: 'currency', color: 'secondary' },
+  { key: 'impressions', label: 'Impressions', format: 'number', color: 'info' },
+  { key: 'clicks', label: 'Clicks', format: 'number', color: 'primary' },
   { key: 'conversions', label: 'Conversions', format: 'number', color: 'success' },
   { key: 'cpa', label: 'CPA', format: 'currency', color: 'warning' },
+  { key: 'conversionRate', label: 'Conversion Rate', format: 'percent', color: 'success' },
 ];
 
-export const defaultAdSetPinnedKPIs = ['spend', 'revenue', 'roas', 'conversions', 'cpa'];
+export const defaultAdSetPinnedKPIs = ['spend', 'revenue', 'roas', 'ctr', 'conversions'];
 
 // ─── Time-Series Generator for Campaign Charts ──────────────────────
 export function generateCampaignTimeSeries(campaign, days = 30, customEndDate = null, customStartDate = null) {
@@ -1670,6 +1853,9 @@ export function generateCampaignTimeSeries(campaign, days = 30, customEndDate = 
       cpa: dayConv > 0 ? Number((daySpend / dayConv).toFixed(2)) : 0,
       ctr: dayImpr > 0 ? Number(((dayClicks / dayImpr) * 100).toFixed(2)) : 0,
       cpc: dayClicks > 0 ? Number((daySpend / dayClicks).toFixed(2)) : 0,
+      aov: dayConv > 0 ? Number((dayRevenue / dayConv).toFixed(2)) : 0,
+      cpm: dayImpr > 0 ? Number(((daySpend / dayImpr) * 1000).toFixed(2)) : 0,
+      conversionRate: dayClicks > 0 ? Number(((dayConv / dayClicks) * 100).toFixed(2)) : 0,
     });
   }
   return series;
@@ -1868,6 +2054,9 @@ export function aggregateTimeSeriesByMonth(dailySeries) {
     const cpa = m.conversions > 0 ? Number((m.spend / m.conversions).toFixed(2)) : 0;
     const cpc = m.clicks > 0 ? Number((m.spend / m.clicks).toFixed(2)) : 0;
     const frequency = m.reach > 0 ? Number((m.impressions / m.reach).toFixed(2)) : 1;
+    const aov = m.conversions > 0 ? Number((m.revenue / m.conversions).toFixed(2)) : 0;
+    const cpm = m.impressions > 0 ? Number(((m.spend / m.impressions) * 1000).toFixed(2)) : 0;
+    const conversionRate = m.clicks > 0 ? Number(((m.conversions / m.clicks) * 100).toFixed(2)) : 0;
 
     result.push({
       ...m,
@@ -1882,6 +2071,9 @@ export function aggregateTimeSeriesByMonth(dailySeries) {
       cpa,
       cpc,
       frequency,
+      aov,
+      cpm,
+      conversionRate,
     });
   }
 

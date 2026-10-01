@@ -29,6 +29,8 @@ builder.Services.AddScoped<IAssignmentRepo, AssignmentRepo>();
 builder.Services.AddScoped<IUserRepo, UserRepo>();
 builder.Services.AddScoped<IRefreshTokenRepo, RefreshTokenRepo>();
 builder.Services.AddScoped<IClientTargetRepo, ClientTargetRepo>();
+builder.Services.AddScoped<IAdDailyMetricsRepo, AdDailyMetricsRepo>();
+builder.Services.AddScoped<ISearchTermRepo, SearchTermRepo>();
 #endregion
 //-----------------------------------Services------------------------------------
 #region Services
@@ -40,6 +42,8 @@ builder.Services.AddScoped<ICampaignService, CampaignService>();
 builder.Services.AddScoped<IPlatformService, PlatformService>();
 builder.Services.AddScoped<IAdSetService, AdSetService>();
 builder.Services.AddScoped<IAdService, AdService>();
+builder.Services.AddScoped<IAdDailyMetricsService, AdDailyMetricsService>();
+builder.Services.AddScoped<ISearchTermService, SearchTermService>();
 builder.Services.AddScoped<IAssociateProfileService, AssociateProfileService>();
 builder.Services.AddScoped<IAssociateTeamService, AssociateTeamService>();
 builder.Services.AddScoped<IAssignmentService, AssignmentService>();

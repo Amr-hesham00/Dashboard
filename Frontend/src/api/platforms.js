@@ -63,3 +63,13 @@ export async function getPlatformStatusesApi() {
   return response.json();
 }
 
+export async function getPlatformCurrenciesApi() {
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/Platform/currencies`);
+    if (response.ok) return await response.json();
+  } catch {
+    // Fall through to default currencies
+  }
+  return ['USD', 'EUR', 'EGP', 'GBP', 'CAD', 'AUD', 'AED', 'SAR'];
+}
+

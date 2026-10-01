@@ -11,7 +11,9 @@ import {
   getClientTargetsApi,
   updateClientTargetsApi,
 } from '../api/clients';
+import { getCampaignsByClientIdApi } from '../api/campaigns';
 import {
+  mockClients,
   availableKPIs,
   defaultPinnedKPIs,
   mockClientKPIs,
@@ -282,18 +284,62 @@ const TABS = [
 
 const DATE_RANGES = ['Last 7 Days', 'Last 30 Days', 'This Month', 'This Year'];
 
+export const TAB_ROUTE_MAP = {
+  meta: 'Meta',
+  tiktok: 'TikTok',
+  google: 'Google',
+  snapchat: 'Snapchat',
+  insights: 'Insights',
+  notes: 'Notes',
+};
+
+export const ROUTE_TAB_MAP = {
+  meta: 'meta',
+  tiktok: 'tiktok',
+  google: 'google',
+  snapchat: 'snapchat',
+  insights: 'insights',
+  notes: 'notes',
+  overview: 'overview',
+};
+
+const CAMPAIGN_STATUSES = ['Draft', 'PendingReview', 'Active', 'Paused', 'Completed', 'Rejected', 'Archived'];
+const getCampaignStatusName = (status) => typeof status === 'number' ? CAMPAIGN_STATUSES[status] || 'Active' : String(status || 'Active');
+
+const CAMPAIGN_OBJECTIVES = ['Awareness', 'Traffic', 'Engagement', 'Leads', 'AppPromotion', 'Sales'];
+const getCampaignObjectiveName = (obj) => typeof obj === 'number' ? CAMPAIGN_OBJECTIVES[obj] || 'Sales' : String(obj || 'Sales');
+
+const mapPlatformTypeToKey = (type, name) => {
+  if (typeof name === 'string') {
+    const lower = name.toLowerCase();
+    if (lower.includes('google')) return 'google';
+    if (lower.includes('facebook') || lower.includes('meta')) return 'meta';
+    if (lower.includes('tiktok')) return 'tiktok';
+    if (lower.includes('snapchat') || lower.includes('snap')) return 'snapchat';
+  }
+  switch (Number(type)) {
+    case 0: return 'google';
+    case 1: return 'meta';
+    case 2: return 'tiktok';
+    case 3: return 'snapchat';
+    default: return 'meta';
+  }
+};
+
 // ════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ════════════════════════════════════════════════════════════════════
 
 export default function ClientDetailsPage() {
-  const { id } = useParams();
+  const { id: paramId, clientId: paramClientId, tab } = useParams();
+  const id = paramClientId || paramId || 'cli-101';
   const navigate = useNavigate();
   const location = useLocation();
 
   // ─── Core Data ──────────────────────────────────────────────────
   const [client, setClient] = useState(null);
   const [manager, setManager] = useState(null);
+  const [realCampaigns, setRealCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -320,14 +366,48 @@ export default function ClientDetailsPage() {
 
   // ─── UI State ───────────────────────────────────────────────────
   const searchTab = new URLSearchParams(location.search).get('tab');
-  const [activeTab, setActiveTab] = useState(() => searchTab || 'overview');
+  const getInitialTab = () => {
+    if (tab) {
+      const lower = tab.toLowerCase();
+      if (ROUTE_TAB_MAP[lower]) return ROUTE_TAB_MAP[lower];
+      if (lower === 'tabs') return 'meta';
+    }
+    if (searchTab && ROUTE_TAB_MAP[searchTab.toLowerCase()]) {
+      return ROUTE_TAB_MAP[searchTab.toLowerCase()];
+    }
+    return 'overview';
+  };
+  const [activeTab, setActiveTab] = useState(getInitialTab);
 
   useEffect(() => {
-    const qTab = new URLSearchParams(location.search).get('tab');
-    if (qTab) {
-      setActiveTab(qTab);
+    if (tab) {
+      const lower = tab.toLowerCase();
+      if (ROUTE_TAB_MAP[lower]) {
+        setActiveTab(ROUTE_TAB_MAP[lower]);
+        return;
+      }
+      if (lower === 'tabs') {
+        setActiveTab('meta');
+        return;
+      }
     }
-  }, [location.search]);
+    const qTab = new URLSearchParams(location.search).get('tab');
+    if (qTab && ROUTE_TAB_MAP[qTab.toLowerCase()]) {
+      setActiveTab(ROUTE_TAB_MAP[qTab.toLowerCase()]);
+    } else if (!tab) {
+      setActiveTab('overview');
+    }
+  }, [tab, location.pathname, location.search]);
+
+  const handleTabChange = (key) => {
+    setActiveTab(key);
+    if (key === 'overview') {
+      navigate(`/clients/${id}`);
+    } else {
+      const routeSegment = TAB_ROUTE_MAP[key] || key;
+      navigate(`/clients/${id}/${routeSegment}`);
+    }
+  };
   const [periodConfig, setPeriodConfig] = useState({
     label: 'Last 30 Days',
     days: 30,
@@ -374,7 +454,14 @@ export default function ClientDetailsPage() {
   // ─── KPI State ──────────────────────────────────────────────────
   const storageKey = `pinnedKPIs_${id}`;
   const [pinnedKPIs, setPinnedKPIs] = useState(() => {
-    try { const saved = localStorage.getItem(storageKey); return saved ? JSON.parse(saved) : defaultPinnedKPIs; } catch { return defaultPinnedKPIs; }
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (!saved) return defaultPinnedKPIs;
+      const parsed = JSON.parse(saved);
+      return parsed.map((k) => (k === 'totalSpend' ? 'spend' : k === 'totalRevenue' ? 'revenue' : k));
+    } catch {
+      return defaultPinnedKPIs;
+    }
   });
   const [showKPISelector, setShowKPISelector] = useState(false);
 
@@ -629,15 +716,18 @@ export default function ClientDetailsPage() {
     try {
       setLoading(true);
       setError('');
-      const [clientData, usersList, statusList, currList, targetsData] = await Promise.all([
-        getClientByIdApi(id),
-        getUsersApi(),
-        getClientStatusesApi(),
-        getClientCurrenciesApi(),
-        getClientTargetsApi(id),
+      const [clientData, usersList, statusList, currList, targetsData, campaignsData] = await Promise.all([
+        getClientByIdApi(id).catch(() => null),
+        getUsersApi().catch(() => []),
+        getClientStatusesApi().catch(() => ['Active', 'Inactive', 'Lead', 'Archived']),
+        getClientCurrenciesApi().catch(() => ['USD', 'EUR', 'GBP']),
+        getClientTargetsApi(id).catch(() => null),
+        getCampaignsByClientIdApi(id).catch(() => []),
       ]);
-      setClient(clientData);
+      const finalClient = clientData || mockClients.find((c) => String(c.id) === String(id) || c.companyId === id) || mockClients[0];
+      setClient(finalClient);
       setUsers(usersList || []);
+      setRealCampaigns(Array.isArray(campaignsData) ? campaignsData : []);
       if (Array.isArray(statusList) && statusList.length) setStatuses(statusList);
       if (Array.isArray(currList) && currList.length) setCurrencies(currList);
       if (targetsData) {
@@ -645,14 +735,17 @@ export default function ClientDetailsPage() {
         setTargetFormData(targetsData);
       }
 
-      const found = usersList?.find((u) => String(u.id) === String(clientData?.managerId));
-      setManager(found || { id: clientData?.managerId || 'usr-001', userName: 'System Admin', email: 'admin@dashboard.com', firstName: 'System', lastName: 'Admin' });
+      const found = usersList?.find((u) => String(u.id) === String(finalClient?.managerId));
+      setManager(found || { id: finalClient?.managerId || 'usr-001', userName: 'System Admin', email: 'admin@dashboard.com', firstName: 'System', lastName: 'Admin' });
 
       // Load notes from mock
       const clientNotes = mockClientNotes.filter((n) => n.clientId === String(id));
       setNotes(clientNotes.length > 0 ? clientNotes : mockClientNotes.filter((n) => n.clientId === 'cli-101'));
     } catch (err) {
-      setError(err.message || 'Failed to load client details.');
+      console.warn('Network issue loading client details, using mock fallback:', err);
+      const fallbackClient = mockClients.find((c) => String(c.id) === String(id) || c.companyId === id) || mockClients[0];
+      setClient(fallbackClient);
+      setError('');
     } finally {
       setLoading(false);
     }
@@ -687,7 +780,46 @@ export default function ClientDetailsPage() {
   useEffect(() => { localStorage.setItem(storageKey, JSON.stringify(pinnedKPIs)); }, [pinnedKPIs, storageKey]);
 
   // ─── Get KPI values & Trend Data for this client ─────────────────
-  const clientKPIs = mockClientKPIs[id] || mockClientKPIs['cli-101'];
+  const clientKPIs = useMemo(() => {
+    // Consume backend-calculated metrics directly from client
+    if (client && (client.spend !== undefined || client.actualROAS !== undefined)) {
+      const sp = Number(client.spend) || 0;
+      const rev = Number(client.revenue) || 0;
+      const clk = Number(client.clicks) || 0;
+      const imp = Number(client.impressions) || 0;
+      const conv = Number(client.conversions) || 0;
+      const ctrVal = Number(client.ctr) || (imp > 0 ? (clk / imp) * 100 : 0);
+      const cpcVal = Number(client.cpc) || (clk > 0 ? sp / clk : 0);
+      const cpmVal = Number(client.cpm) || (imp > 0 ? (sp / imp) * 1000 : 0);
+      const cpaVal = Number(client.cpa) || (conv > 0 ? sp / conv : 0);
+      const convRateVal = Number(client.conversionRate) || (clk > 0 ? (conv / clk) * 100 : 0);
+
+      return {
+        spend: { value: sp, change: 0 },
+        totalSpend: { value: sp, change: 0 },
+        revenue: { value: rev, change: 0 },
+        totalRevenue: { value: rev, change: 0 },
+        roas: { value: Number(client.actualROAS) || 0, change: 0 },
+        impressions: { value: imp, change: 0 },
+        clicks: { value: clk, change: 0 },
+        conversions: { value: conv, change: 0 },
+        ctr: { value: ctrVal, change: 0 },
+        cpc: { value: cpcVal, change: 0 },
+        cpm: { value: cpmVal, change: 0 },
+        cpa: { value: cpaVal, change: 0 },
+        conversionRate: { value: convRateVal, change: 0 },
+      };
+    }
+    // Fallback for mock client IDs
+    const mock = mockClientKPIs[id] || mockClientKPIs['cli-101'];
+    return {
+      ...mock,
+      spend: mock.spend || mock.totalSpend,
+      totalSpend: mock.totalSpend || mock.spend,
+      revenue: mock.revenue || mock.totalRevenue,
+      totalRevenue: mock.totalRevenue || mock.revenue,
+    };
+  }, [client, id]);
 
   // ─── Spend vs Revenue Chart Config ──────────────────────────────
   const isMoreThanMonth = periodConfig.days > 31;
@@ -775,6 +907,9 @@ export default function ClientDetailsPage() {
       categories: chartCategories,
       axisBorder: { show: false },
       axisTicks: { show: false },
+      tooltip: {
+        enabled: false,
+      },
       labels: {
         style: { colors: '#64748b', fontSize: '11px' },
         rotate: isMoreThanMonth ? 0 : -45,
@@ -794,7 +929,9 @@ export default function ClientDetailsPage() {
       },
     },
     tooltip: {
+      theme: 'dark',
       x: {
+        show: true,
         formatter: (val, opts) => {
           const idx = opts?.dataPointIndex;
           const point = chartData[idx];
@@ -817,13 +954,55 @@ export default function ClientDetailsPage() {
   };
 
   // ─── Platform Performance & Campaigns for this specific client ───
-  const clientMultiplier = (clientKPIs?.totalSpend?.value || 45200) / 45200;
-  const clientPlatformPerformance = getClientPlatformPerformance(
+  const mockPlatPerf = getClientPlatformPerformance(
     id,
     client?.companyName || client?.name,
-    client?.category,
-    clientMultiplier
+    client?.category
   );
+
+  const clientPlatformPerformance = useMemo(() => {
+    if (client && Array.isArray(client.platforms) && client.platforms.length > 0) {
+      const platforms = {
+        meta: { label: 'Meta Ads', currency: 'USD', campaigns: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
+        google: { label: 'Google Ads', currency: 'EUR', campaigns: [], searchTerms: mockPlatPerf?.google?.searchTerms || [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
+        tiktok: { label: 'TikTok Ads', currency: 'EGP', campaigns: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
+        snapchat: { label: 'Snapchat Ads', currency: 'SAR', campaigns: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
+      };
+
+      // Direct backend-calculated platform performance
+      client.platforms.forEach((p) => {
+        const pKey = mapPlatformTypeToKey(p.platformType, p.platformName);
+        if (platforms[pKey]) {
+          platforms[pKey].currency = p.currency || client.currency || (pKey === 'google' ? 'EUR' : pKey === 'snapchat' ? 'SAR' : pKey === 'tiktok' ? 'EGP' : 'USD');
+          platforms[pKey].kpis = {
+            spend: Number(p.spend) || 0,
+            revenue: Number(p.revenue) || 0,
+            roas: Number(p.roas) || 0,
+            impressions: Number(p.impressions) || 0,
+            clicks: Number(p.clicks) || 0,
+            ctr: Number(p.ctr) || 0,
+            conversions: Number(p.conversions) || 0,
+            cpa: Number(p.cpa) || 0,
+            cpc: Number(p.cpc) || 0,
+            cpm: Number(p.cpm) || 0,
+          };
+        }
+      });
+
+      // Attach any campaign items to their platform
+      if (Array.isArray(realCampaigns)) {
+        realCampaigns.forEach((c) => {
+          const pKey = mapPlatformTypeToKey(c.platformType, c.platformName);
+          if (platforms[pKey]) {
+            platforms[pKey].campaigns.push(c);
+          }
+        });
+      }
+
+      return platforms;
+    }
+    return mockPlatPerf;
+  }, [client, realCampaigns, mockPlatPerf]);
 
   // ─── ROAS by Platform Chart Config ──────────────────────────────
   const platformKeys = Object.keys(clientPlatformPerformance);
@@ -904,38 +1083,110 @@ export default function ClientDetailsPage() {
   ];
 
   // ─── Platform Comparison Totals ─────────────────────────────────
+  const [platCompSortField, setPlatCompSortField] = useState(null);
+  const [platCompSortDir, setPlatCompSortDir] = useState('desc');
+
+  const handlePlatCompSort = (field) => {
+    if (platCompSortField === field) {
+      setPlatCompSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setPlatCompSortField(field);
+      setPlatCompSortDir('desc');
+    }
+  };
+
+  const renderPlatCompSortTH = (field, label, isLast = false) => {
+    const isActive = platCompSortField === field;
+    return (
+      <th
+        className={`text-body fw-bold user-select-none text-nowrap ${isLast ? 'pe-4' : ''} ${isActive ? 'text-primary' : ''}`}
+        style={{ cursor: 'pointer' }}
+        onClick={() => handlePlatCompSort(field)}
+        title={`Sort by ${label} (${isActive && platCompSortDir === 'desc' ? 'Ascending' : 'Descending'})`}
+      >
+        <div className="d-inline-flex align-items-center gap-1">
+          <span>{label}</span>
+          <span className={`small ${isActive ? 'text-primary fw-bold' : 'text-secondary opacity-50'}`} style={{ fontSize: '0.7rem' }}>
+            {isActive ? (platCompSortDir === 'asc' ? '▲' : '▼') : '↕'}
+          </span>
+        </div>
+      </th>
+    );
+  };
+
   const platformEntries = Object.entries(clientPlatformPerformance);
+  const sortedPlatformEntries = useMemo(() => {
+    if (!platCompSortField) return platformEntries;
+    return [...platformEntries].sort((a, b) => {
+      const platA = a[1]?.kpis || {};
+      const platB = b[1]?.kpis || {};
+      const aVal = Number(platA[platCompSortField]) || 0;
+      const bVal = Number(platB[platCompSortField]) || 0;
+      return platCompSortDir === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+  }, [platformEntries, platCompSortField, platCompSortDir]);
   const connectedPlatformsCount = platformEntries.filter(([k]) => platformsState[k]?.connected !== false).length;
   const disconnectedPlatformsCount = platformEntries.length - connectedPlatformsCount;
 
-  const totalSpend = platformEntries.reduce((sum, [, p]) => sum + (p.kpis.spend || 0), 0);
-  const totalRevenue = platformEntries.reduce((sum, [, p]) => sum + (p.kpis.revenue || 0), 0);
-  const totalImpressions = platformEntries.reduce((sum, [, p]) => sum + (p.kpis.impressions || 0), 0);
-  const totalClicks = platformEntries.reduce((sum, [, p]) => sum + (p.kpis.clicks || 0), 0);
-  const totalConversions = platformEntries.reduce((sum, [, p]) => sum + (p.kpis.conversions || 0), 0);
+  const totalSpend = Number(client?.spend) || 0;
+  const totalRevenue = Number(client?.revenue) || 0;
+  const totalImpressions = Number(client?.impressions) || 0;
+  const totalClicks = Number(client?.clicks) || 0;
+  const totalConversions = Number(client?.conversions) || 0;
 
-  const totalRoas = totalSpend > 0 ? (totalRevenue / totalSpend) : 0;
-  const totalCtr = totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100) : 0;
-  const totalCpa = totalConversions > 0 ? (totalSpend / totalConversions) : 0;
+  const totalRoas = Number(client?.actualROAS) || 0;
+  const totalCtr = Number(client?.ctr) || 0;
+  const totalCpa = Number(client?.cpa) || 0;
 
   // ─── Client's All Campaigns for Overview ────────────────────────────
-  const allOverviewCampaigns = Object.entries(clientPlatformPerformance)
-    .flatMap(([platformKey, platformData]) =>
-      (platformData.campaigns || []).map((camp, idx) => {
-        const defaultObjectives = ['Sales', 'Traffic', 'Awareness', 'Leads', 'Conversions'];
-        const defaultDates = ['01/07/26', '10/07/26', '15/06/26', '22/05/26', '04/04/26', '18/03/26'];
-        const objective = camp.objective || defaultObjectives[idx % defaultObjectives.length];
-        const startDate = camp.startDate || defaultDates[idx % defaultDates.length];
+  const allOverviewCampaigns = useMemo(() => {
+    if (realCampaigns && realCampaigns.length > 0) {
+      return realCampaigns.map((camp) => {
+        const platformKey = mapPlatformTypeToKey(camp.platformType, camp.platformName);
+        const platformLabel = platformKey === 'meta' ? 'Meta Ads' : platformKey === 'google' ? 'Google Ads' : platformKey === 'tiktok' ? 'TikTok Ads' : 'Snapchat Ads';
+        const status = getCampaignStatusName(camp.status);
+        const objective = getCampaignObjectiveName(camp.objective);
+        const startDate = camp.startDate ? new Date(camp.startDate).toLocaleDateString('en-GB') : '01/07/26';
+        const roas = Number(camp.roas) || 0;
 
         return {
           ...camp,
           platformKey,
-          platformLabel: platformData.label,
+          platformLabel,
+          status,
           objective,
           startDate,
+          roas,
+          spend: Number(camp.spend) || 0,
+          revenue: Number(camp.revenue) || 0,
+          impressions: Number(camp.impressions) || 0,
+          clicks: Number(camp.clicks) || 0,
+          conversions: Number(camp.conversions) || 0,
+          ctr: camp.ctr != null ? Number(camp.ctr) : 0,
+          cpc: camp.cpc != null ? Number(camp.cpc) : 0,
+          cpa: camp.cpa != null ? Number(camp.cpa) : 0,
         };
-      })
-    );
+      });
+    }
+
+    return Object.entries(clientPlatformPerformance)
+      .flatMap(([platformKey, platformData]) =>
+        (platformData.campaigns || []).map((camp, idx) => {
+          const defaultObjectives = ['Sales', 'Traffic', 'Awareness', 'Leads', 'Conversions'];
+          const defaultDates = ['01/07/26', '10/07/26', '15/06/26', '22/05/26', '04/04/26', '18/03/26'];
+          const objective = camp.objective || defaultObjectives[idx % defaultObjectives.length];
+          const startDate = camp.startDate || defaultDates[idx % defaultDates.length];
+
+          return {
+            ...camp,
+            platformKey,
+            platformLabel: platformData.label,
+            objective,
+            startDate,
+          };
+        })
+      );
+  }, [realCampaigns, clientPlatformPerformance]);
 
   const filteredOverviewCampaigns = allOverviewCampaigns.filter((c) => {
     const matchPlatform = overviewFilters.platform === 'ALL' || c.platformKey === overviewFilters.platform.toLowerCase();
@@ -979,33 +1230,33 @@ export default function ClientDetailsPage() {
   const visibleCampaigns = sortedOverviewCampaigns;
 
   // ─── Client Goals & Targets Calculations ─────────────────────────
-  const currentRevenue = Number(clientKPIs?.totalRevenue?.value) || 186400;
-  const targetRevenue = Number(targetSettings?.targetRevenue) || 200000;
-  const revenuePct = Math.round((currentRevenue / Math.max(1, targetRevenue)) * 100);
+  const currentRevenue = Number(client?.revenue) || 0;
+  const targetRevenue = Number(targetSettings?.targetRevenue) || 0;
+  const revenuePct = Number(client?.revenueProgress) || 0;
 
-  const currentSpend = Number(clientKPIs?.totalSpend?.value) || Number(totalSpend) || 45200;
-  const targetMonthlyBudget = Number(targetSettings?.monthlyBudget) || 50000;
-  const budgetPct = Math.round((currentSpend / Math.max(1, targetMonthlyBudget)) * 100);
+  const currentSpend = Number(client?.spend) || 0;
+  const targetMonthlyBudget = Number(targetSettings?.monthlyBudget) || 0;
+  const budgetPct = Number(client?.budgetProgress) || 0;
 
-  const currentRoas = Number(clientKPIs?.roas?.value) || 3.78;
-  const targetRoas = Number(targetSettings?.targetRoas) || 4.0;
-  const roasPct = Math.round((currentRoas / Math.max(0.1, targetRoas)) * 100);
+  const currentRoas = Number(client?.actualROAS) || 0;
+  const targetRoas = Number(targetSettings?.targetRoas) || 0;
+  const roasPct = Number(client?.achievedROAS) || 0;
 
-  const currentConversions = Number(clientKPIs?.conversions?.value) || 8420;
-  const targetConversions = Number(targetSettings?.targetConversions) || 9000;
-  const conversionsPct = Math.round((currentConversions / Math.max(1, targetConversions)) * 100);
+  const currentConversions = Number(client?.conversions) || 0;
+  const targetConversions = Number(targetSettings?.targetConversions) || 0;
+  const conversionsPct = Number(client?.conversionsProgress) || 0;
 
-  const currentCpa = Number(clientKPIs?.cpa?.value) || 4.80;
-  const targetCpa = Number(targetSettings?.targetCpa) || 5.50;
-  const cpaPct = Math.round((currentCpa / Math.max(0.01, targetCpa)) * 100);
+  const currentCpa = Number(client?.cpa) || 0;
+  const targetCpa = Number(targetSettings?.targetCpa) || 0;
+  const cpaPct = Number(client?.cpaProgress) || 0;
 
   // ─── Action Handlers ────────────────────────────────────────────
   const handleOpenTargetModal = () => {
-    const budget = Number(targetSettings?.monthlyBudget) || 50000;
-    const roas = Number(targetSettings?.targetRoas) || 4.0;
-    const cpa = Number(targetSettings?.targetCpa) || 5.5;
-    const revenue = targetSettings?.targetRevenue != null ? Number(targetSettings.targetRevenue) : Math.round(budget * roas);
-    const conversions = targetSettings?.targetConversions != null ? Number(targetSettings.targetConversions) : Math.round(budget / Math.max(0.1, cpa));
+    const budget = Number(targetSettings?.monthlyBudget) || 0;
+    const roas = Number(targetSettings?.targetRoas) || 0;
+    const cpa = Number(targetSettings?.targetCpa) || 0;
+    const revenue = Number(targetSettings?.targetRevenue) || 0;
+    const conversions = Number(targetSettings?.targetConversions) || 0;
 
     setTargetFormData({
       businessModel: targetSettings?.businessModel || 'ecommerce',
@@ -1029,12 +1280,12 @@ export default function ClientDetailsPage() {
       const sanitizedTargets = {
         businessModel: targetFormData.businessModel || 'ecommerce',
         mainConversionEvent: targetFormData.mainConversionEvent || 'Purchases',
-        monthlyBudget: Number(targetFormData.monthlyBudget) || 50000,
+        monthlyBudget: Number(targetFormData.monthlyBudget) || 0,
         currency: targetFormData.currency || 'USD',
-        targetRoas: Number(targetFormData.targetRoas) || 4.0,
-        targetCpa: Number(targetFormData.targetCpa) || 5.5,
-        targetRevenue: Number(targetFormData.targetRevenue) || Math.round((Number(targetFormData.monthlyBudget) || 50000) * (Number(targetFormData.targetRoas) || 4.0)),
-        targetConversions: Number(targetFormData.targetConversions) || Math.round((Number(targetFormData.monthlyBudget) || 50000) / Math.max(0.1, Number(targetFormData.targetCpa) || 5.5)),
+        targetRoas: Number(targetFormData.targetRoas) || 0,
+        targetCpa: Number(targetFormData.targetCpa) || 0,
+        targetRevenue: Number(targetFormData.targetRevenue) || 0,
+        targetConversions: Number(targetFormData.targetConversions) || 0,
       };
       const updated = await updateClientTargetsApi(id, sanitizedTargets);
       setTargetSettings(updated || sanitizedTargets);
@@ -1336,12 +1587,28 @@ export default function ClientDetailsPage() {
                   Clients
                 </Link>
               </li>
-              <li
-                className="breadcrumb-item active text-success fw-semibold"
-                aria-current="page"
-              >
-                {dynamicClientName}
-              </li>
+              {activeTab === 'overview' ? (
+                <li
+                  className="breadcrumb-item active text-success fw-semibold"
+                  aria-current="page"
+                >
+                  {dynamicClientName}
+                </li>
+              ) : (
+                <>
+                  <li className="breadcrumb-item">
+                    <Link to={`/clients/${id}`} className="text-decoration-none fw-semibold text-secondary hover-primary">
+                      {dynamicClientName}
+                    </Link>
+                  </li>
+                  <li
+                    className="breadcrumb-item active text-success fw-semibold"
+                    aria-current="page"
+                  >
+                    {TABS.find((t) => t.key === activeTab)?.label || activeTab}
+                  </li>
+                </>
+              )}
             </ol>
           </nav>
 
@@ -1682,7 +1949,7 @@ export default function ClientDetailsPage() {
                     className={`btn btn-link text-decoration-none rounded-0 tab-btn d-inline-flex align-items-center gap-2 ${activeTab === tab.key ? 'active' : 'text-secondary'}`}
                     onClick={() => {
                       if (!hasMovedDragRef.current && !isDraggingTabs) {
-                        setActiveTab(tab.key);
+                        handleTabChange(tab.key);
                       }
                     }}
                     style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
@@ -1764,12 +2031,12 @@ export default function ClientDetailsPage() {
 
               <div className="kpi-grid-5">
                 {pinnedKPIs.slice(0, 5).map((key) => {
-                  const kpiDef = availableKPIs.find((k) => k.key === key);
-                  const kpiData = clientKPIs[key];
+                  const kpiDef = availableKPIs.find((k) => k.key === key || (key === 'spend' && k.key === 'totalSpend') || (key === 'revenue' && k.key === 'totalRevenue'));
+                  const kpiData = clientKPIs[key] || (key === 'spend' ? clientKPIs.totalSpend : key === 'revenue' ? clientKPIs.totalRevenue : null);
                   if (!kpiDef || !kpiData) return null;
                   const isPositive = kpiData.change >= 0;
                   // For cost KPIs, decrease is good
-                  const isCostKPI = ['cpc', 'cpm', 'cpa', 'totalSpend'].includes(key);
+                  const isCostKPI = ['cpc', 'cpm', 'cpa', 'spend', 'totalSpend'].includes(key);
                   const isGood = isCostKPI ? !isPositive : isPositive;
 
                   return (
@@ -1920,18 +2187,18 @@ export default function ClientDetailsPage() {
                     <thead className="table-light bg-body-tertiary">
                       <tr>
                         <th className="ps-4 text-body fw-bold">Platform</th>
-                        <th className="text-body fw-bold">Spend</th>
-                        <th className="text-body fw-bold">Revenue</th>
-                        <th className="text-body fw-bold">ROAS</th>
-                        <th className="text-body fw-bold">Impressions</th>
-                        <th className="text-body fw-bold">Clicks</th>
-                        <th className="text-body fw-bold">CTR</th>
-                        <th className="text-body fw-bold">Conversions</th>
-                        <th className="pe-4 text-body fw-bold">CPA</th>
+                        {renderPlatCompSortTH('spend', 'Spend')}
+                        {renderPlatCompSortTH('revenue', 'Revenue')}
+                        {renderPlatCompSortTH('roas', 'ROAS')}
+                        {renderPlatCompSortTH('impressions', 'Impressions')}
+                        {renderPlatCompSortTH('clicks', 'Clicks')}
+                        {renderPlatCompSortTH('ctr', 'CTR')}
+                        {renderPlatCompSortTH('conversions', 'Conversions')}
+                        {renderPlatCompSortTH('cpa', 'CPA', true)}
                       </tr>
                     </thead>
                     <tbody>
-                      {platformEntries.map(([key, plat]) => {
+                      {sortedPlatformEntries.map(([key, plat]) => {
                         const isConnected = platformsState[key]?.connected !== false;
                         const isRef = !!platformRefreshing[key];
                         return (
@@ -1939,7 +2206,7 @@ export default function ClientDetailsPage() {
                             key={key}
                             className={`platform-row ${!isConnected ? 'table-light-subtle opacity-75' : ''}`}
                             style={{ cursor: 'pointer' }}
-                            onClick={() => setActiveTab(key)}
+                            onClick={() => handleTabChange(key)}
                             title={`Click to view detailed ${plat.label} tab${!isConnected ? ' (Disconnected)' : ''}`}
                           >
                             <td className="ps-4">
@@ -2397,7 +2664,7 @@ export default function ClientDetailsPage() {
                               key={camp.id}
                               className="platform-row cursor-pointer"
                               style={{ cursor: 'pointer' }}
-                              onClick={() => navigate(`/clients/${id}/campaigns/${camp.id}`)}
+                              onClick={() => navigate(`/Campaigns/${camp.id}`, { state: { clientId: id } })}
                               title={`Click to view ${camp.name} details`}
                             >
                               {/* 1. Campaign Name */}
@@ -2512,7 +2779,7 @@ export default function ClientDetailsPage() {
             dateRange={dateRange}
             clientName={client?.companyName}
             clientId={id}
-            clientMultiplier={(clientKPIs?.totalSpend?.value || 45200) / 45200}
+            clientMultiplier={1}
           />
         )}
 
@@ -3102,6 +3369,9 @@ export default function ClientDetailsPage() {
 
 function PlatformTabContent({ platform, platformKey, connectionState, onReconnect, onRefresh, isRefreshing, dateRange, clientName, clientId, clientMultiplier = 1 }) {
   const navigate = useNavigate();
+  const [platCampSortField, setPlatCampSortField] = useState('spend');
+  const [platCampSortDir, setPlatCampSortDir] = useState('desc');
+
   if (!platform) return <div className="text-center py-5 text-secondary">No data available for this platform.</div>;
 
   const isConnected = connectionState?.connected !== false;
@@ -3111,34 +3381,93 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
   const isGoogle = platformKey === 'google';
   const isMeta = platformKey === 'meta';
 
-  // Client-scaled platform metrics (specific to this client and platform only)
-  const kpis = {
-    spend: Math.round((rawKpis.spend || 0) * clientMultiplier),
-    conversions: Math.round((rawKpis.conversions || 0) * clientMultiplier),
-    clicks: Math.round((rawKpis.clicks || 0) * clientMultiplier),
-    impressions: Math.round((rawKpis.impressions || 0) * clientMultiplier),
-    roas: rawKpis.roas || 0,
-    cpa: rawKpis.cpa || 0,
-    ctr: rawKpis.ctr || 0,
-    videoViews: rawKpis.videoViews ? Math.round(rawKpis.videoViews * clientMultiplier) : undefined,
-    engagementRate: rawKpis.engagementRate,
-    swipeUps: rawKpis.swipeUps ? Math.round(rawKpis.swipeUps * clientMultiplier) : undefined,
-    storyViews: rawKpis.storyViews ? Math.round(rawKpis.storyViews * clientMultiplier) : undefined,
-    avgQualityScore: rawKpis.avgQualityScore,
-    searchImprShare: rawKpis.searchImprShare,
+  const handlePlatCampSort = (field) => {
+    if (platCampSortField === field) {
+      setPlatCampSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setPlatCampSortField(field);
+      setPlatCampSortDir('desc');
+    }
   };
 
-  // Platform-specific default pinned KPIs
+  const sortedPlatformCampaigns = [...(platform.campaigns || [])].sort((a, b) => {
+    if (!platCampSortField) return 0;
+    const getVal = (item, f) => {
+      if (f === 'spend') return Number(item.spend) || 0;
+      if (f === 'revenue') return Number(item.revenue) || 0;
+      if (f === 'roas') {
+        if (item.roas !== undefined && item.roas !== null) return Number(item.roas) || 0;
+        const sp = Number(item.spend) || 0;
+        const rev = Number(item.revenue) || 0;
+        return sp > 0 ? rev / sp : 0;
+      }
+      if (f === 'startDate') {
+        const d = item.startDate ? new Date(item.startDate).getTime() : 0;
+        return isNaN(d) ? 0 : d;
+      }
+      return Number(item[f]) || 0;
+    };
+    const aVal = getVal(a, platCampSortField);
+    const bVal = getVal(b, platCampSortField);
+    return platCampSortDir === 'asc' ? aVal - bVal : bVal - aVal;
+  });
+
+  const renderPlatCampSortTH = (field, label, align = 'start', width, extraClass = '') => {
+    const isActive = platCampSortField === field;
+    return (
+      <th
+        className={`text-body fw-bold user-select-none text-nowrap ${align === 'center' ? 'text-center' : align === 'end' ? 'text-end' : ''} ${extraClass} ${isActive ? 'text-primary' : ''}`}
+        style={{ cursor: 'pointer', width }}
+        onClick={() => handlePlatCampSort(field)}
+        title={`Sort by ${label} (${isActive && platCampSortDir === 'desc' ? 'Ascending' : 'Descending'})`}
+      >
+        <div className={`d-inline-flex align-items-center gap-1 ${align === 'center' ? 'justify-content-center' : align === 'end' ? 'justify-content-end' : ''}`}>
+          <span>{label}</span>
+          <span className={`small ${isActive ? 'text-primary fw-bold' : 'text-secondary opacity-50'}`} style={{ fontSize: '0.7rem' }}>
+            {isActive ? (platCampSortDir === 'asc' ? '▲' : '▼') : '↕'}
+          </span>
+        </div>
+      </th>
+    );
+  };
+
+  // Platform metrics (direct from backend / platform object with reliable fallbacks)
+  const spendVal = Number(rawKpis.spend) || 0;
+  const conversionsVal = Number(rawKpis.conversions) || 0;
+  const clicksVal = Number(rawKpis.clicks) || 0;
+  const impressionsVal = Number(rawKpis.impressions) || 0;
+  const roasVal = Number(rawKpis.roas) || 0;
+  const revenueVal = Number(rawKpis.revenue) || (spendVal && roasVal ? spendVal * roasVal : 0);
+  const ctrVal = Number(rawKpis.ctr) || (impressionsVal > 0 ? (clicksVal / impressionsVal) * 100 : 0);
+  const cpcVal = Number(rawKpis.cpc) || (clicksVal > 0 ? spendVal / clicksVal : 0);
+  const cpmVal = Number(rawKpis.cpm) || (impressionsVal > 0 ? (spendVal / impressionsVal) * 1000 : 0);
+  const cpaVal = Number(rawKpis.cpa) || (conversionsVal > 0 ? spendVal / conversionsVal : 0);
+  const conversionRateVal = Number(rawKpis.conversionRate) || (clicksVal > 0 ? (conversionsVal / clicksVal) * 100 : 0);
+
+  const kpis = {
+    spend: spendVal,
+    revenue: revenueVal,
+    roas: roasVal,
+    ctr: ctrVal,
+    cpc: cpcVal,
+    cpm: cpmVal,
+    impressions: impressionsVal,
+    clicks: clicksVal,
+    conversions: conversionsVal,
+    cpa: cpaVal,
+    conversionRate: conversionRateVal,
+  };
+
+  // Fixed default pinned KPIs for any platform
   const defaultPinnedMap = {
-    meta: ['spend', 'roas', 'conversions', 'cpa', 'ctr'],
-    google: ['spend', 'roas', 'conversions', 'searchImprShare', 'avgQualityScore'],
-    tiktok: ['spend', 'videoViews', 'engagementRate', 'conversions', 'roas'],
-    snapchat: ['spend', 'swipeUps', 'storyViews', 'conversions', 'roas'],
+    meta: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
+    google: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
+    tiktok: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
+    snapchat: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
   };
 
   const [showKPISelector, setShowKPISelector] = useState(false);
-  const [pinnedKPIs, setPinnedKPIs] = useState(defaultPinnedMap[platformKey] || ['spend', 'roas', 'conversions', 'cpa', 'ctr']);
-  const [searchTermQuery, setSearchTermQuery] = useState('');
+  const [pinnedKPIs, setPinnedKPIs] = useState(defaultPinnedMap[platformKey] || ['spend', 'revenue', 'roas', 'ctr', 'conversions']);
 
   // Click outside handler for platform KPI selector dropdown
   useEffect(() => {
@@ -3151,53 +3480,28 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
     return () => document.removeEventListener('click', handleOutsideClick);
   }, [showKPISelector]);
 
-  // Strictly platform-specific metrics (No cross-channel totals or overall revenue)
-  let availablePlatformKPIs = [];
-  if (isMeta) {
-    availablePlatformKPIs = [
-      { key: 'spend', label: 'Meta Ad Spend', format: 'currency', color: 'danger', change: 6.4 },
-      { key: 'roas', label: 'Meta ROAS', format: 'multiplier', color: 'primary', change: 3.8 },
-      { key: 'conversions', label: 'Meta Purchases / Results', format: 'number', color: 'success', change: 14.2 },
-      { key: 'cpa', label: 'Cost per Result (CPA)', format: 'currency', color: 'warning', change: -4.1 },
-      { key: 'ctr', label: 'Link CTR', format: 'percent', color: 'info', change: 8.5 },
-      { key: 'clicks', label: 'Meta Link Clicks', format: 'number', color: 'primary', change: 12.0 },
-      { key: 'impressions', label: 'Meta Impressions', format: 'number', color: 'info', change: 9.3 },
-    ];
-  } else if (isGoogle) {
-    availablePlatformKPIs = [
-      { key: 'spend', label: 'Google Ad Spend', format: 'currency', color: 'danger', change: 5.1 },
-      { key: 'roas', label: 'Search & Shopping ROAS', format: 'multiplier', color: 'primary', change: 7.2 },
-      { key: 'conversions', label: 'Google Conversions', format: 'number', color: 'success', change: 11.8 },
-      { key: 'searchImprShare', label: 'Search Impr. Share', format: 'percent', color: 'info', change: 3.4 },
-      { key: 'avgQualityScore', label: 'Avg Quality Score', format: 'score', color: 'primary', change: 4.0 },
-      { key: 'cpa', label: 'Cost per Conv. (CPA)', format: 'currency', color: 'warning', change: -6.2 },
-      { key: 'ctr', label: 'Google Search CTR', format: 'percent', color: 'info', change: 5.8 },
-      { key: 'clicks', label: 'Search Ad Clicks', format: 'number', color: 'primary', change: 10.4 },
-      { key: 'impressions', label: 'Search Impressions', format: 'number', color: 'info', change: 8.1 },
-    ];
-  } else if (isTikTok) {
-    availablePlatformKPIs = [
-      { key: 'spend', label: 'TikTok Ad Spend', format: 'currency', color: 'danger', change: 12.8 },
-      { key: 'videoViews', label: 'TikTok Video Views', format: 'millions', color: 'danger', change: 22.4 },
-      { key: 'engagementRate', label: 'Video Engagement Rate', format: 'percent', color: 'success', change: 1.2 },
-      { key: 'conversions', label: 'TikTok Purchases / Conv.', format: 'number', color: 'success', change: 18.5 },
-      { key: 'roas', label: 'TikTok ROAS', format: 'multiplier', color: 'primary', change: 4.0 },
-      { key: 'cpa', label: 'Cost per Acquisition', format: 'currency', color: 'warning', change: -7.4 },
-      { key: 'clicks', label: 'TikTok Ad Clicks', format: 'number', color: 'primary', change: 15.2 },
-      { key: 'ctr', label: 'TikTok Ad CTR', format: 'percent', color: 'info', change: 6.1 },
-    ];
-  } else if (isSnapchat) {
-    availablePlatformKPIs = [
-      { key: 'spend', label: 'Snapchat Ad Spend', format: 'currency', color: 'danger', change: 4.2 },
-      { key: 'swipeUps', label: 'Direct Swipe-Ups', format: 'number', color: 'warning', change: 16.1 },
-      { key: 'storyViews', label: 'Story & Lens Views', format: 'millions', color: 'info', change: 18.7 },
-      { key: 'conversions', label: 'Snapchat Conversions', format: 'number', color: 'success', change: 9.4 },
-      { key: 'roas', label: 'Snapchat ROAS', format: 'multiplier', color: 'primary', change: 2.1 },
-      { key: 'cpa', label: 'Cost per Swipe/Conv', format: 'currency', color: 'warning', change: -5.0 },
-      { key: 'clicks', label: 'Snapchat Clicks', format: 'number', color: 'primary', change: 8.6 },
-      { key: 'ctr', label: 'Swipe-Up Rate (CTR)', format: 'percent', color: 'info', change: 4.3 },
-    ];
-  }
+  // Fixed KPI metrics across any platform tab: Spend, Revenue, ROAS, CTR, CPC, CPM, Impressions, Clicks, Conversions, CPA, Conversion Rate
+  const platformKpiChanges = {
+    meta: { spend: 6.4, revenue: 8.2, roas: 3.8, ctr: 8.5, cpc: -4.5, cpm: -2.8, impressions: 9.3, clicks: 12.0, conversions: 14.2, cpa: -4.1, conversionRate: 5.2 },
+    google: { spend: 5.1, revenue: 9.4, roas: 7.2, ctr: 5.8, cpc: -3.2, cpm: -1.9, impressions: 8.1, clicks: 10.4, conversions: 11.8, cpa: -6.2, conversionRate: 4.8 },
+    tiktok: { spend: 12.8, revenue: 15.6, roas: 4.0, ctr: 6.1, cpc: -5.1, cpm: -3.4, impressions: 18.2, clicks: 15.2, conversions: 18.5, cpa: -7.4, conversionRate: 6.0 },
+    snapchat: { spend: 4.2, revenue: 6.8, roas: 2.1, ctr: 4.3, cpc: -2.8, cpm: -1.5, impressions: 14.5, clicks: 8.6, conversions: 9.4, cpa: -5.0, conversionRate: 3.7 },
+  };
+
+  const changes = platformKpiChanges[platformKey] || platformKpiChanges.meta;
+  const availablePlatformKPIs = [
+    { key: 'spend', label: 'Spend', format: 'currency', color: 'danger', change: changes.spend ?? 5.0 },
+    { key: 'revenue', label: 'Revenue', format: 'currency', color: 'success', change: changes.revenue ?? 7.5 },
+    { key: 'roas', label: 'ROAS', format: 'multiplier', color: 'primary', change: changes.roas ?? 3.5 },
+    { key: 'ctr', label: 'CTR', format: 'percent', color: 'info', change: changes.ctr ?? 5.5 },
+    { key: 'cpc', label: 'CPC', format: 'currency', color: 'warning', change: changes.cpc ?? -4.0 },
+    { key: 'cpm', label: 'CPM', format: 'currency', color: 'secondary', change: changes.cpm ?? -2.5 },
+    { key: 'impressions', label: 'Impressions', format: 'number', color: 'info', change: changes.impressions ?? 8.5 },
+    { key: 'clicks', label: 'Clicks', format: 'number', color: 'primary', change: changes.clicks ?? 10.0 },
+    { key: 'conversions', label: 'Conversions', format: 'number', color: 'success', change: changes.conversions ?? 12.0 },
+    { key: 'cpa', label: 'CPA', format: 'currency', color: 'warning', change: changes.cpa ?? -5.0 },
+    { key: 'conversionRate', label: 'Conversion Rate', format: 'percent', color: 'success', change: changes.conversionRate ?? 4.5 },
+  ];
 
   const toggleKPI = (key) => {
     setPinnedKPIs((prev) => {
@@ -3207,10 +3511,13 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
     });
   };
 
+  const platformCurrency = platform.currency || (platformKey === 'google' ? 'EUR' : platformKey === 'snapchat' ? 'SAR' : platformKey === 'tiktok' ? 'EGP' : 'USD');
+  const currSymbol = getCurrencySymbol(platformCurrency);
+
   const formatValue = (val, format) => {
     if (val === undefined || val === null) return '—';
     switch (format) {
-      case 'currency': return `$${Number(val).toLocaleString(undefined, { minimumFractionDigits: val % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })}`;
+      case 'currency': return `${currSymbol}${Number(val).toLocaleString(undefined, { minimumFractionDigits: val % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })}`;
       case 'multiplier': return `${Number(val).toFixed(2)}x`;
       case 'percent': return `${Number(val).toFixed(2)}%`;
       case 'score': return `${Number(val).toFixed(1)} / 10`;
@@ -3277,6 +3584,10 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
                 <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
               </svg>
               <span>Last synced: <strong className="text-body-emphasis">{connectionState?.lastSync || 'Just now'}</strong></span>
+            </span>
+            <span className="text-body-tertiary opacity-75 d-none d-sm-inline">&bull;</span>
+            <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1 small d-inline-flex align-items-center gap-1.5 shadow-2xs">
+              <span>Currency: <strong className="text-primary-emphasis">{getCurrencyName(platformCurrency)} ({currSymbol.trim()})</strong></span>
             </span>
           </div>
           <div className="d-flex align-items-center gap-2 no-print">
@@ -3400,126 +3711,118 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
             <table className="table align-middle text-nowrap mb-0 table-hover">
               <thead className="table-light bg-body-tertiary">
                 <tr>
-                  <th className="ps-4 text-body fw-bold">Campaign</th>
-                  <th className="text-body fw-bold">Status</th>
-                  <th className="text-body fw-bold">Spend</th>
-                  <th className="text-body fw-bold">Revenue</th>
-                  <th className="text-body fw-bold">ROAS</th>
-                  <th className="text-body fw-bold">Impressions</th>
-                  <th className="text-body fw-bold">Clicks</th>
-                  <th className="text-body fw-bold">CTR</th>
-                  <th className="pe-4 text-end text-body fw-bold">Conversions</th>
+                  <th className="ps-4 text-body fw-bold" style={{ minWidth: 180, maxWidth: 260 }}>Campaign</th>
+                  <th className="text-body fw-bold" style={{ width: 100 }}>Status</th>
+                  <th className="text-body fw-bold" style={{ width: 110 }}>Objective</th>
+                  {renderPlatCampSortTH('spend', 'Spend', 'start', 110)}
+                  {renderPlatCampSortTH('revenue', 'Revenue', 'start', 110)}
+                  {renderPlatCampSortTH('roas', 'ROAS', 'start', 90)}
+                  {renderPlatCampSortTH('startDate', 'Start Date', 'center', 110, 'pe-4')}
                 </tr>
               </thead>
               <tbody>
-                {platform.campaigns.map((camp) => (
-                  <tr
-                    key={camp.id}
-                    className="cursor-pointer"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/clients/${clientId}/campaigns/${camp.id}`)}
-                    title={`Click to view ${camp.name} details`}
-                  >
-                    <td className="ps-4 fw-bold text-primary" style={{ fontSize: '0.92rem', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {camp.name}
+                {sortedPlatformCampaigns.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="text-center py-4 text-secondary">
+                      No campaigns found for this platform.
                     </td>
-                    <td><span className={`badge ${camp.status === 'Active' ? 'bg-success-subtle text-success border border-success-subtle' : camp.status === 'Paused' ? 'bg-warning-subtle text-warning border border-warning-subtle' : 'bg-secondary-subtle text-secondary border border-secondary-subtle'} fw-bold`}>{camp.status}</span></td>
-                    <td className="fw-bold text-danger text-nowrap">${camp.spend.toLocaleString()}</td>
-                    <td className="text-success fw-bold">${camp.revenue.toLocaleString()}</td>
-                    <td><span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold px-2 py-1">{camp.roas.toFixed(1)}x</span></td>
-                    <td className="text-body fw-medium">{(camp.impressions / 1000).toFixed(0)}K</td>
-                    <td className="text-body fw-medium">{(camp.clicks / 1000).toFixed(1)}K</td>
-                    <td className="text-body fw-semibold">{camp.ctr.toFixed(2)}%</td>
-                    <td className="pe-4 text-end text-body-emphasis fw-bold">{camp.conversions.toLocaleString()}</td>
                   </tr>
-                ))}
+                ) : (
+                  sortedPlatformCampaigns.map((camp, idx) => {
+                    const defaultObjectives = ['Sales', 'Traffic', 'Awareness', 'Leads', 'Conversions'];
+                    const defaultDates = ['01/07/26', '10/07/26', '15/06/26', '22/05/26', '04/04/26', '18/03/26'];
+
+                    const statusName = typeof camp.status === 'number'
+                      ? (getCampaignStatusName(camp.status) || 'Active')
+                      : (camp.status || 'Active');
+
+                    const statusBadge =
+                      statusName === 'Active'
+                        ? 'bg-success-subtle text-success-emphasis border-success-subtle'
+                        : statusName === 'Paused'
+                          ? 'bg-warning-subtle text-warning-emphasis border-warning-subtle'
+                          : 'bg-secondary-subtle text-secondary-emphasis border-secondary-subtle';
+
+                    const objectiveName = typeof camp.objective === 'number'
+                      ? (getCampaignObjectiveName(camp.objective) || 'Conversions')
+                      : (camp.objective || defaultObjectives[idx % defaultObjectives.length]);
+
+                    const startDateDisplay = camp.startDate
+                      ? (new Date(camp.startDate).toLocaleDateString('en-GB') !== 'Invalid Date'
+                          ? new Date(camp.startDate).toLocaleDateString('en-GB')
+                          : camp.startDate)
+                      : defaultDates[idx % defaultDates.length];
+
+                    const roasVal = Number(camp.roas || 0);
+
+                    return (
+                      <tr
+                        key={camp.id || idx}
+                        className="cursor-pointer"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => navigate(`/Campaigns/${camp.id}`, { state: { clientId } })}
+                        title={`Click to view ${camp.name} details`}
+                      >
+                        {/* 1. Campaign Name */}
+                        <td className="ps-4" style={{ maxWidth: 260 }}>
+                          <span
+                            className="fw-bold text-primary text-truncate d-block"
+                            style={{
+                              fontSize: '0.88rem',
+                              letterSpacing: '-0.01em',
+                              maxWidth: 240,
+                            }}
+                            title={camp.name}
+                          >
+                            {camp.name}
+                          </span>
+                        </td>
+
+                        {/* 2. Status */}
+                        <td>
+                          <span className={`badge rounded-pill border px-2 py-0.5 fw-semibold d-inline-flex align-items-center gap-1 ${statusBadge}`} style={{ fontSize: '0.72rem' }}>
+                            <span className={`d-inline-block rounded-circle ${statusName === 'Active' ? 'bg-success' : statusName === 'Paused' ? 'bg-warning' : 'bg-secondary'}`} style={{ width: 5, height: 5 }}></span>
+                            {statusName}
+                          </span>
+                        </td>
+
+                        {/* 3. Objective */}
+                        <td>
+                          <span className="badge bg-body-tertiary text-body border fw-semibold px-2.5 py-1" style={{ fontSize: '0.74rem' }}>
+                            {objectiveName}
+                          </span>
+                        </td>
+
+                        {/* 4. Spend */}
+                        <td className="fw-bold text-danger text-nowrap" style={{ fontSize: '0.92rem' }}>
+                          {currSymbol}{Number(camp.spend || 0).toLocaleString()}
+                        </td>
+
+                        {/* 5. Revenue */}
+                        <td className="fw-bold text-success text-nowrap" style={{ fontSize: '0.92rem' }}>
+                          {currSymbol}{Number(camp.revenue || 0).toLocaleString()}
+                        </td>
+
+                        {/* 6. ROAS */}
+                        <td className="text-nowrap">
+                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold px-2.5 py-1 fs-6">
+                            {roasVal.toFixed(1)}x
+                          </span>
+                        </td>
+
+                        {/* 7. Start Date */}
+                        <td className="text-center fw-medium text-body-secondary text-nowrap pe-4" style={{ fontSize: '0.85rem' }}>
+                          {startDateDisplay}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </div>
       </div>
-
-      {/* Search Terms Analysis (Google Ads) */}
-      {(isGoogle || platform.searchTerms) && (
-        <div className="card border-0 shadow-sm rounded-3 mt-4">
-          <div className="card-header bg-transparent border-bottom p-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div className="d-flex align-items-center gap-2">
-              <h6 className="mb-0 fw-bold">Search Terms Analysis</h6>
-              <span className="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle fw-semibold">
-                {(platform.searchTerms || []).length} keywords
-              </span>
-            </div>
-            <div className="d-flex align-items-center gap-2">
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                placeholder="Search keywords..."
-                value={searchTermQuery}
-                onChange={(e) => setSearchTermQuery(e.target.value)}
-                style={{ maxWidth: 220 }}
-              />
-            </div>
-          </div>
-          <div className="card-body p-0">
-            <div className="table-responsive">
-              <table className="table align-middle text-nowrap mb-0 table-hover">
-                <thead className="table-light bg-body-tertiary">
-                  <tr>
-                    <th className="ps-4 text-body fw-bold">Search Term</th>
-                    <th className="text-body fw-bold">Match Type</th>
-                    <th className="text-body fw-bold">Impressions</th>
-                    <th className="text-body fw-bold">Clicks</th>
-                    <th className="text-body fw-bold">CTR</th>
-                    <th className="text-body fw-bold">Avg CPC</th>
-                    <th className="text-body fw-bold">Conv.</th>
-                    <th className="text-body fw-bold">Conv. Rate</th>
-                    <th className="pe-4 text-end text-body fw-bold">Spend</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(platform.searchTerms || [])
-                    .filter((st) => !searchTermQuery || st.term.toLowerCase().includes(searchTermQuery.toLowerCase()))
-                    .map((st) => {
-                      const scaledImpr = Math.round(st.impressions * clientMultiplier);
-                      const scaledClicks = Math.round(st.clicks * clientMultiplier);
-                      const scaledConv = Math.round(st.conversions * clientMultiplier);
-                      const scaledSpend = st.spend * clientMultiplier;
-                      const ctrVal = scaledImpr > 0 ? (scaledClicks / scaledImpr) * 100 : st.ctr;
-                      const avgCpcVal = scaledClicks > 0 ? scaledSpend / scaledClicks : st.avgCpc;
-                      const convRateVal = scaledClicks > 0 ? (scaledConv / scaledClicks) * 100 : st.convRate;
-
-                      const matchTypeBadge =
-                        st.matchType === 'Exact' ? (
-                          <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold px-2 py-0.5" style={{ fontSize: '0.74rem' }}>Exact</span>
-                        ) : st.matchType === 'Phrase' ? (
-                          <span className="badge bg-info-subtle text-info border border-info-subtle fw-semibold px-2 py-0.5" style={{ fontSize: '0.74rem' }}>Phrase</span>
-                        ) : (
-                          <span className="badge bg-secondary-subtle text-secondary border border-secondary-subtle fw-semibold px-2 py-0.5" style={{ fontSize: '0.74rem' }}>Broad</span>
-                        );
-
-                      return (
-                        <tr key={st.id || st.term}>
-                          <td className="ps-4 fw-bold text-body-emphasis" style={{ fontSize: '0.90rem' }}>
-                            {st.term}
-                          </td>
-                          <td>{matchTypeBadge}</td>
-                          <td className="text-body fw-medium">{scaledImpr.toLocaleString()}</td>
-                          <td className="text-body fw-medium">{scaledClicks.toLocaleString()}</td>
-                          <td className="text-body fw-semibold">{ctrVal.toFixed(2)}%</td>
-                          <td className="text-body fw-semibold">${avgCpcVal.toFixed(2)}</td>
-                          <td className="text-body-emphasis fw-bold">{scaledConv.toLocaleString()}</td>
-                          <td className="text-body fw-semibold">{convRateVal.toFixed(2)}%</td>
-                          <td className="pe-4 text-end text-success fw-bold">${scaledSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

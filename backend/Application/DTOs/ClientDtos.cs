@@ -21,13 +21,25 @@ public class ClientDTO
     public ClientTargetDTO? Target { get; set; }
     public List<PlatformDTO> Platforms { get; set; } = new();
 
-    // Performance & ROAS Target Metrics
+    // Performance & ROAS Target Metrics (Calculated on Backend)
     public decimal Spend { get; set; }
     public decimal Revenue { get; set; }
     public int Conversions { get; set; }
-    public double AchievedROAS { get; set; }
+    public int Impressions { get; set; }
+    public int Clicks { get; set; }
+    public double CTR { get; set; }
+    public double CPC { get; set; }
+    public double CPM { get; set; }
+    public double CPA { get; set; }
     public double ActualROAS { get; set; }
     public double TargetROAS { get; set; }
+    public double AchievedROAS { get; set; }
+
+    // Target Progress Percentages (Calculated on Backend)
+    public double BudgetProgress { get; set; }
+    public double RevenueProgress { get; set; }
+    public double ConversionsProgress { get; set; }
+    public double CPAProgress { get; set; }
 }
 
 public class ManagerClientsDTO : ClientDTO { }

@@ -19,6 +19,7 @@ import ReportsPage from './components/ReportsPage.jsx';
 import TeamPage from './components/TeamPage.jsx';
 import AccountSettingsPage from './components/AccountSettingsPage.jsx';
 import AdminManagementPage from './components/AdminManagementPage.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 const pageModules = import.meta.glob('./content/**/*.html', { query: '?raw', import: 'default', eager: true });
 
@@ -80,7 +81,8 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppBootstrap />
-        <Routes>
+        <ErrorBoundary>
+          <Routes>
           <Route path="/pages/authentication/sign-in" element={<SignInPage />} />
           <Route path="/login" element={<Navigate to="/pages/authentication/sign-in" replace />} />
 
@@ -124,6 +126,27 @@ export default function App() {
             }
           />
 
+          {/* Client Details Overview */}
+          <Route
+            path="/clients/:clientId"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <ClientDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Client Details Tabs (e.g. /clients/:clientId/Meta, /clients/:clientId/TikTok, /clients/:clientId/tabs) */}
+          <Route
+            path="/clients/:clientId/:tab"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <ClientDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Legacy backward compatibility for /clients/:id */}
           <Route
             path="/clients/:id"
             element={
@@ -133,6 +156,43 @@ export default function App() {
             }
           />
 
+          {/* Campaign Detail routes - matching /Campaigns/CampId and /campaigns/:campId */}
+          <Route
+            path="/Campaigns/:campId"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <CampaignDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/campaigns/:campId"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <CampaignDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* AdSet Detail routes - matching /Adsets/AdsetId and /adsets/:adSetId */}
+          <Route
+            path="/Adsets/:adSetId"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <AdSetDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/adsets/:adSetId"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <AdSetDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Backward compatibility for previous nested detail routes */}
           <Route
             path="/clients/:clientId/campaigns/:campaignId"
             element={
@@ -141,7 +201,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/clients/:clientId/campaigns/:campaignId/adsets/:adSetId"
             element={
@@ -168,9 +227,25 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/Campaigns"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <CampaignsPage />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/adsets"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <AdSetsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/Adsets"
             element={
               <ProtectedRoute nonAdminOnly>
                 <AdSetsPage />
@@ -223,7 +298,9 @@ export default function App() {
               route === '/clients' ||
               route === '/platforms' ||
               route === '/campaigns' ||
+              route === '/Campaigns' ||
               route === '/adsets' ||
+              route === '/Adsets' ||
               route === '/insights' ||
               route === '/reports' ||
               route === '/team' ||
@@ -251,6 +328,7 @@ export default function App() {
 
           <Route path="*" element={<Navigate to="/pages/error/404-error" replace />} />
         </Routes>
+        </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   );

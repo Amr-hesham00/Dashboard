@@ -9,6 +9,7 @@ import {
   deletePlatformApi,
   getPlatformTypesApi,
   getPlatformStatusesApi,
+  getPlatformCurrenciesApi,
 } from '../api/platforms';
 
 export default function PlatformsPage() {
@@ -16,6 +17,7 @@ export default function PlatformsPage() {
   const [clients, setClients] = useState([]);
   const [types, setTypes] = useState(['GoogleAds', 'FacebookAds', 'TikTokAds', 'LinkedInAds', 'InstagramAds']);
   const [statuses, setStatuses] = useState(['Active', 'Inactive', 'Pending']);
+  const [currencies, setCurrencies] = useState(['USD', 'EUR', 'EGP', 'GBP', 'CAD', 'AUD', 'AED', 'SAR']);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -32,6 +34,7 @@ export default function PlatformsPage() {
   const [formData, setFormData] = useState({
     platformType: 0,
     status: 0,
+    currency: 0,
     clientId: '',
   });
 
@@ -39,21 +42,43 @@ export default function PlatformsPage() {
   const [platformToDelete, setPlatformToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
+  const getCurrencySymbol = (curr) => {
+    if (!curr && curr !== 0) return '$';
+    const c = typeof curr === 'number' ? (currencies[curr] || 'USD') : String(curr);
+    switch (c.toUpperCase()) {
+      case 'EUR': return '€';
+      case 'GBP': return '£';
+      case 'AED': return 'AED ';
+      case 'SAR': return 'SAR ';
+      case 'CAD': return 'C$';
+      case 'AUD': return 'A$';
+      case 'EGP': return 'EGP ';
+      default: return '$';
+    }
+  };
+
+  const getCurrencyCode = (curr) => {
+    if (typeof curr === 'number') return currencies[curr] || 'USD';
+    return String(curr || 'USD');
+  };
+
   const loadData = async () => {
     try {
       setLoading(true);
       setError('');
-      const [platList, clientList, typeList, statusList] = await Promise.all([
+      const [platList, clientList, typeList, statusList, currencyList] = await Promise.all([
         getPlatformsApi(),
         getClientsApi(),
         getPlatformTypesApi(),
         getPlatformStatusesApi(),
+        getPlatformCurrenciesApi(),
       ]);
 
       setPlatforms(platList || []);
       setClients(clientList || []);
       if (Array.isArray(typeList) && typeList.length) setTypes(typeList);
       if (Array.isArray(statusList) && statusList.length) setStatuses(statusList);
+      if (Array.isArray(currencyList) && currencyList.length) setCurrencies(currencyList);
     } catch (err) {
       setError(err.message || 'Failed to load platforms.');
     } finally {
@@ -70,6 +95,7 @@ export default function PlatformsPage() {
     setFormData({
       platformType: 0,
       status: 0,
+      currency: 0,
       clientId: clients[0]?.id || '',
     });
     setModalError('');
@@ -80,10 +106,12 @@ export default function PlatformsPage() {
     setEditPlatform(plat);
     const typeIdx = typeof plat.platformType === 'number' ? plat.platformType : types.indexOf(plat.platformType);
     const statusIdx = typeof plat.status === 'number' ? plat.status : statuses.indexOf(plat.status);
+    const currIdx = typeof plat.currency === 'number' ? plat.currency : currencies.indexOf(plat.currency);
     
     setFormData({
       platformType: typeIdx >= 0 ? typeIdx : 0,
       status: statusIdx >= 0 ? statusIdx : 0,
+      currency: currIdx >= 0 ? currIdx : 0,
       clientId: plat.clientId || '',
     });
     setModalError('');
@@ -104,6 +132,7 @@ export default function PlatformsPage() {
       const payload = {
         platformType: Number(formData.platformType),
         status: Number(formData.status),
+        currency: Number(formData.currency),
         clientId: Number(formData.clientId),
       };
 
@@ -242,6 +271,7 @@ export default function PlatformsPage() {
                 <tr>
                   <th scope="col" className="ps-4">Client Portfolio</th>
                   <th scope="col">Platform Channel</th>
+                  <th scope="col">Currency</th>
                   <th scope="col">Status</th>
                   <th scope="col">Connected On</th>
                   <th scope="col" className="text-end pe-4">Actions</th>
@@ -250,7 +280,7 @@ export default function PlatformsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-5">
+                    <td colSpan={6} className="text-center py-5">
                       <div className="spinner-border text-primary" role="status">
                         <span className="visually-hidden">Loading...</span>
                       </div>
@@ -258,7 +288,7 @@ export default function PlatformsPage() {
                   </tr>
                 ) : filteredPlatforms.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-5 text-secondary">
+                    <td colSpan={6} className="text-center py-5 text-secondary">
                       No platform connections found.
                     </td>
                   </tr>
@@ -290,6 +320,11 @@ export default function PlatformsPage() {
                         </td>
                         <td>
                           <span className="fw-medium">{typeName}</span>
+                        </td>
+                        <td>
+                          <span className="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle px-2.5 py-1 fw-semibold">
+                            {getCurrencyCode(plat.currency)} ({getCurrencySymbol(plat.currency).trim()})
+                          </span>
                         </td>
                         <td>
                           <span className={badgeClass}>{statusName}</span>
@@ -386,6 +421,24 @@ export default function PlatformsPage() {
                             </option>
                           ))}
                         </select>
+                      </div>
+
+                      <div>
+                        <label className="form-label fw-medium">Platform Currency</label>
+                        <select
+                          className="form-select"
+                          value={formData.currency}
+                          onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                        >
+                          {currencies.map((curr, idx) => (
+                            <option key={curr || idx} value={idx}>
+                              {curr} ({getCurrencySymbol(curr).trim()})
+                            </option>
+                          ))}
+                        </select>
+                        <small className="text-secondary" style={{ fontSize: '0.74rem' }}>
+                          Operating currency used for ad spend, budgets, and billing on this platform.
+                        </small>
                       </div>
 
                       <div>

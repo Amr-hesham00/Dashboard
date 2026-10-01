@@ -1,6 +1,4 @@
-using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces.Services;
-using Dashboard.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dashboard.API.Controllers;
@@ -18,12 +16,23 @@ public class AdController : ControllerBase
     }
 
     /// <summary>
-    /// Get list of all ads.
+    /// Get all ads belonging to a specific client.
     /// </summary>
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
+    /// <param name="clientId">The client ID.</param>
+    [HttpGet("Clients/{clientId:int}")]
+    public async Task<IActionResult> GetByClient(int clientId)
     {
-        var ads = await _adService.GetAllAdsAsync();
+        if (clientId <= 0)
+        {
+            return BadRequest(new { message = "Client ID must be a positive integer." });
+        }
+
+        var ads = await _adService.GetByClientIdAsync(clientId);
+        if (ads == null)
+        {
+            return NotFound(new { message = $"Client with ID '{clientId}' not found." });
+        }
+
         return Ok(ads);
     }
 
@@ -34,52 +43,11 @@ public class AdController : ControllerBase
     public async Task<IActionResult> GetById(int id)
     {
         var ad = await _adService.GetAdByIdAsync(id);
+
         if (ad == null)
-        {
             return NotFound(new { message = $"Ad with ID '{id}' not found." });
-        }
 
         return Ok(ad);
-    }
-
-    /// <summary>
-    /// Create a new ad.
-    /// </summary>
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateAdDTO dto)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-
-        var (success, message, ad) = await _adService.CreateAdAsync(dto);
-        if (!success)
-        {
-            return BadRequest(new { message });
-        }
-
-        return CreatedAtAction(nameof(GetById), new { id = ad!.Id }, ad);
-    }
-
-    /// <summary>
-    /// Update an existing ad's information.
-    /// </summary>
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateAdDTO dto)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-
-        var (success, message) = await _adService.UpdateAdAsync(id, dto);
-        if (!success)
-        {
-            return BadRequest(new { message });
-        }
-
-        return Ok(new { message });
     }
 
     /// <summary>
@@ -97,23 +65,31 @@ public class AdController : ControllerBase
         return Ok(new { message });
     }
 
+    // under process
     /// <summary>
-    /// Get available ad status values.
+    /// Get all ads belonging to a specific ad set.
     /// </summary>
-    [HttpGet("statuses")]
-    public IActionResult GetStatuses()
+    /// <param name="adSetId">The ad set ID.</param>
+    [HttpGet("AdSets/{adSetId:int}")]
+    public async Task<IActionResult> GetByAdSet(int adSetId, DateOnly start, DateOnly end)
     {
-        var statuses = Enum.GetNames(typeof(AdStatus));
-        return Ok(statuses);
+        if (end < start)
+            throw new ArgumentException(
+                "End date must be on or after start date.",
+                nameof(end));
+
+        if (adSetId <= 0)
+        {
+            return BadRequest(new { message = "AdSet ID must be a positive integer." });
+        }
+
+        var ads = await _adService.GetByAdSetIdAsync(adSetId, start, end);
+        if (ads == null)
+        {
+            return NotFound(new { message = $"AdSet with ID '{adSetId}' not found." });
+        }
+        return Ok(ads);
     }
 
-    /// <summary>
-    /// Get available media type values.
-    /// </summary>
-    [HttpGet("media-types")]
-    public IActionResult GetMediaTypes()
-    {
-        var types = Enum.GetNames(typeof(MediaType));
-        return Ok(types);
-    }
+
 }

@@ -8,7 +8,7 @@ public enum PlatformStatus
 public enum PlatformType
 {
     GoogleAds,
-    FacebookAds,
+    MetaAds,
     TikTokAds,
     SnapchatAds,
 }

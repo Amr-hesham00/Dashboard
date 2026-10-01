@@ -15,6 +15,8 @@ public interface IUnitOfWork : IDisposable
     IUserRepo User { get; }
     IRefreshTokenRepo RefreshToken { get; }
     IClientTargetRepo ClientTarget { get; }
+    IAdDailyMetricsRepo AdDailyMetrics { get; }
+    ISearchTermRepo SearchTerm { get; }
 
     Task Complete();
 }

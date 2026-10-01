@@ -437,6 +437,9 @@ export default function CampaignsPage() {
   const kpiImpressions = displayCampaigns.reduce((acc, curr) => acc + (Number(curr.impressions) || 0), 0);
   const kpiClicks = displayCampaigns.reduce((acc, curr) => acc + (Number(curr.clicks) || 0), 0);
   const kpiCtr = kpiImpressions > 0 ? ((kpiClicks / kpiImpressions) * 100).toFixed(2) : '0.00';
+  const kpiAov = kpiConversions > 0 ? (kpiTotalRevenue / kpiConversions).toFixed(2) : '0.00';
+  const kpiCpm = kpiImpressions > 0 ? ((kpiTotalSpend / kpiImpressions) * 1000).toFixed(2) : '0.00';
+  const kpiConversionRate = kpiClicks > 0 ? ((kpiConversions / kpiClicks) * 100).toFixed(2) : '0.00';
   const kpiNetProfit = kpiTotalRevenue - kpiTotalSpend;
 
   const formatKpiNumber = (num) => {
@@ -734,6 +737,18 @@ export default function CampaignsPage() {
                 <div className="d-flex align-items-center gap-1.5">
                   <span className="text-secondary">Avg CTR:</span>
                   <strong className="text-body fw-semibold">{kpiCtr}%</strong>
+                </div>
+                <div className="d-flex align-items-center gap-1.5">
+                  <span className="text-secondary">AOV:</span>
+                  <strong className="text-body fw-semibold">${kpiAov}</strong>
+                </div>
+                <div className="d-flex align-items-center gap-1.5">
+                  <span className="text-secondary">CPM:</span>
+                  <strong className="text-body fw-semibold">${kpiCpm}</strong>
+                </div>
+                <div className="d-flex align-items-center gap-1.5">
+                  <span className="text-secondary">Conv. Rate:</span>
+                  <strong className="text-body fw-semibold">{kpiConversionRate}%</strong>
                 </div>
               </div>
               {hasAnyFilterActive && (
@@ -1339,7 +1354,8 @@ export default function CampaignsPage() {
                           {/* 1. Campaign Name */}
                           <td className="ps-4">
                             <Link
-                              to={`/clients/${clientInfo.id}/campaigns/${camp.id}`}
+                              to={`/Campaigns/${camp.id}`}
+                              state={{ clientId: clientInfo.id }}
                               className="fw-bold text-body-emphasis text-decoration-none hover-primary"
                               style={{
                                 fontSize: '0.92rem',

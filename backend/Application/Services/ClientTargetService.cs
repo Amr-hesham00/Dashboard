@@ -151,8 +151,6 @@ public class ClientTargetService : IClientTargetService
         return new ClientTargetDTO
         {
             Id = target.Id,
-            ClientId = target.ClientId,
-            ClientName = clientName ?? target.Client?.CompanyName,
             TargetROAS = target.TargetROAS,
             TargetCPA = target.TargetCPA,
             MonthlyBudget = target.MonthlyBudget,

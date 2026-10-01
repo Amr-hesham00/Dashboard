@@ -34,12 +34,16 @@ for (const vendorPath of vendorPaths) {
   copyDir(path.join(nodeModules, vendorPath), path.join(vendorRoot, vendorPath));
 }
 
-const tablerCssSrc = path.join(nodeModules, '@tabler', 'icons-webfont', 'dist', 'tabler-icons.min.css');
+const tablerCssSrc = fs.existsSync(path.join(nodeModules, '@tabler', 'icons-webfont', 'dist', 'tabler-icons.min.css'))
+  ? path.join(nodeModules, '@tabler', 'icons-webfont', 'dist', 'tabler-icons.min.css')
+  : path.join(nodeModules, '@tabler', 'icons-webfont', 'tabler-icons.min.css');
 const tablerCssDestDir = path.join(vendorRoot, 'tabler-icons');
 if (fs.existsSync(tablerCssSrc)) {
   fs.mkdirSync(tablerCssDestDir, { recursive: true });
   fs.copyFileSync(tablerCssSrc, path.join(tablerCssDestDir, 'tabler-icons.min.css'));
-  const tablerFontsDir = path.join(nodeModules, '@tabler', 'icons-webfont', 'dist', 'fonts');
+  const tablerFontsDir = fs.existsSync(path.join(nodeModules, '@tabler', 'icons-webfont', 'dist', 'fonts'))
+    ? path.join(nodeModules, '@tabler', 'icons-webfont', 'dist', 'fonts')
+    : path.join(nodeModules, '@tabler', 'icons-webfont', 'fonts');
   if (fs.existsSync(tablerFontsDir)) {
     copyDir(tablerFontsDir, path.join(tablerCssDestDir, 'fonts'));
   }

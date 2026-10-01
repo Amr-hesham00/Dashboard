@@ -1,23 +1,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import ApexCharts from 'apexcharts';
 import DashboardLayout from './DashboardLayout';
 import { getClientByIdApi } from '../api/clients';
 import { getCampaignByIdApi } from '../api/campaigns';
 import { getAdSetByIdApi } from '../api/adsets';
-import { getAdsByAdSetIdApi } from '../api/ads';
+import { getAdsByAdSetIdApi, getAdSetPageDataApi } from '../api/ads';
+import { getSearchTermsByAdSetIdApi } from '../api/searchTerms';
 import {
   resolveClientAndCampaign,
+  resolveAdSetAndCampaignAndClient,
   getCampaignAdSets,
   getAdSetAds,
   availableAdSetKPIs,
   defaultAdSetPinnedKPIs,
   generateAdSetTimeSeries,
   aggregateTimeSeriesByMonth,
+  getAdSetSearchTerms,
 } from '../mock/mockData';
 import metaIcon from '../assets/meta-icon.webp';
 import KpiMetricBadge from './KpiMetricBadge';
 import PeriodSelector from './PeriodSelector';
+import AdDetailsModal from './AdDetailsModal';
 
 // ─── ApexCharts React Wrapper ───────────────────────────────────────
 function ApexChart({ options, series, type, height = 310 }) {
@@ -59,14 +63,29 @@ const IconRefresh = ({ spinning }) => (
 );
 
 // ─── Helpers ────────────────────────────────────────────────────────
-const OBJECTIVES_MAP = { 0: 'Awareness', 1: 'Traffic', 2: 'Engagement', 3: 'Leads', 4: 'Sales' };
 const PLATFORMS_MAP = { 1: 'Meta', 2: 'Google', 3: 'Snapchat', 4: 'TikTok' };
 const PLATFORM_KEYS_MAP = { 1: 'meta', 2: 'google', 3: 'snapchat', 4: 'tiktok' };
 
-function formatKPIValue(value, format) {
+function getCurrencySymbol(currency) {
+  if (!currency) return '$';
+  const c = String(currency).toUpperCase();
+  switch (c) {
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'AED': return 'AED ';
+    case 'SAR': return 'SAR ';
+    case 'CAD': return 'C$';
+    case 'AUD': return 'A$';
+    case 'EGP': return 'EGP ';
+    default: return '$';
+  }
+}
+
+function formatKPIValue(value, format, currency = 'USD') {
   if (value == null) return '—';
+  const sym = getCurrencySymbol(currency);
   switch (format) {
-    case 'currency': return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: value >= 100 ? 0 : 2 });
+    case 'currency': return `${sym}${value >= 100 ? value.toLocaleString('en-US', { maximumFractionDigits: 0 }) : value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     case 'percent': return `${value.toFixed(2)}%`;
     case 'multiplier': return `${value.toFixed(2)}x`;
     case 'number': return value >= 1000000 ? `${(value / 1000000).toFixed(2)}M` : value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toLocaleString();
@@ -101,159 +120,32 @@ const IconCheck = () => (
 // ─── Ad Thumbnail ───────────────────────────────────────────────────
 function AdThumbnail({ src, name, mediaType }) {
   const [error, setError] = useState(false);
-  const isVideo = mediaType === 1 || String(mediaType || '').toLowerCase().includes('video');
+  const isVideo =
+    mediaType === 1 ||
+    String(mediaType || '').toLowerCase().includes('video') ||
+    (typeof src === 'string' && /\.(mp4|webm|ogg|mov)($|\?)/i.test(src));
+  const isVideoFile = typeof src === 'string' && /\.(mp4|webm|ogg|mov)($|\?)/i.test(src);
+
   useEffect(() => { setError(false); }, [src]);
   if (error || !src) {
     return (
       <div className="rounded-2 border bg-body-tertiary d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 44, height: 44 }} title={name}>
-        {isVideo ? (<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-secondary"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>) : (<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-secondary"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>)}
+        {isVideo ? (
+          <i className="ti ti-video text-secondary" style={{ fontSize: 18 }} />
+        ) : (
+          <i className="ti ti-photo text-secondary" style={{ fontSize: 18 }} />
+        )}
       </div>
     );
   }
   return (
-    <div className="position-relative flex-shrink-0" style={{ width: 44, height: 44 }}>
-      <img src={src} alt={name} width={44} height={44} className="rounded-2 border shadow-2xs" style={{ objectFit: 'cover' }} onError={() => setError(true)} />
+    <div className="position-relative flex-shrink-0 rounded-2 overflow-hidden border shadow-2xs" style={{ width: 44, height: 44, background: '#22232f' }}>
+      {isVideoFile ? (
+        <video src={src} muted preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={() => setError(true)} />
+      ) : (
+        <img src={src} alt={name} width={44} height={44} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={() => setError(true)} />
+      )}
       {isVideo && (<span className="position-absolute bottom-0 end-0 bg-dark bg-opacity-75 text-white rounded-circle d-flex align-items-center justify-content-center shadow-sm" style={{ width: 16, height: 16, fontSize: '0.55rem' }} title="Video">▶</span>)}
-    </div>
-  );
-}
-
-// ─── Ad Details Modal ───────────────────────────────────────────────
-function AdDetailsModal({ ad, onClose }) {
-  const [imgError, setImgError] = useState(false);
-  useEffect(() => {
-    const handleKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handleKeyDown);
-    const orig = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { window.removeEventListener('keydown', handleKeyDown); document.body.style.overflow = orig; };
-  }, [onClose]);
-  useEffect(() => { setImgError(false); }, [ad?.mediaURL]);
-
-  if (!ad) return null;
-  const normStatus = normalizeStatus(ad.status);
-  const normMediaType = normalizeMediaType(ad.mediaType);
-  const spend = Number(ad.spend) || 0;
-  const revenue = Number(ad.revenue) || 0;
-  const impressions = Number(ad.impressions) || 0;
-  const clicks = Number(ad.clicks) || 0;
-  const conversions = Number(ad.conversions) || 0;
-  const reach = Number(ad.reach) || impressions;
-  const ctr = Number(ad.ctr) || (impressions > 0 ? (clicks / impressions) * 100 : 0);
-  const cpc = Number(ad.cpc) || (clicks > 0 ? spend / clicks : 0);
-  const cpa = Number(ad.cpa) || (conversions > 0 ? spend / conversions : 0);
-  const roas = Number(ad.roas) || (spend > 0 ? revenue / spend : 0);
-
-  const heroMetrics = [
-    { label: 'Spend', value: `$${spend.toLocaleString()}`, icon: '↗', accent: '#e11d48', bg: 'rgba(225,29,72,0.08)' },
-    { label: 'Revenue', value: `$${revenue.toLocaleString()}`, icon: '↗', accent: '#00a76f', bg: 'rgba(0,167,111,0.08)' },
-    { label: 'ROAS', value: `${roas.toFixed(2)}x`, icon: '⚡', accent: '#6366f1', bg: 'rgba(99,102,241,0.08)' },
-  ];
-
-  const detailMetrics = [
-    { label: 'Impressions', value: impressions >= 1000 ? `${(impressions / 1000).toFixed(1)}K` : impressions.toLocaleString() },
-    { label: 'Clicks', value: clicks >= 1000 ? `${(clicks / 1000).toFixed(1)}K` : clicks.toLocaleString() },
-    { label: 'CTR', value: `${ctr.toFixed(2)}%` },
-    { label: 'CPC', value: `$${cpc.toFixed(2)}` },
-    { label: 'Conversions', value: conversions.toLocaleString() },
-    { label: 'CPA', value: `$${cpa.toFixed(2)}` },
-    { label: 'Reach', value: reach >= 1000 ? `${(reach / 1000).toFixed(1)}K` : reach.toLocaleString() },
-  ];
-
-  const hasMedia = ad.mediaURL && !imgError;
-
-  return (
-    <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', zIndex: 1060 }} tabIndex="-1" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-
-          {/* ── Header ── */}
-          <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid var(--bs-border-color-translucent)' }}>
-            <div className="d-flex align-items-start justify-content-between mb-1">
-              <h5 className="fw-bold text-body-emphasis mb-0 text-truncate pe-3" title={ad.name} style={{ fontSize: '1.05rem', lineHeight: 1.4 }}>{ad.name}</h5>
-              <button type="button" className="btn-close flex-shrink-0 mt-1" onClick={onClose} aria-label="Close" />
-            </div>
-            <div className="d-flex align-items-center gap-1.5 pb-2">
-              <span className={`badge rounded-pill border px-2 py-0.5 fw-semibold ${normStatus === 'Active' ? 'bg-success-subtle text-success-emphasis border-success-subtle' : normStatus === 'Paused' ? 'bg-warning-subtle text-warning-emphasis border-warning-subtle' : 'bg-secondary-subtle text-secondary'}`} style={{ fontSize: '0.7rem' }}>
-                <span className="d-inline-block rounded-circle me-1" style={{ width: 6, height: 6, backgroundColor: normStatus === 'Active' ? '#00a76f' : normStatus === 'Paused' ? '#f59e0b' : '#94a3b8', verticalAlign: 'middle' }} />{normStatus}
-              </span>
-              <span className="badge bg-body-secondary text-secondary border rounded-pill px-2 py-0.5 fw-medium" style={{ fontSize: '0.7rem' }}>{normMediaType}</span>
-            </div>
-          </div>
-
-          {/* ── Scrollable Body ── */}
-          <div style={{ overflowY: 'auto', flex: 1 }}>
-
-            {/* ── Hero Metrics Strip ── */}
-            <div className="d-flex border-bottom" style={{ gap: 0 }}>
-              {heroMetrics.map((m, i) => (
-                <div key={i} className="flex-fill text-center py-3 px-2" style={{ borderRight: i < 2 ? '1px solid var(--bs-border-color-translucent)' : 'none' }}>
-                  <div className="text-secondary text-uppercase fw-semibold" style={{ fontSize: '0.65rem', letterSpacing: '0.04em', marginBottom: 2 }}>{m.label}</div>
-                  <div className="fw-bold" style={{ fontSize: '1.15rem', color: m.accent }}>{m.value}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* ── Creative + Copy Section ── */}
-            <div className="p-4 pb-3">
-              <div className="d-flex gap-3" style={{ alignItems: 'flex-start' }}>
-                {/* Media Preview */}
-                {hasMedia && (
-                  <div className="flex-shrink-0" style={{ width: 180, minHeight: 140 }}>
-                    <img
-                      src={ad.mediaURL}
-                      alt={ad.name}
-                      className="rounded-3 border w-100"
-                      style={{ height: 160, objectFit: 'cover' }}
-                      onError={() => setImgError(true)}
-                    />
-                  </div>
-                )}
-                {/* Ad Copy */}
-                <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                  {ad.headline && (
-                    <div className="mb-2">
-                      <div className="text-secondary text-uppercase fw-semibold" style={{ fontSize: '0.62rem', letterSpacing: '0.05em', marginBottom: 3 }}>Headline</div>
-                      <p className="fw-semibold text-body-emphasis mb-0" style={{ fontSize: '0.92rem', lineHeight: 1.45 }}>{ad.headline}</p>
-                    </div>
-                  )}
-                  {ad.description && (
-                    <div className="mb-2">
-                      <div className="text-secondary text-uppercase fw-semibold" style={{ fontSize: '0.62rem', letterSpacing: '0.05em', marginBottom: 3 }}>Description</div>
-                      <p className="text-body-secondary mb-0" style={{ fontSize: '0.82rem', lineHeight: 1.55 }}>{ad.description}</p>
-                    </div>
-                  )}
-                  <div className="d-flex align-items-center gap-2 mt-2">
-                    <span className="text-secondary text-uppercase fw-semibold" style={{ fontSize: '0.62rem', letterSpacing: '0.05em' }}>CTA</span>
-                    <span className="badge bg-primary text-white px-2.5 py-1 rounded-pill fw-semibold" style={{ fontSize: '0.72rem' }}>{ad.cta || 'Learn More'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Detailed Metrics ── */}
-            <div className="px-4 pb-4">
-              <div className="text-secondary text-uppercase fw-semibold mb-2" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>Performance Breakdown</div>
-              <div className="rounded-3 border overflow-hidden">
-                {detailMetrics.map((m, i) => (
-                  <div
-                    key={i}
-                    className="d-flex align-items-center justify-content-between px-3 py-2"
-                    style={{
-                      borderBottom: i < detailMetrics.length - 1 ? '1px solid var(--bs-border-color-translucent)' : 'none',
-                      backgroundColor: i % 2 === 0 ? 'var(--bs-tertiary-bg)' : 'transparent',
-                      fontSize: '0.84rem',
-                    }}
-                  >
-                    <span className="text-body-secondary fw-medium">{m.label}</span>
-                    <span className="fw-bold text-body-emphasis">{m.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -266,13 +158,17 @@ const PERF_CHART_METRICS = {
   cpa: { label: 'CPA', color: '#f59e0b', type: 'currency' },
   ctr: { label: 'CTR', color: '#06b6d4', type: 'percent' },
   conversions: { label: 'Conversions', color: '#8b5cf6', type: 'number' },
-  frequency: { label: 'Frequency', color: '#64748b', type: 'decimal' },
 };
 
 // ─── Main Component ─────────────────────────────────────────────────
 export default function AdSetDetailPage() {
-  const { clientId, campaignId, adSetId } = useParams();
+  const { clientId: paramClientId, campaignId: paramCampaignId, adSetId: paramAdSetId, AdsetId, adsetId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const adSetId = adsetId || AdsetId || paramAdSetId;
+  const initialCampaignId = paramCampaignId || location.state?.campaignId;
+  const initialClientId = paramClientId || location.state?.clientId;
 
   const [client, setClient] = useState(null);
   const [campaign, setCampaign] = useState(null);
@@ -286,11 +182,27 @@ export default function AdSetDetailPage() {
   const [adStatusFilter, setAdStatusFilter] = useState('ALL');
   const [sortField, setSortField] = useState('spend');
   const [sortDir, setSortDir] = useState('desc');
+  const [searchTerms, setSearchTerms] = useState([]);
+  const [searchTermQuery, setSearchTermQuery] = useState('');
+  const [loadingSearchTerms, setLoadingSearchTerms] = useState(false);
+  const [stSortField, setStSortField] = useState(null);
+  const [stSortDir, setStSortDir] = useState('desc');
 
   // KPI State
   const kpiStorageKey = `adSetPinnedKPIs_${adSetId}`;
   const [pinnedKPIs, setPinnedKPIs] = useState(() => {
-    try { const saved = localStorage.getItem(kpiStorageKey); return saved ? JSON.parse(saved) : defaultAdSetPinnedKPIs; } catch { return defaultAdSetPinnedKPIs; }
+    try {
+      const saved = localStorage.getItem(kpiStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((k) => k !== 'reach' && k !== 'frequency');
+        }
+      }
+      return defaultAdSetPinnedKPIs;
+    } catch {
+      return defaultAdSetPinnedKPIs;
+    }
   });
   const [showKPISelector, setShowKPISelector] = useState(false);
   const [selectedMetrics, setSelectedMetrics] = useState(['spend', 'revenue']);
@@ -339,6 +251,11 @@ export default function AdSetDetailPage() {
     else { setSortField(field); setSortDir('desc'); }
   };
 
+  const handleStSort = (field) => {
+    if (stSortField === field) setStSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setStSortField(field); setStSortDir('desc'); }
+  };
+
   // Load Data
   useEffect(() => {
     let isMounted = true;
@@ -346,25 +263,35 @@ export default function AdSetDetailPage() {
       try {
         setLoading(true);
         setError(null);
-        const [clientRes, campaignApiRes] = await Promise.all([
-          getClientByIdApi(clientId).catch(() => null),
-          getCampaignByIdApi(campaignId).catch(() => null),
-        ]);
-        const resolved = resolveClientAndCampaign(clientId, campaignId);
-        const finalClient = clientRes || resolved.client;
-        const finalCampaign = (campaignApiRes && String(campaignApiRes.id) === String(campaignId))
-          ? { ...campaignApiRes, platformKey: resolved.platformKey, platformLabel: resolved.campaign?.platformLabel || 'Platform' }
-          : resolved.campaign;
-        if (!finalCampaign) throw new Error('Campaign not found.');
 
-        const allAdSets = getCampaignAdSets(campaignId, finalCampaign);
-        const foundAdSet = allAdSets.find((a) => String(a.id) === String(adSetId));
-        if (!foundAdSet) throw new Error(`Ad Set '${adSetId}' not found.`);
+        const { client: resClient, campaign: resCampaign, adSet: resAdSet, campaignId: resolvedCampId } = resolveAdSetAndCampaignAndClient(
+          adSetId,
+          initialCampaignId,
+          initialClientId
+        );
+
+        const [clientRes, campaignApiRes, adSetApiRes] = await Promise.all([
+          (initialClientId || resClient?.id) ? getClientByIdApi(initialClientId || resClient?.id).catch(() => null) : Promise.resolve(null),
+          resolvedCampId ? getCampaignByIdApi(resolvedCampId).catch(() => null) : Promise.resolve(null),
+          getAdSetByIdApi(adSetId).catch(() => null),
+        ]);
+
+        const finalClient = clientRes || resClient;
+        const finalCampaign = (campaignApiRes && String(campaignApiRes.id) === String(resolvedCampId))
+          ? { ...campaignApiRes, platformKey: resCampaign?.platformKey || 'meta', platformLabel: resCampaign?.platformLabel || 'Platform' }
+          : resCampaign;
+        const finalAdSet = adSetApiRes || resAdSet;
+        if (!finalAdSet) throw new Error(`Ad Set '${adSetId}' not found.`);
 
         const apiAds = await getAdsByAdSetIdApi(adSetId).catch(() => []);
-        const finalAds = apiAds.length > 0 ? apiAds : getAdSetAds(adSetId, foundAdSet, finalCampaign);
+        const finalAds = apiAds.length > 0 ? apiAds : getAdSetAds(adSetId, finalAdSet, finalCampaign);
 
-        if (isMounted) { setClient(finalClient); setCampaign(finalCampaign); setAdSet(foundAdSet); setAds(finalAds); }
+        if (isMounted) {
+          setClient(finalClient);
+          setCampaign(finalCampaign);
+          setAdSet(finalAdSet);
+          setAds(finalAds);
+        }
       } catch (err) {
         if (isMounted) setError(err.message || 'Failed to load ad set data.');
       } finally {
@@ -373,9 +300,85 @@ export default function AdSetDetailPage() {
     }
     loadData();
     return () => { isMounted = false; };
-  }, [clientId, campaignId, adSetId]);
+  }, [initialClientId, initialCampaignId, adSetId]);
 
   const handleRefresh = useCallback(() => { setRefreshing(true); setTimeout(() => setRefreshing(false), 1200); }, []);
+
+  const platformLabel = PLATFORMS_MAP[campaign?.platformId] || campaign?.platformLabel || 'Platform';
+  const platformKey = PLATFORM_KEYS_MAP[campaign?.platformId] || campaign?.platformKey || 'meta';
+
+  const isGoogle =
+    platformKey === 'google' ||
+    String(platformLabel).toLowerCase().includes('google') ||
+    String(campaign?.platformKey || '').toLowerCase() === 'google' ||
+    String(campaign?.platformName || '').toLowerCase().includes('google') ||
+    String(campaign?.platformType || '').toLowerCase().includes('google') ||
+    campaign?.platformId === 2 ||
+    campaign?.platformId === '2' ||
+    String(adSet?.platformKey || '').toLowerCase() === 'google' ||
+    String(adSet?.platform || '').toLowerCase().includes('google');
+
+  // Fetch search terms from database/API for Google Ads ad sets based on selected period
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchSearchTerms() {
+      if (!isGoogle || !adSetId) {
+        setSearchTerms([]);
+        return;
+      }
+      try {
+        setLoadingSearchTerms(true);
+        const startDate = periodConfig.startDate || null;
+        const endDate = periodConfig.endDate || null;
+        const apiData = await getSearchTermsByAdSetIdApi(adSetId, startDate, endDate);
+        if (isMounted) {
+          if (Array.isArray(apiData) && apiData.length > 0) {
+            setSearchTerms(apiData);
+          } else {
+            const pageData = await getAdSetPageDataApi(adSetId, startDate, endDate).catch(() => null);
+            if (pageData && Array.isArray(pageData.searchTerms) && pageData.searchTerms.length > 0) {
+              setSearchTerms(pageData.searchTerms);
+            } else {
+              // Fallback from mock data for this specific ad set if backend returns empty
+              const fallbackTerms = getAdSetSearchTerms(adSetId, adSet, campaign, client);
+              setSearchTerms(fallbackTerms || []);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching search terms:', err);
+        if (isMounted) {
+          const fallbackTerms = getAdSetSearchTerms(adSetId, adSet, campaign, client);
+          setSearchTerms(fallbackTerms || []);
+        }
+      } finally {
+        if (isMounted) setLoadingSearchTerms(false);
+      }
+    }
+    fetchSearchTerms();
+    return () => { isMounted = false; };
+  }, [isGoogle, adSetId, periodConfig.startDate, periodConfig.endDate, adSet, campaign, client]);
+
+  const filteredSearchTerms = searchTerms
+    .filter(
+      (st) => !searchTermQuery || (st.searchTerm || st.term || '').toLowerCase().includes(searchTermQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (!stSortField) return 0;
+      const getVal = (item, f) => {
+        if (f === 'cpa') {
+          if (item.cpa !== undefined && item.cpa !== null) return Number(item.cpa) || 0;
+          const conv = Number(item.conversions) || 0;
+          const sp = Number(item.spend || item.cost) || 0;
+          return conv > 0 ? sp / conv : 0;
+        }
+        if (f === 'spend') return Number(item.spend || item.cost) || 0;
+        return Number(item[f]) || 0;
+      };
+      const aVal = getVal(a, stSortField);
+      const bVal = getVal(b, stSortField);
+      return stSortDir === 'asc' ? aVal - bVal : bVal - aVal;
+    });
 
   // Generate time series data for charts based on selected period
   const timeSeries = adSet
@@ -396,8 +399,6 @@ export default function AdSetDetailPage() {
   const asCtr = asImpressions > 0 ? (asClicks / asImpressions) * 100 : 0;
   const asConversions = timeSeries.length ? timeSeries.reduce((s, d) => s + d.conversions, 0) : (Number(adSet?.conversions) || 0);
   const asCpa = asConversions > 0 ? asSpend / asConversions : 0;
-  const asReach = timeSeries.length ? timeSeries.reduce((s, d) => s + (d.reach || 0), 0) : Math.round(asImpressions * 0.72);
-  const asFrequency = asReach > 0 ? asImpressions / asReach : 1;
   const asCpm = asImpressions > 0 ? (asSpend / asImpressions) * 1000 : 0;
   const asDailyBudget = Number(adSet?.dailyBudget) || Math.round(asSpend / Math.max(1, periodConfig.days));
   const asTotalBudget = asDailyBudget * periodConfig.days;
@@ -407,8 +408,6 @@ export default function AdSetDetailPage() {
     spend: { value: asSpend, change: 6.4 },
     revenue: { value: asRevenue, change: 10.2 },
     roas: { value: asRoas, change: 2.8 },
-    reach: { value: asReach, change: 12.1 },
-    frequency: { value: asFrequency, change: 3.5 },
     ctr: { value: asCtr, change: 1.8 },
     conversions: { value: asConversions, change: 11.9 },
     cpa: { value: asCpa, change: -4.7 },
@@ -435,20 +434,20 @@ export default function AdSetDetailPage() {
   if (adSet?.bidStrategy) targeting.push({ label: 'Bid Strategy', value: adSet.bidStrategy });
   if (adSet?.targetAudience) targeting.push({ label: 'Target Audience', value: adSet.targetAudience });
 
+  const resolvedCampaignId = campaign?.id || initialCampaignId || 'c101-m1';
+  const resolvedClientId = client?.id || initialClientId || 'cli-101';
+
   // Loading/Error
   if (loading) {
     return (<DashboardLayout><div className="container-fluid py-5 text-center"><div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}><span className="visually-hidden">Loading...</span></div><p className="text-secondary fw-medium">Loading Ad Set details...</p></div></DashboardLayout>);
   }
   if (error || !adSet) {
-    return (<DashboardLayout><div className="container-fluid py-5"><div className="card border-0 shadow-sm rounded-3 mx-auto p-5 text-center" style={{ maxWidth: 540 }}><div className="mb-3 text-warning"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg></div><h4 className="fw-bold mb-2">Ad Set Not Found</h4><p className="text-secondary mb-4">{error || 'Could not load ad set.'}</p><Link to={`/clients/${clientId}/campaigns/${campaignId}`} className="btn btn-primary px-4 rounded-2">Back to Campaign</Link></div></div></DashboardLayout>);
+    return (<DashboardLayout><div className="container-fluid py-5"><div className="card border-0 shadow-sm rounded-3 mx-auto p-5 text-center" style={{ maxWidth: 540 }}><div className="mb-3 text-warning"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg></div><h4 className="fw-bold mb-2">Ad Set Not Found</h4><p className="text-secondary mb-4">{error || 'Could not load ad set.'}</p><Link to={`/Campaigns/${resolvedCampaignId}`} className="btn btn-primary px-4 rounded-2">Back to Campaign</Link></div></div></DashboardLayout>);
   }
 
   const clientName = client?.companyName || 'Client';
   const campName = campaign?.name || 'Campaign';
   const asStatus = normalizeStatus(adSet.status);
-  const campObjective = OBJECTIVES_MAP[campaign?.objective] || 'Campaign';
-  const platformLabel = PLATFORMS_MAP[campaign?.platformId] || campaign?.platformLabel || 'Platform';
-  const platformKey = PLATFORM_KEYS_MAP[campaign?.platformId] || campaign?.platformKey || 'meta';
   const campaignLifetime = formatDateRange(campaign?.startDate, campaign?.endDate);
 
   // Period-aware chart data: Aggregate by month if period > 31 days
@@ -493,6 +492,9 @@ export default function AdSetDetailPage() {
   const primaryMetric = selectedMetrics[0] || 'spend';
   const metricType = PERF_CHART_METRICS[primaryMetric]?.type || 'currency';
 
+  const adSetCurrency = adSet?.currency || campaign?.currency || (platformKey === 'google' ? 'EUR' : platformKey === 'snapchat' ? 'SAR' : platformKey === 'tiktok' ? 'EGP' : 'USD');
+  const currSymbol = getCurrencySymbol(adSetCurrency);
+
   const perfChartOptions = {
     chart: { type: 'area', toolbar: { show: false }, fontFamily: 'inherit' },
     colors: perfChartColors,
@@ -504,11 +506,14 @@ export default function AdSetDetailPage() {
       labels: { style: { fontSize: '11px', colors: '#94a3b8' } },
       axisBorder: { show: false },
       axisTicks: { show: false },
+      tooltip: {
+        enabled: false,
+      },
     },
     yaxis: {
       labels: {
         style: { fontSize: '11px', colors: '#94a3b8' }, formatter: (val) => {
-          if (metricType === 'currency') return '$' + (val >= 1000 ? (val / 1000).toFixed(1) + 'K' : val.toFixed(0));
+          if (metricType === 'currency') return currSymbol + (val >= 1000 ? (val / 1000).toFixed(1) + 'K' : val.toFixed(0));
           if (metricType === 'ratio') return val.toFixed(1) + 'x';
           if (metricType === 'percent') return val.toFixed(1) + '%';
           if (metricType === 'decimal') return val.toFixed(1);
@@ -518,7 +523,9 @@ export default function AdSetDetailPage() {
     },
     grid: { borderColor: 'rgba(0,0,0,0.06)', strokeDashArray: 4 },
     tooltip: {
+      theme: 'dark',
       x: {
+        show: true,
         formatter: (val, opts) => {
           const idx = opts?.dataPointIndex;
           const point = chartData[idx];
@@ -529,7 +536,7 @@ export default function AdSetDetailPage() {
       },
       y: {
         formatter: (val) => {
-          if (metricType === 'currency') return '$' + val.toLocaleString();
+          if (metricType === 'currency') return currSymbol + val.toLocaleString();
           if (metricType === 'ratio') return val.toFixed(2) + 'x';
           if (metricType === 'percent') return val.toFixed(2) + '%';
           if (metricType === 'decimal') return val.toFixed(2);
@@ -553,11 +560,30 @@ export default function AdSetDetailPage() {
     );
   };
 
+  const renderStSortTH = (field, label, isLast = false) => {
+    const isActive = stSortField === field;
+    return (
+      <th
+        className={`text-end text-body fw-bold user-select-none ${isLast ? 'pe-4' : ''} ${isActive ? 'text-primary' : ''}`}
+        style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}
+        onClick={() => handleStSort(field)}
+        title={`Sort by ${label} (${isActive && stSortDir === 'desc' ? 'Ascending' : 'Descending'})`}
+      >
+        <div className="d-inline-flex align-items-center justify-content-end gap-1">
+          <span>{label}</span>
+          <span className={`small ${isActive ? 'text-primary fw-bold' : 'text-secondary opacity-50'}`} style={{ fontSize: '0.7rem' }}>
+            {isActive ? (stSortDir === 'asc' ? '▲' : '▼') : '↕'}
+          </span>
+        </div>
+      </th>
+    );
+  };
+
   return (
     <DashboardLayout
       pageTitle={clientName}
       title={`${adSet.name} - Ad Set Details | Dasher`}
-      clientSwitcher={{ currentClientId: clientId, currentClientName: clientName }}
+      clientSwitcher={{ currentClientId: resolvedClientId, currentClientName: clientName }}
     >
       <div className="w-100 py-3">
         <style>{`
@@ -583,16 +609,18 @@ export default function AdSetDetailPage() {
               <li className="breadcrumb-item"><Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">Dashboard</Link></li>
               <li className="breadcrumb-item"><Link to="/clients" className="text-decoration-none fw-semibold text-secondary hover-primary">Clients</Link></li>
               <li className="breadcrumb-item text-truncate" style={{ maxWidth: 220 }}>
-                <Link to={`/clients/${clientId}`} className="text-decoration-none fw-semibold text-secondary hover-primary" title={clientName}>
+                <Link to={`/clients/${resolvedClientId}`} className="text-decoration-none fw-semibold text-secondary hover-primary" title={clientName}>
                   {clientName}
                 </Link>
               </li>
               <li className="breadcrumb-item">
-                <Link to={`/clients/${clientId}/campaigns/${campaignId}`} className="text-decoration-none fw-semibold text-secondary hover-primary">
+                <Link to={`/Campaigns/${resolvedCampaignId}`} className="text-decoration-none fw-semibold text-secondary hover-primary" title={campName || 'Campaign'}>
                   Campaigns
                 </Link>
               </li>
-              <li className="breadcrumb-item active text-success fw-semibold" aria-current="page">Ad Sets</li>
+              <li className="breadcrumb-item active text-success fw-semibold" aria-current="page" title={adSet?.name || 'Ad Set'}>
+                Adsets
+              </li>
             </ol>
           </nav>
 
@@ -621,7 +649,7 @@ export default function AdSetDetailPage() {
           <div className="d-flex align-items-center gap-3">
             <button
               className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center p-2 rounded-circle no-print shadow-sm"
-              onClick={() => navigate(`/clients/${clientId}/campaigns/${campaignId}`)}
+              onClick={() => navigate(`/Campaigns/${resolvedCampaignId}`)}
               title="Back to Campaign"
               aria-label="Back to Campaign"
             >
@@ -646,7 +674,6 @@ export default function AdSetDetailPage() {
               <div className="d-flex align-items-center gap-2 flex-wrap">
                 <h1 className="h3 mb-0 fw-bold text-body-emphasis me-1">{adSet.name}</h1>
                 <span className={`badge rounded-pill border px-2.5 py-1 fw-bold small ${asStatus === 'Active' ? 'bg-success-subtle text-success-emphasis border-success-subtle' : asStatus === 'Paused' ? 'bg-warning-subtle text-warning-emphasis border-warning-subtle' : 'bg-secondary-subtle text-secondary border-secondary-subtle'}`}>{asStatus}</span>
-                <span className="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle rounded-pill px-2.5 py-1 fw-semibold small">{campObjective}</span>
               </div>
 
               {/* Subheader Metadata Spans (Platform, Budget, Date Range) */}
@@ -656,7 +683,7 @@ export default function AdSetDetailPage() {
                 </span>
                 <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
                 <span className="fw-semibold text-body-secondary">
-                  Budget: ${asDailyBudget.toLocaleString()}/day
+                  Budget: {currSymbol}{asDailyBudget.toLocaleString()}/day
                 </span>
                 <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
                 <span className="d-inline-flex align-items-center gap-1.5 text-body-secondary">
@@ -703,7 +730,7 @@ export default function AdSetDetailPage() {
                         <span className="text-secondary fw-semibold small text-truncate" title={kpiDef.label}>{kpiDef.label}</span>
                         <KpiMetricBadge metricKey={kpiDef.key} color={kpiDef.color} label={kpiDef.label} size={34} />
                       </div>
-                      <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">{formatKPIValue(kpiData.value, kpiDef.format)}</div>
+                      <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">{formatKPIValue(kpiData.value, kpiDef.format, adSetCurrency)}</div>
                       <div className="d-flex align-items-center justify-content-between pt-1 border-top border-light-subtle mt-1">
                         <div className={`d-flex align-items-center gap-1 fw-semibold small ${isGood ? 'text-success' : 'text-danger'}`}>{isPositive ? <IconUp /> : <IconDown />}<span>{Math.abs(kpiData.change).toFixed(1)}%</span></div>
                         <span className="text-secondary small" style={{ fontSize: '0.75rem' }}>vs prev</span>
@@ -721,7 +748,7 @@ export default function AdSetDetailPage() {
           <div className="card-header bg-transparent border-bottom p-4">
             <div className="d-flex justify-content-between align-items-center mb-2">
               <div><h5 className="mb-1 fw-bold">Performance Over Time</h5><small className="text-secondary">Ad set trend by selected metric</small></div>
-              <span className="badge bg-primary-subtle text-primary-emphasis px-2.5 py-1.5 rounded-pill fw-semibold shadow-xs" style={{ fontSize: '0.8rem' }}>
+              <span className="badge px-2.5 py-1.5 rounded-pill fw-semibold shadow-xs" style={{ fontSize: '0.8rem', backgroundColor: 'rgba(28, 37, 46, 0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', color: '#f8fafc', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
                 {monthBadgeText}
               </span>
             </div>
@@ -800,13 +827,13 @@ export default function AdSetDetailPage() {
                             </div>
                           </td>
                           <td className="text-center"><span className={`badge rounded-pill border px-2 py-0.5 fw-semibold ${adStatus === 'Active' ? 'bg-success-subtle text-success-emphasis border-success-subtle' : 'bg-secondary-subtle text-secondary'}`} style={{ fontSize: '0.72rem' }}>{adStatus}</span></td>
-                          <td className="text-end fw-bold text-danger text-nowrap" style={{ fontSize: '0.88rem' }}>${adSpend.toLocaleString()}</td>
+                          <td className="text-end fw-bold text-danger text-nowrap" style={{ fontSize: '0.88rem' }}>{currSymbol}{adSpend.toLocaleString()}</td>
                           <td className="text-end text-body fw-medium" style={{ fontSize: '0.85rem' }}>{adImpr >= 1000 ? (adImpr / 1000).toFixed(0) + 'K' : adImpr}</td>
                           <td className="text-end text-body fw-medium" style={{ fontSize: '0.85rem' }}>{adClicks >= 1000 ? (adClicks / 1000).toFixed(1) + 'K' : adClicks}</td>
                           <td className="text-end text-body fw-semibold" style={{ fontSize: '0.85rem' }}>{adCtr.toFixed(2)}%</td>
                           <td className="text-end text-body-emphasis fw-bold" style={{ fontSize: '0.88rem' }}>{adConv.toLocaleString()}</td>
-                          <td className="text-end text-body fw-semibold" style={{ fontSize: '0.85rem' }}>${adCpa.toFixed(2)}</td>
-                          <td className="text-end fw-semibold text-success text-nowrap" style={{ fontSize: '0.88rem' }}>${adRevenue.toLocaleString()}</td>
+                          <td className="text-end text-body fw-semibold" style={{ fontSize: '0.85rem' }}>{currSymbol}{adCpa.toFixed(2)}</td>
+                          <td className="text-end fw-semibold text-success text-nowrap" style={{ fontSize: '0.88rem' }}>{currSymbol}{adRevenue.toLocaleString()}</td>
                           <td className="text-center"><span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold px-2 py-0.5" style={{ fontSize: '0.78rem' }}>{adRoas.toFixed(1)}x</span></td>
                         </tr>
                       );
@@ -818,8 +845,141 @@ export default function AdSetDetailPage() {
           </div>
         </div>
 
+        {/* Search Terms Analysis (Google Ads Only) */}
+        {isGoogle && (
+          <div className="card border-0 shadow-sm rounded-3 mt-4">
+            <div className="card-header bg-transparent border-bottom p-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div className="d-flex align-items-center gap-2">
+                <h6 className="mb-0 fw-bold">Search Terms Analysis</h6>
+                <span className="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle fw-semibold">
+                  {filteredSearchTerms.length} search terms
+                </span>
+                <span className="badge bg-body-tertiary text-secondary border fw-normal" style={{ fontSize: '0.72rem' }}>
+                  {periodConfig.startDate && periodConfig.endDate ? `${periodConfig.startDate} — ${periodConfig.endDate}` : periodConfig.label}
+                </span>
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <input
+                  type="text"
+                  className="form-control form-control-sm"
+                  placeholder="Search queries..."
+                  value={searchTermQuery}
+                  onChange={(e) => setSearchTermQuery(e.target.value)}
+                  style={{ maxWidth: 220 }}
+                />
+              </div>
+            </div>
+            <div className="card-body p-0">
+              <div className="table-responsive">
+                <table className="table align-middle text-nowrap mb-0 table-hover">
+                  <thead className="table-light bg-body-tertiary">
+                    <tr>
+                      <th className="ps-4 text-body fw-bold">Term</th>
+                      <th className="text-body fw-bold">Keyword</th>
+                      <th className="text-body fw-bold">Match Type</th>
+                      <th className="text-body fw-bold">Date</th>
+                      {renderStSortTH('impressions', 'Impressions')}
+                      {renderStSortTH('clicks', 'Clicks')}
+                      {renderStSortTH('spend', 'Spend')}
+                      {renderStSortTH('conversions', 'Conversions')}
+                      {renderStSortTH('cpa', 'CPA', true)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loadingSearchTerms ? (
+                      <tr>
+                        <td colSpan={9} className="text-center py-5 text-secondary">
+                          <div className="spinner-border spinner-border-sm text-primary me-2" role="status" />
+                          <span>Loading search terms...</span>
+                        </td>
+                      </tr>
+                    ) : filteredSearchTerms.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="text-center py-5 text-secondary">
+                          <div className="d-flex flex-column align-items-center justify-content-center py-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-secondary opacity-50 mb-2">
+                              <circle cx="11" cy="11" r="8"></circle>
+                              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <span className="fw-semibold">No search terms found</span>
+                            <span className="small text-muted mt-1">
+                              {searchTermQuery
+                                ? `No results matching "${searchTermQuery}".`
+                                : `No search terms recorded for this ad set in the selected period.`}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSearchTerms.map((st, idx) => {
+                        const termText = st.term || st.searchTerm || '';
+                        const keywordText = st.keyword || '—';
+                        const matchType = st.matchType || 'Exact';
+                        const dateText = st.date ? String(st.date) : '—';
+                        const impr = Number(st.impressions) || 0;
+                        const clicks = Number(st.clicks) || 0;
+                        const spend = Number(st.spend || st.cost) || 0;
+                        const conv = Number(st.conversions) || 0;
+                        const cpaVal = st.cpa !== undefined && st.cpa !== null ? Number(st.cpa) : (conv > 0 ? spend / conv : 0);
+
+                        const matchTypeBadge =
+                          matchType === 'Exact' ? (
+                            <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold px-2 py-0.5" style={{ fontSize: '0.74rem' }}>Exact</span>
+                          ) : matchType === 'Phrase' ? (
+                            <span className="badge bg-info-subtle text-info border border-info-subtle fw-semibold px-2 py-0.5" style={{ fontSize: '0.74rem' }}>Phrase</span>
+                          ) : (
+                            <span className="badge bg-secondary-subtle text-secondary border border-secondary-subtle fw-semibold px-2 py-0.5" style={{ fontSize: '0.74rem' }}>Broad</span>
+                          );
+
+                        return (
+                          <tr key={st.id || `${termText}-${dateText}-${idx}`}>
+                            {/* 1. Term */}
+                            <td className="ps-4 fw-bold text-body-emphasis" style={{ fontSize: '0.88rem', maxWidth: 240 }}>
+                              <span className="text-truncate d-block" title={termText}>{termText}</span>
+                            </td>
+
+                            {/* 2. Keyword */}
+                            <td className="text-secondary" style={{ fontSize: '0.84rem', maxWidth: 180 }}>
+                              <span className="text-truncate d-block" title={keywordText}>{keywordText}</span>
+                            </td>
+
+                            {/* 3. Match Type */}
+                            <td>{matchTypeBadge}</td>
+
+                            {/* 4. Date */}
+                            <td className="text-body fw-medium" style={{ fontSize: '0.85rem' }}>{dateText}</td>
+
+                            {/* 5. Impressions */}
+                            <td className="text-end text-body fw-medium" style={{ fontSize: '0.85rem' }}>{impr.toLocaleString()}</td>
+
+                            {/* 6. Clicks */}
+                            <td className="text-end text-body fw-medium" style={{ fontSize: '0.85rem' }}>{clicks.toLocaleString()}</td>
+
+                            {/* 7. Spend */}
+                            <td className="text-end fw-bold text-danger text-nowrap" style={{ fontSize: '0.88rem' }}>
+                              {currSymbol}{spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+
+                            {/* 8. Conversions */}
+                            <td className="text-end text-body-emphasis fw-bold" style={{ fontSize: '0.88rem' }}>{conv.toLocaleString()}</td>
+
+                            {/* 9. CPA */}
+                            <td className="pe-4 text-end text-body fw-semibold text-nowrap" style={{ fontSize: '0.85rem' }}>
+                              {currSymbol}{cpaVal.toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Ad Details Modal */}
-        {selectedAd && <AdDetailsModal ad={selectedAd} onClose={() => setSelectedAd(null)} />}
+        {selectedAd && <AdDetailsModal ad={{ ...selectedAd, currency: adSetCurrency }} currency={adSetCurrency} onClose={() => setSelectedAd(null)} />}
       </div>
     </DashboardLayout>
   );

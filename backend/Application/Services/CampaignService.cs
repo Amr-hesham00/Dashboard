@@ -3,6 +3,7 @@ using Dashboard.Application.Interfaces;
 using Dashboard.Application.Interfaces.Services;
 using Dashboard.Domain.Entities;
 
+
 namespace Dashboard.Application.Services;
 public class CampaignService : ICampaignService
 {
@@ -13,100 +14,315 @@ public class CampaignService : ICampaignService
         _unitOfWork = unitOfWork;
     }
 
-    public async Task<IEnumerable<CampaignDTO>> GetAllCampaignsAsync()
+    // done 
+    public async Task<PlatformPageDTO?> GetCampaignsByPlatformAsync(int clientId, int platformid, DateOnly startDate, DateOnly endDate)
     {
-        var campaigns = await _unitOfWork.Campaign.GetAll(new Campaign());
-        return campaigns.Select(MapToDTO);
+        var client = await _unitOfWork.Client.GetById(clientId);
+
+        if (client is null)
+            return null;
+
+        var campaigns = await _unitOfWork.Campaign.GetByPlatformAsync(clientId, platformid, startDate, endDate);
+
+        if (campaigns is null)
+            return null;
+
+
+        return MapToPlatformPageDTO(campaigns);
     }
 
-    public async Task<CampaignDTO?> GetCampaignByIdAsync(int id)
+    // under process
+    public async Task<ClientPageDTO?> GetCampaignsByClientIdAsync(
+    int clientId,
+    DateOnly startDate,
+    DateOnly endDate)
     {
-        var campaign = await _unitOfWork.Campaign.GetById(id);
-        return campaign == null ? null : MapToDTO(campaign);
+        var client = await _unitOfWork.Client.GetById(clientId);
+
+        if (client is null)
+            return null;
+
+        var campaigns = await _unitOfWork.Campaign.GetByClientIdAsync(clientId, startDate, endDate);
+
+        return MapToClientPageDTO();
+        //return MapToDTO(client, campaigns, startDate, endDate);
     }
 
-    public async Task<(bool Success, string Message, CampaignDTO? Campaign)> CreateCampaignAsync(CreateCampaignDTO dto)
+    // methods
+    private PlatformPageDTO? MapToPlatformPageDTO(IEnumerable<Campaign> campaigns)
     {
-        var campaign = new Campaign
+
+        var campaignList = campaigns as IList<Campaign> ?? campaigns.ToList();
+
+        var platformCurrency = campaignList.FirstOrDefault(c => c.Platform != null)!.Platform.Currency;
+
+        int totalImpressions = 0;
+        int totalClicks = 0;
+        int totalConversions = 0;
+        double totalSpend = 0;
+        double totalRevenue = 0;
+
+        var campRows = new List<CampsTable>();
+
+        foreach (var campaign in campaignList)
         {
-            Name = dto.Name,
-            Objective = dto.Objective,
-            Status = dto.Status,
-            StartDate = dto.StartDate,
-            EndDate = dto.EndDate,
-            PlatformId = dto.PlatformId,
-            Impressions = dto.Impressions,
-            Clicks = dto.Clicks,
-            Conversions = dto.Conversions,
-            Spend = dto.Spend,
-            Revenue = dto.Revenue,
-            CreatedAt = DateTime.UtcNow
-        };
+            var campMetrics = (campaign.AdSets)
+                .SelectMany(adSet => adSet.Ads)
+                .SelectMany(ad => ad.DailyMetrics);
 
-        await _unitOfWork.Campaign.Create(campaign);
-        await _unitOfWork.Complete();
+            double campSpend = 0;
+            double campRevenue = 0;
 
-        return (true, "Campaign created successfully.", MapToDTO(campaign));
-    }
+            foreach (var metric in campMetrics)
+            {
+                campSpend += metric.Spend;
+                campRevenue += metric.Revenue;
 
-    public async Task<(bool Success, string Message)> UpdateCampaignAsync(int id, UpdateCampaignDTO dto)
-    {
-        var campaign = await _unitOfWork.Campaign.GetById(id);
-        if (campaign == null)
-        {
-            return (false, "Campaign not found.");
+                totalImpressions += metric.Impressions;
+                totalClicks += metric.Clicks;
+                totalConversions += metric.Conversions;
+                totalSpend += metric.Spend;
+                totalRevenue += metric.Revenue;
+            }
+
+            campRows.Add(new CampsTable
+            {
+                CampaignId = campaign.Id,
+                CampaignName = campaign.Name,
+                PlatformId = campaign.PlatformId != 0 ? campaign.PlatformId : (campaign.Platform?.Id ?? 0),
+                Platform = campaign.Platform != null ? campaign.Platform.PlatformType : default,
+                Status = campaign.Status,
+                Objective = campaign.Objective,
+                StartDate = campaign.StartDate,
+                Spend = campSpend,
+                Revenue = campRevenue,
+                ROAS = Divide(campRevenue, campSpend)
+            });
         }
 
-        campaign.Name = dto.Name;
-        campaign.Objective = dto.Objective;
-        campaign.Status = dto.Status;
-        campaign.StartDate = dto.StartDate;
-        campaign.EndDate = dto.EndDate;
-        campaign.PlatformId = dto.PlatformId;
-        campaign.Impressions = dto.Impressions;
-        campaign.Clicks = dto.Clicks;
-        campaign.Conversions = dto.Conversions;
-        campaign.Spend = dto.Spend;
-        campaign.Revenue = dto.Revenue;
+        return new PlatformPageDTO
+        {
+            Currency = platformCurrency,
+            Impressions = totalImpressions,
+            Clicks = totalClicks,
+            Conversions = totalConversions,
+            Spend = totalSpend,
+            Revenue = totalRevenue,
 
-        _unitOfWork.Campaign.Update(campaign);
-        await _unitOfWork.Complete();
+            ROAS = Divide(totalRevenue, totalSpend),
+            CTR = Divide(totalClicks, totalImpressions) * 100,
+            CPC = Divide(totalSpend, totalClicks),
+            CPM = Divide(totalSpend, totalImpressions) * 1000,
+            CPA = Divide(totalSpend, totalConversions),
+            ConversionRate = Divide(totalConversions, totalClicks) * 100,
+            AOV = totalConversions > 0 ? Divide(totalRevenue, totalConversions) : null,
 
-        return (true, "Campaign updated successfully.");
+            CampRow = campRows
+        };
+
+        static double Divide(double numerator, double denominator) =>
+            denominator == 0 ? 0 : numerator / denominator;
+    }
+    private static ClientPageDTO? MapToClientPageDTO()
+    {
+        return new ClientPageDTO();
     }
 
-    public async Task<(bool Success, string Message)> DeleteCampaignAsync(int id)
+
+
+
+
+
+    private static ClientPageDTO MapToDTO(
+Client client,
+IEnumerable<Campaign> campaigns,
+DateOnly startDate,
+DateOnly endDate)
     {
-        var campaign = await _unitOfWork.Campaign.GetById(id);
-        if (campaign == null)
+        var campaignList = campaigns.ToList();
+
+        // Monetary totals require a common currency.
+        var currencies = campaignList
+          .Select(campaign => campaign.Platform.Currency)
+          .Distinct()
+          .ToList();
+
+        if (currencies.Count > 1)
         {
-            return (false, "Campaign not found.");
+            throw new InvalidOperationException(
+                "Convert campaign metrics to one reporting currency " +
+                "before calculating client totals.");
         }
 
-        _unitOfWork.Campaign.Delete(campaign);
-        await _unitOfWork.Complete();
+        // These records were already filtered by date in the repository.
+        var metrics = campaignList
+          .SelectMany(GetCampaignMetrics)
+          .ToList();
 
-        return (true, "Campaign deleted successfully.");
+        var total = SumMetrics(metrics);
+
+        var byDate = metrics.ToLookup(metric => metric.Date);
+
+        // Group by platform ID so separate accounts stay separate.
+        var campaignsByPlatform = campaignList
+          .ToLookup(campaign => campaign.PlatformId);
+
+        // Chart
+        var points = new List<ChartPoint>();
+        int dayCount = endDate.DayNumber - startDate.DayNumber + 1;
+
+        for (int i = 0; i < dayCount; i++)
+        {
+            var date = startDate.AddDays(i);
+            var daily = SumMetrics(byDate[date]);
+
+            points.Add(new ChartPoint
+            {
+                Date = date,
+                Spend = daily.Spend,
+                Revenue = daily.Revenue,
+                Conversions = daily.Conversions,
+                ROAS = Divide(daily.Revenue, daily.Spend),
+                CPA = Divide(daily.Spend, daily.Conversions),
+                CTR = Divide(daily.Clicks, daily.Impressions) * 100
+            });
+        }
+
+        // Platforms comparison table
+        var platformRows = new List<PlatformsTable>();
+
+        foreach (var platform in client.Platforms)
+        {
+            var platformMetrics = campaignsByPlatform[platform.Id]
+                .SelectMany(GetCampaignMetrics);
+
+            var platformTotal = SumMetrics(platformMetrics);
+
+            platformRows.Add(new PlatformsTable
+            {
+                PlatformId = platform.Id,
+                PlatformName = platform.PlatformType,
+                Currency = platform.Currency,
+                Spend = platformTotal.Spend,
+                Revenue = platformTotal.Revenue,
+                Impressions = platformTotal.Impressions,
+                Clicks = platformTotal.Clicks,
+                Conversions = platformTotal.Conversions,
+                ROAS = Divide(platformTotal.Revenue, platformTotal.Spend),
+                CTR = Divide(platformTotal.Clicks, platformTotal.Impressions) * 100,
+                CPA = Divide(platformTotal.Spend, platformTotal.Conversions)
+            });
+        }
+
+        // Campaigns table
+        var campaignRows = new List<CampsTable>();
+
+        foreach (var campaign in campaignList)
+        {
+            var campaignTotal = SumMetrics(GetCampaignMetrics(campaign));
+
+            campaignRows.Add(new CampsTable
+            {
+                CampaignId = campaign.Id,
+                CampaignName = campaign.Name,
+                PlatformId = campaign.PlatformId,
+                Platform = campaign.Platform.PlatformType,
+                Currency = campaign.Platform.Currency,
+                Status = campaign.Status,
+                Objective = campaign.Objective,
+                StartDate = campaign.StartDate,
+                Spend = campaignTotal.Spend,
+                Revenue = campaignTotal.Revenue,
+                ROAS = Divide(campaignTotal.Revenue, campaignTotal.Spend)
+            });
+        }
+
+        return new ClientPageDTO
+        {
+            Impressions = total.Impressions,
+            Clicks = total.Clicks,
+            Conversions = total.Conversions,
+            Spend = total.Spend,
+            Revenue = total.Revenue,
+
+            //Currency = currencies.Count == 1 ? currencies[0] : null,
+
+            ROAS = Divide(total.Revenue, total.Spend),
+            CTR = Divide(total.Clicks, total.Impressions) * 100,
+            CPC = Divide(total.Spend, total.Clicks),
+            CPM = Divide(total.Spend, total.Impressions) * 1000,
+            CPA = Divide(total.Spend, total.Conversions),
+            ConversionRate = Divide(total.Conversions, total.Clicks) * 100,
+
+            // Requires a verified count of completed orders.
+            AOV = null,
+
+            Client = new ClientInfoDTO
+            {
+                Id = client.Id,
+                CompanyName = client.CompanyName,
+                Logo = client.Logo,
+                Website = client.Website,
+                Email = client.Email,
+                Phone = client.Phone,
+                Country = client.Country,
+                Status = client.Status,
+                BusinessModel = client.BusinessModel,
+                CreatedAt = client.CreatedAt,
+                Notes = client.Notes
+            },
+
+            Target = client.Target is null ? null : new ClientTargetDTO
+            {
+                Id = client.Target.Id,
+                TargetROAS = client.Target.TargetROAS,
+                TargetCPA = client.Target.TargetCPA,
+                MonthlyBudget = client.Target.MonthlyBudget,
+                TargetRevenue = client.Target.TargetRevenue,
+                TargetConversions = client.Target.TargetConversions,
+                TargetCTR = client.Target.TargetCTR,
+                TargetCPC = client.Target.TargetCPC
+            },
+
+            Points = points,
+            PlatformRow = platformRows,
+            CampRowS = campaignRows
+        };
     }
 
-    private static CampaignDTO MapToDTO(Campaign campaign)
+    // Collect every ad's daily metrics within one campaign.
+    private static IEnumerable<AdDailyMetrics> GetCampaignMetrics(
+    Campaign campaign)
     {
-        return new CampaignDTO
+        return campaign.AdSets
+          .SelectMany(adSet => adSet.Ads)
+          .SelectMany(ad => ad.DailyMetrics);
+    }
+    public static (double Spend, double Revenue, int Impressions, int Clicks, int Conversions) SumMetrics(IEnumerable<AdDailyMetrics> metrics)
+    {
+        var total = (
+          Spend: 0.0,
+          Revenue: 0.0,
+          Impressions: 0,
+          Clicks: 0,
+          Conversions: 0
+        );
+
+        foreach (var metric in metrics)
         {
-            Id = campaign.Id,
-            Name = campaign.Name,
-            Objective = campaign.Objective,
-            Status = campaign.Status,
-            StartDate = campaign.StartDate,
-            EndDate = campaign.EndDate,
-            CreatedAt = campaign.CreatedAt,
-            PlatformId = campaign.PlatformId,
-            Impressions = campaign.Impressions,
-            Clicks = campaign.Clicks,
-            Conversions = campaign.Conversions,
-            Spend = campaign.Spend,
-            Revenue = campaign.Revenue
-        };
+            total.Spend += metric.Spend;
+            total.Revenue += metric.Revenue;
+            total.Impressions += metric.Impressions;
+            total.Clicks += metric.Clicks;
+            total.Conversions += metric.Conversions;
+        }
+
+        return total;
+    }
+
+    public static double Divide(double numerator, double denominator)
+    {
+        return denominator == 0 ? 0 : numerator / denominator;
     }
 }
 

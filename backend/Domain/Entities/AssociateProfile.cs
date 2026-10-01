@@ -6,7 +6,7 @@ public class AssociateProfile
 {
     public string Id { get; set; } = null!; // Pk & Fk => Appuser.Id
     public AssociateStatus Status { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 
     // Navigation property for 1:1 relationship with AppUser
 

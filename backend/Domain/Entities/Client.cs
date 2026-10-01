@@ -13,7 +13,7 @@ public class Client
     public Currency Currency { get; set; }
     public ClientStatus Status { get; set; }
     public BusinessModel BusinessModel { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
     public string? Notes { get; set; }
 
     public string ManagerId { get; set; } = null!; // FK
@@ -21,3 +21,4 @@ public class Client
     public ICollection<Platform> Platforms { get; set; }
     public ClientTarget? Target { get; set; }
 }
+

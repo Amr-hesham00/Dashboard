@@ -1,6 +1,4 @@
-using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces.Services;
-using Dashboard.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dashboard.API.Controllers;
@@ -15,16 +13,6 @@ public class CampaignController : ControllerBase
     public CampaignController(ICampaignService campaignService)
     {
         _campaignService = campaignService;
-    }
-
-    /// <summary>
-    /// Get list of all campaigns.
-    /// </summary>
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
-    {
-        var campaigns = await _campaignService.GetAllCampaignsAsync();
-        return Ok(campaigns);
     }
 
     /// <summary>
@@ -43,46 +31,6 @@ public class CampaignController : ControllerBase
     }
 
     /// <summary>
-    /// Create a new campaign.
-    /// </summary>
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateCampaignDTO dto)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-
-        var (success, message, campaign) = await _campaignService.CreateCampaignAsync(dto);
-        if (!success)
-        {
-            return BadRequest(new { message });
-        }
-
-        return CreatedAtAction(nameof(GetById), new { id = campaign!.Id }, campaign);
-    }
-
-    /// <summary>
-    /// Update an existing campaign's information.
-    /// </summary>
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateCampaignDTO dto)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-
-        var (success, message) = await _campaignService.UpdateCampaignAsync(id, dto);
-        if (!success)
-        {
-            return BadRequest(new { message });
-        }
-
-        return Ok(new { message });
-    }
-
-    /// <summary>
     /// Delete a campaign by Campaign ID.
     /// </summary>
     [HttpDelete("{id}")]
@@ -97,23 +45,51 @@ public class CampaignController : ControllerBase
         return Ok(new { message });
     }
 
+
+    // under process
     /// <summary>
-    /// Get available campaign status values.
+    /// Get all campaigns belonging to a specific client.
     /// </summary>
-    [HttpGet("statuses")]
-    public IActionResult GetStatuses()
+    /// <param name="clientId">The client ID.</param>
+    [HttpGet("Clients/{clientId:int}")]
+    public async Task<IActionResult> GetByClientOverview(int clientId, DateOnly startDate, DateOnly endDate)
     {
-        var statuses = Enum.GetNames(typeof(CampaignStatus));
-        return Ok(statuses);
+        if (clientId <= 0)
+        {
+            return BadRequest(new { message = "Client ID must be a positive integer." });
+        }
+
+        var campaigns = await _campaignService.GetCampaignsByClientIdAsync(clientId, startDate, endDate);
+        if (campaigns == null)
+        {
+            return NotFound(new { message = $"Client with ID '{clientId}' not found." });
+        }
+
+        return Ok(campaigns);
     }
 
     /// <summary>
-    /// Get available campaign objective values.
+    /// Get campaigns belonging to a specific Client within a specific Platform.
     /// </summary>
-    [HttpGet("objectives")]
-    public IActionResult GetObjectives()
+    [HttpGet("Clients/{clientId:int}/{Platform:alpha}")]
+    public async Task<IActionResult> GetByClientPlatform(int clientId, [FromQuery] int platformid, [FromQuery] DateOnly startDate, [FromQuery] DateOnly endDate)
     {
-        var objectives = Enum.GetNames(typeof(CampaignObjective));
-        return Ok(objectives);
+        if (clientId <= 0)
+        {
+            return BadRequest(new { message = "Client ID must be a positive integer." });
+        }
+
+        if (startDate > endDate)
+        {
+            return BadRequest(new { message = "startDate must not be greater than endDate." });
+        }
+
+        var campaigns = await _campaignService.GetCampaignsByPlatformAsync(clientId, platformid, startDate, endDate);
+        if (campaigns == null)
+        {
+            return NotFound(new { message = $"Client or platform data for client ID '{clientId}' not found." });
+        }
+
+        return Ok(campaigns);
     }
 }

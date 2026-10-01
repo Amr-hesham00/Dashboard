@@ -40,11 +40,6 @@ const CustomTooltip = ({ active, payload, label, sym }: any) => {
   );
 };
 
-const MATCH_TYPE_COLORS: Record<string, string> = {
-  Exact: 'bg-blue-50 text-blue-700 border border-blue-200',
-  Phrase: 'bg-violet-50 text-violet-700 border border-violet-200',
-  Broad: 'bg-slate-100 text-slate-600 border border-slate-200',
-};
 
 export default function GoogleAdsTab({ client }: { client: Client }) {
   const d = client.platforms.google;
@@ -64,7 +59,6 @@ export default function GoogleAdsTab({ client }: { client: Client }) {
     { title: 'CPA', value: formatCurrency(d.cpa, sym), subtext: `Target: ${formatCurrency(client.targetCPA, sym)}`, highlight: client.targetCPA > 0 && d.cpa <= client.targetCPA },
   ];
 
-  const searchTerms = d.searchTerms || [];
 
   return (
     <div className="space-y-5">
@@ -145,7 +139,7 @@ export default function GoogleAdsTab({ client }: { client: Client }) {
           <table className="w-full">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                {['Campaign', 'Status', 'Type', 'Spend', 'Revenue', 'ROAS', 'CTR', 'Avg CPC', 'Conversions', 'CPA'].map(h => (
+                {['Campaign', 'Status', 'Objective', 'Spend', 'Revenue', 'ROAS', 'Start Date'].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs text-slate-500 whitespace-nowrap" style={{ fontWeight: 600 }}>{h}</th>
                 ))}
               </tr>
@@ -169,14 +163,7 @@ export default function GoogleAdsTab({ client }: { client: Client }) {
                       {client.targetROAS === 0 ? 'N/A' : `${camp.roas.toFixed(1)}×`}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-500 text-sm">{formatPercent(camp.ctr)}</td>
-                  <td className="px-4 py-3 text-slate-500 text-sm">{formatCurrency(camp.cpc, sym)}</td>
-                  <td className="px-4 py-3 text-slate-700 text-sm" style={{ fontWeight: 500 }}>{camp.conversions}</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-0.5 rounded-md ${getCPABg(camp.cpa, client.targetCPA)}`} style={{ fontWeight: 600 }}>
-                      {formatCurrency(camp.cpa, sym)}
-                    </span>
-                  </td>
+                  <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{camp.startDate || '01/07/26'}</td>
                 </tr>
               ))}
             </tbody>
@@ -184,60 +171,7 @@ export default function GoogleAdsTab({ client }: { client: Client }) {
         </div>
       </div>
 
-      {/* Search Terms Analysis */}
-      {searchTerms.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-            <div>
-              <h3 className="text-slate-800">Search Terms Analysis</h3>
-              <p className="text-slate-400 text-xs mt-0.5">Top performing search queries · April 2026</p>
-            </div>
-            <span className="bg-blue-50 text-blue-700 text-xs px-2.5 py-1 rounded-lg border border-blue-200" style={{ fontWeight: 500 }}>
-              {searchTerms.length} terms
-            </span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  {['Search Term', 'Match Type', 'Impressions', 'Clicks', 'CTR', 'Avg CPC', 'Conv.', 'Conv. Rate', 'Spend'].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs text-slate-500 whitespace-nowrap" style={{ fontWeight: 600 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {searchTerms.map((term, i) => (
-                  <tr key={i} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors ${i === searchTerms.length - 1 ? 'border-0' : ''}`}>
-                    <td className="px-4 py-3">
-                      <span className="text-slate-700 text-xs" style={{ fontWeight: 500 }}>"{term.term}"</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${MATCH_TYPE_COLORS[term.matchType]}`} style={{ fontWeight: 500 }}>
-                        {term.matchType}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 text-sm">{formatNumber(term.impressions, true)}</td>
-                    <td className="px-4 py-3 text-slate-600 text-sm">{formatNumber(term.clicks, true)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs ${term.ctr >= 7 ? 'text-emerald-600' : term.ctr >= 4 ? 'text-amber-600' : 'text-red-600'}`} style={{ fontWeight: 600 }}>
-                        {formatPercent(term.ctr)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 text-sm">{formatCurrency(term.avgCpc, sym)}</td>
-                    <td className="px-4 py-3 text-slate-700 text-sm" style={{ fontWeight: 500 }}>{term.conversions}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs ${term.convRate >= 2 ? 'text-emerald-600' : term.convRate >= 1 ? 'text-amber-600' : 'text-red-600'}`} style={{ fontWeight: 600 }}>
-                        {formatPercent(term.convRate)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 text-sm">{formatCurrency(term.spend, sym)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

@@ -1,6 +1,5 @@
 using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces.Services;
-using Dashboard.Domain.Enums;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Dashboard.API.Controllers;
@@ -97,13 +96,4 @@ public class AssociateTeamController : ControllerBase
         return Ok(new { message });
     }
 
-    /// <summary>
-    /// Get available associate team status values.
-    /// </summary>
-    [HttpGet("statuses")]
-    public IActionResult GetStatuses()
-    {
-        var statuses = Enum.GetNames(typeof(AssociateTeamStatus));
-        return Ok(statuses);
-    }
 }

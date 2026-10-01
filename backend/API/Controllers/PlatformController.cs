@@ -98,22 +98,32 @@ public class PlatformController : ControllerBase
     }
 
     /// <summary>
-    /// Get available platform type values.
+    /// Get supported platform types.
     /// </summary>
     [HttpGet("types")]
-    public IActionResult GetPlatformTypes()
+    public IActionResult GetTypes()
     {
         var types = Enum.GetNames(typeof(PlatformType));
         return Ok(types);
     }
 
     /// <summary>
-    /// Get available platform status values.
+    /// Get platform statuses.
     /// </summary>
     [HttpGet("statuses")]
     public IActionResult GetStatuses()
     {
         var statuses = Enum.GetNames(typeof(PlatformStatus));
         return Ok(statuses);
+    }
+
+    /// <summary>
+    /// Get supported platform currencies.
+    /// </summary>
+    [HttpGet("currencies")]
+    public IActionResult GetCurrencies()
+    {
+        var currencies = Enum.GetNames(typeof(Currency));
+        return Ok(currencies);
     }
 }

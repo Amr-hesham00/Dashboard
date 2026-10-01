@@ -246,7 +246,7 @@ export default function PrintReportPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                 <thead>
                   <tr style={{ background: '#F8FAFC' }}>
-                    {['Campaign', 'Status', 'Spend', 'Revenue', 'ROAS', 'CTR', 'Conversions', 'CPA'].map(h => (
+                    {['Campaign', 'Status', 'Objective', 'Spend', 'Revenue', 'ROAS', 'Start Date'].map(h => (
                       <th key={h} style={{ textAlign: 'left', padding: '7px 10px', color: '#64748B', fontWeight: 600, fontSize: '10px', borderBottom: '1px solid #E2E8F0' }}>{h}</th>
                     ))}
                   </tr>
@@ -256,16 +256,13 @@ export default function PrintReportPage() {
                     <tr key={camp.id} style={{ borderBottom: '1px solid #F1F5F9', background: i % 2 === 0 ? '#fff' : '#F8FAFC' }}>
                       <td style={{ padding: '7px 10px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={camp.name}>{camp.name}</td>
                       <td style={{ padding: '7px 10px', textTransform: 'capitalize', color: camp.status === 'active' ? '#10B981' : '#94A3B8', fontWeight: 500 }}>{camp.status}</td>
+                      <td style={{ padding: '7px 10px', color: '#64748B' }}>{camp.objective || 'Conversions'}</td>
                       <td style={{ padding: '7px 10px' }}>{formatCurrency(camp.spend, sym)}</td>
                       <td style={{ padding: '7px 10px' }}>{formatCurrency(camp.revenue, sym)}</td>
                       <td style={{ padding: '7px 10px', fontWeight: 600, color: camp.roas >= client.targetROAS ? '#10B981' : '#EF4444' }}>
                         {client.targetROAS === 0 ? 'N/A' : `${camp.roas.toFixed(1)}×`}
                       </td>
-                      <td style={{ padding: '7px 10px' }}>{formatPercent(camp.ctr)}</td>
-                      <td style={{ padding: '7px 10px', fontWeight: 600 }}>{camp.conversions}</td>
-                      <td style={{ padding: '7px 10px', fontWeight: 600, color: camp.cpa <= client.targetCPA ? '#10B981' : '#EF4444' }}>
-                        {formatCurrency(camp.cpa, sym)}
-                      </td>
+                      <td style={{ padding: '7px 10px', color: '#64748B' }}>{camp.startDate || '01/07/26'}</td>
                     </tr>
                   ))}
                 </tbody>

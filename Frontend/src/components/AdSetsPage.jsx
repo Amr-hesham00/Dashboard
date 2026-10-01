@@ -288,7 +288,7 @@ export default function AdSetsPage() {
                       <tr key={adSet.id}>
                         <td className="ps-4">
                           <Link
-                            to={`/clients/cli-101/campaigns/${adSet.campaignId || 1}/adsets/${adSet.id}`}
+                            to={`/Adsets/${adSet.id}`}
                             className="fw-semibold text-body-emphasis text-decoration-none hover-primary"
                             title={`View ad set details for ${adSet.name}`}
                           >
@@ -297,7 +297,7 @@ export default function AdSetsPage() {
                         </td>
                         <td>
                           <Link
-                            to={`/clients/cli-101/campaigns/${adSet.campaignId || 1}`}
+                            to={`/Campaigns/${adSet.campaignId || 1}`}
                             className="text-secondary text-decoration-none hover-primary small fw-medium"
                             title={`View campaign details`}
                           >

@@ -31,6 +31,7 @@ public class PlatformService : IPlatformService
         {
             PlatformType = dto.PlatformType,
             Status = dto.Status,
+            Currency = dto.Currency,
             ClientId = dto.ClientId,
             CreatedAt = DateTime.UtcNow
         };
@@ -51,6 +52,7 @@ public class PlatformService : IPlatformService
 
         platform.PlatformType = dto.PlatformType;
         platform.Status = dto.Status;
+        platform.Currency = dto.Currency;
         platform.ClientId = dto.ClientId;
 
         _unitOfWork.Platform.Update(platform);
@@ -75,13 +77,19 @@ public class PlatformService : IPlatformService
 
     private static PlatformDTO MapToDTO(Platform platform)
     {
+        var pCampaigns = platform.Campaigns?.ToList() ?? new List<Campaign>();
+
         return new PlatformDTO
         {
             Id = platform.Id,
             PlatformType = platform.PlatformType,
+            PlatformName = platform.PlatformType.ToString(),
             Status = platform.Status,
+            Currency = platform.Currency,
+            CurrencyName = platform.Currency.ToString(),
             CreatedAt = platform.CreatedAt,
-            ClientId = platform.ClientId
+            ClientId = platform.ClientId,
+            CampaignsCount = pCampaigns.Count
         };
     }
 }

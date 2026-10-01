@@ -15,6 +15,12 @@ public class CampaignConfig : IEntityTypeConfiguration<Campaign>
                .IsRequired()
                .HasMaxLength(200);
 
+        builder.Property(c => c.ExternalId)
+               .HasMaxLength(100);
+
+        builder.Property(c => c.Currency)
+               .HasConversion<string>();
+
         builder.Property(c => c.Objective)
                .HasConversion<string>();
 

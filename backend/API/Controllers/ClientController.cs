@@ -1,6 +1,5 @@
 using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces.Services;
-using Dashboard.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -129,25 +128,5 @@ public class ClientController : ControllerBase
         return Ok(new { message });
     }
 
-    /// <summary>
-    /// Get available client status values.
-    /// </summary>
-    [HttpGet("statuses")]
-    [AllowAnonymous]
-    public IActionResult GetStatuses()
-    {
-        var statuses = Enum.GetNames(typeof(ClientStatus));
-        return Ok(statuses);
-    }
 
-    /// <summary>
-    /// Get available currency values.
-    /// </summary>
-    [HttpGet("currencies")]
-    [AllowAnonymous]
-    public IActionResult GetCurrencies()
-    {
-        var currencies = Enum.GetNames(typeof(Currency));
-        return Ok(currencies);
-    }
 }

@@ -22,6 +22,8 @@ public class AppDbContext : IdentityDbContext
     public DbSet<Assignment> Assignment { get; set; }
     public DbSet<RefreshToken> RefreshTokens { get; set; }
     public DbSet<ClientTarget> ClientTargets { get; set; }
+    public DbSet<AdDailyMetrics> AdDailyMetrics { get; set; }
+    public DbSet<SearchTerm> SearchTerms { get; set; }
 
     //protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //{

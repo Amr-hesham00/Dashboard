@@ -24,6 +24,7 @@ export interface Campaign {
   cpc: number;
   conversions: number;
   cpa: number;
+  startDate?: string;
 }
 
 export interface SearchTerm {

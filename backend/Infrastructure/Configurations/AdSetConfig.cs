@@ -15,6 +15,9 @@ public class AdSetConfig : IEntityTypeConfiguration<AdSet>
                .IsRequired()
                .HasMaxLength(200);
 
+        builder.Property(a => a.ExternalId)
+               .HasMaxLength(100);
+
         builder.Property(a => a.AudienceType)
                .IsRequired()
                .HasMaxLength(100);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import ApexCharts from 'apexcharts';
 import DashboardLayout from './DashboardLayout';
 import { getClientByIdApi } from '../api/clients';
@@ -105,14 +105,29 @@ const IconCheck = () => (
 );
 
 // ─── Helpers ────────────────────────────────────────────────────────
-const OBJECTIVES_MAP = { 0: 'Awareness', 1: 'Traffic', 2: 'Engagement', 3: 'Leads', 4: 'Sales' };
 const PLATFORMS_MAP = { 1: 'Meta', 2: 'Google', 3: 'Snapchat', 4: 'TikTok' };
 const PLATFORM_KEYS_MAP = { 1: 'meta', 2: 'google', 3: 'snapchat', 4: 'tiktok' };
 
-function formatKPIValue(value, format) {
+function getCurrencySymbol(currency) {
+  if (!currency) return '$';
+  const c = String(currency).toUpperCase();
+  switch (c) {
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    case 'AED': return 'AED ';
+    case 'SAR': return 'SAR ';
+    case 'CAD': return 'C$';
+    case 'AUD': return 'A$';
+    case 'EGP': return 'EGP ';
+    default: return '$';
+  }
+}
+
+function formatKPIValue(value, format, currency = 'USD') {
   if (value == null) return '—';
+  const sym = getCurrencySymbol(currency);
   switch (format) {
-    case 'currency': return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: value >= 100 ? 0 : 2 });
+    case 'currency': return `${sym}${value >= 100 ? value.toLocaleString('en-US', { maximumFractionDigits: 0 }) : value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     case 'percent': return `${value.toFixed(2)}%`;
     case 'multiplier': return `${value.toFixed(2)}x`;
     case 'number': return value >= 1000000 ? `${(value / 1000000).toFixed(2)}M` : value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toLocaleString();
@@ -144,13 +159,18 @@ const PERF_CHART_METRICS = {
   roas: { label: 'ROAS', color: '#0d9488', type: 'ratio' },
   conversions: { label: 'Conversions', color: '#8b5cf6', type: 'number' },
   cpa: { label: 'CPA', color: '#f59e0b', type: 'currency' },
+  cpm: { label: 'CPM', color: '#ea580c', type: 'currency' },
   ctr: { label: 'CTR', color: '#06b6d4', type: 'percent' },
 };
 
 // ─── Main Component ─────────────────────────────────────────────────
 export default function CampaignDetailPage() {
-  const { clientId, campaignId } = useParams();
+  const { clientId: paramClientId, campaignId: paramCampaignId, campId, CampId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const campaignId = campId || CampId || paramCampaignId;
+  const initialClientId = paramClientId || location.state?.clientId;
 
   const [client, setClient] = useState(null);
   const [campaign, setCampaign] = useState(null);
@@ -159,12 +179,25 @@ export default function CampaignDetailPage() {
   const [error, setError] = useState(null);
   const [adSetSearch, setAdSetSearch] = useState('');
   const [adSetStatusFilter, setAdSetStatusFilter] = useState('ALL');
+  const [adSetSortField, setAdSetSortField] = useState('spend');
+  const [adSetSortDir, setAdSetSortDir] = useState('desc');
   const [refreshing, setRefreshing] = useState(false);
 
   // KPI State
   const kpiStorageKey = `campaignPinnedKPIs_${campaignId}`;
   const [pinnedKPIs, setPinnedKPIs] = useState(() => {
-    try { const saved = localStorage.getItem(kpiStorageKey); return saved ? JSON.parse(saved) : defaultCampaignPinnedKPIs; } catch { return defaultCampaignPinnedKPIs; }
+    try {
+      const saved = localStorage.getItem(kpiStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.slice(0, 5);
+        }
+      }
+      return defaultCampaignPinnedKPIs.slice(0, 5);
+    } catch {
+      return defaultCampaignPinnedKPIs.slice(0, 5);
+    }
   });
   const [showKPISelector, setShowKPISelector] = useState(false);
   const [periodConfig, setPeriodConfig] = useState({
@@ -219,15 +252,26 @@ export default function CampaignDetailPage() {
         setLoading(true);
         setError(null);
         const [clientRes, campaignApiRes] = await Promise.all([
-          getClientByIdApi(clientId).catch(() => null),
+          initialClientId ? getClientByIdApi(initialClientId).catch(() => null) : Promise.resolve(null),
           getCampaignByIdApi(campaignId).catch(() => null),
         ]);
-        const resolved = resolveClientAndCampaign(clientId, campaignId);
-        const finalClient = clientRes || resolved.client;
+        const resolved = resolveClientAndCampaign(initialClientId, campaignId);
+        let finalClient = clientRes || resolved.client;
         const finalCampaign = (campaignApiRes && String(campaignApiRes.id) === String(campaignId))
           ? { ...campaignApiRes, platformKey: resolved.platformKey, platformLabel: resolved.campaign?.platformLabel || 'Ad Platform' }
           : resolved.campaign;
         if (!finalCampaign) throw new Error(`Campaign with ID '${campaignId}' was not found.`);
+
+        const targetClientId = finalCampaign?.clientId || finalCampaign?.target?.clientId;
+        if ((!finalClient || finalClient.id === 'cli-101') && targetClientId && targetClientId !== 'cli-101') {
+          try {
+            const fetchedClient = await getClientByIdApi(targetClientId);
+            if (fetchedClient) finalClient = fetchedClient;
+          } catch {
+            // keep finalClient
+          }
+        }
+
         if (isMounted) {
           setClient(finalClient);
           setCampaign(finalCampaign);
@@ -241,19 +285,53 @@ export default function CampaignDetailPage() {
     }
     loadData();
     return () => { isMounted = false; };
-  }, [clientId, campaignId]);
+  }, [initialClientId, campaignId]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 1200);
   }, []);
 
-  // Filter Ad Sets
-  const filteredAdSets = adSets.filter((as) => {
-    const matchSearch = !adSetSearch || as.name.toLowerCase().includes(adSetSearch.toLowerCase()) || (as.audienceType && as.audienceType.toLowerCase().includes(adSetSearch.toLowerCase()));
-    const matchStatus = adSetStatusFilter === 'ALL' || String(as.status).toLowerCase() === adSetStatusFilter.toLowerCase();
-    return matchSearch && matchStatus;
-  });
+  const handleAdSetSort = (field) => {
+    if (adSetSortField === field) {
+      setAdSetSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setAdSetSortField(field);
+      setAdSetSortDir('desc');
+    }
+  };
+
+  // Filter & sort Ad Sets
+  const filteredAdSets = adSets
+    .filter((as) => {
+      const matchSearch =
+        !adSetSearch ||
+        as.name.toLowerCase().includes(adSetSearch.toLowerCase()) ||
+        (as.audienceType && as.audienceType.toLowerCase().includes(adSetSearch.toLowerCase()));
+      const matchStatus = adSetStatusFilter === 'ALL' || String(as.status).toLowerCase() === adSetStatusFilter.toLowerCase();
+      return matchSearch && matchStatus;
+    })
+    .sort((a, b) => {
+      if (!adSetSortField) return 0;
+      const getVal = (item, f) => {
+        if (f === 'cpa') {
+          if (item.cpa !== undefined && item.cpa !== null) return Number(item.cpa) || 0;
+          const conv = Number(item.conversions) || 0;
+          const sp = Number(item.spend) || 0;
+          return conv > 0 ? sp / conv : 0;
+        }
+        if (f === 'roas') {
+          if (item.roas !== undefined && item.roas !== null) return Number(item.roas) || 0;
+          const sp = Number(item.spend) || 0;
+          const rev = Number(item.revenue) || 0;
+          return sp > 0 ? rev / sp : 0;
+        }
+        return Number(item[f]) || 0;
+      };
+      const aVal = getVal(a, adSetSortField);
+      const bVal = getVal(b, adSetSortField);
+      return adSetSortDir === 'asc' ? aVal - bVal : bVal - aVal;
+    });
 
   // Generate time series data for charts based on selected period
   const timeSeries = campaign
@@ -275,6 +353,10 @@ export default function CampaignDetailPage() {
   const cConversions = timeSeries.length ? timeSeries.reduce((s, d) => s + d.conversions, 0) : (Number(campaign?.conversions) || 0);
   const cCpa = cConversions > 0 ? cSpend / cConversions : 0;
   const cCpc = cClicks > 0 ? cSpend / cClicks : 0;
+  const cAov = cConversions > 0 ? cRevenue / cConversions : 0;
+  const cCpm = cImpressions > 0 ? (cSpend / cImpressions) * 1000 : 0;
+  const cConversionRate = cClicks > 0 ? (cConversions / cClicks) * 100 : 0;
+  const resolvedClientId = client?.id || initialClientId || 'cli-101';
 
   // KPI data map (value + simulated change)
   const kpiDataMap = {
@@ -287,6 +369,9 @@ export default function CampaignDetailPage() {
     conversions: { value: cConversions, change: 14.6 },
     cpa: { value: cCpa, change: -5.8 },
     cpc: { value: cCpc, change: -3.4 },
+    aov: { value: cAov, change: 4.5 },
+    cpm: { value: cCpm, change: -2.3 },
+    conversionRate: { value: cConversionRate, change: 3.1 },
   };
 
   // ─── Loading ──────────────────────────────────────────────────────
@@ -294,8 +379,10 @@ export default function CampaignDetailPage() {
     return (
       <DashboardLayout>
         <div className="container-fluid py-5 text-center">
-          <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}><span className="visually-hidden">Loading...</span></div>
-          <p className="text-secondary fw-medium">Loading Campaign details...</p>
+          <div className="spinner-border text-primary" role="status" style={{ width: '2.5rem', height: '2.5rem' }}>
+            <span className="visually-hidden">Loading campaign details...</span>
+          </div>
+          <p className="text-secondary mt-3 fw-medium">Loading campaign performance data...</p>
         </div>
       </DashboardLayout>
     );
@@ -311,7 +398,7 @@ export default function CampaignDetailPage() {
             </div>
             <h4 className="fw-bold mb-2">Campaign Not Found</h4>
             <p className="text-secondary mb-4">{error || 'This campaign does not belong to the specified client.'}</p>
-            <Link to={`/clients/${clientId}`} className="btn btn-primary px-4 rounded-2">Return to Client</Link>
+            <Link to={`/clients/${resolvedClientId}`} className="btn btn-primary px-4 rounded-2">Return to Client</Link>
           </div>
         </div>
       </DashboardLayout>
@@ -320,10 +407,11 @@ export default function CampaignDetailPage() {
 
   const clientName = client?.companyName || 'Client';
   const campStatus = normalizeStatus(campaign.status);
-  const campObjective = OBJECTIVES_MAP[campaign.objective] || 'Campaign';
   const platformLabel = PLATFORMS_MAP[campaign.platformId] || campaign.platformLabel || 'Platform';
   const platformKey = PLATFORM_KEYS_MAP[campaign.platformId] || campaign.platformKey || 'meta';
   const campaignLifetime = formatDateRange(campaign.startDate, campaign.endDate);
+  const campCurrency = campaign?.currency || client?.currency || (platformKey === 'google' ? 'EUR' : platformKey === 'snapchat' ? 'SAR' : platformKey === 'tiktok' ? 'EGP' : 'USD');
+  const currSymbol = getCurrencySymbol(campCurrency);
 
   // Period-aware chart data: Aggregate by month if period > 31 days
   const isMoreThanMonth = periodConfig.days > 31;
@@ -361,12 +449,15 @@ export default function CampaignDetailPage() {
   const monthBadgeText = getMonthBadgeText();
 
   // Performance Chart
-  const perfChartSeries = selectedMetrics.map((key) => ({
+  const activeSelectedMetrics = selectedMetrics.filter((key) => PERF_CHART_METRICS[key]);
+  const currentChartMetrics = activeSelectedMetrics.length > 0 ? activeSelectedMetrics : ['spend', 'revenue'];
+
+  const perfChartSeries = currentChartMetrics.map((key) => ({
     name: PERF_CHART_METRICS[key]?.label || key,
     data: chartData.map((d) => d[key] || 0),
   }));
-  const perfChartColors = selectedMetrics.map((key) => PERF_CHART_METRICS[key]?.color || '#00a76f');
-  const primaryMetric = selectedMetrics[0] || 'spend';
+  const perfChartColors = currentChartMetrics.map((key) => PERF_CHART_METRICS[key]?.color || '#00a76f');
+  const primaryMetric = currentChartMetrics[0] || 'spend';
   const metricType = PERF_CHART_METRICS[primaryMetric]?.type || 'currency';
 
   const perfChartOptions = {
@@ -380,12 +471,15 @@ export default function CampaignDetailPage() {
       labels: { style: { fontSize: '11px', colors: '#94a3b8' } },
       axisBorder: { show: false },
       axisTicks: { show: false },
+      tooltip: {
+        enabled: false,
+      },
     },
     yaxis: {
       labels: {
         style: { fontSize: '11px', colors: '#94a3b8' },
         formatter: (val) => {
-          if (metricType === 'currency') return '$' + (val >= 1000 ? (val / 1000).toFixed(1) + 'K' : val.toFixed(0));
+          if (metricType === 'currency') return currSymbol + (val >= 1000 ? (val / 1000).toFixed(1) + 'K' : val.toFixed(0));
           if (metricType === 'ratio') return val.toFixed(1) + 'x';
           if (metricType === 'percent') return val.toFixed(1) + '%';
           return val >= 1000 ? (val / 1000).toFixed(1) + 'K' : val.toFixed(0);
@@ -394,7 +488,9 @@ export default function CampaignDetailPage() {
     },
     grid: { borderColor: 'rgba(0,0,0,0.06)', strokeDashArray: 4 },
     tooltip: {
+      theme: 'dark',
       x: {
+        show: true,
         formatter: (val, opts) => {
           const idx = opts?.dataPointIndex;
           const point = chartData[idx];
@@ -405,7 +501,7 @@ export default function CampaignDetailPage() {
       },
       y: {
         formatter: (val) => {
-          if (metricType === 'currency') return '$' + val.toLocaleString();
+          if (metricType === 'currency') return currSymbol + val.toLocaleString();
           if (metricType === 'ratio') return val.toFixed(2) + 'x';
           if (metricType === 'percent') return val.toFixed(2) + '%';
           return val.toLocaleString();
@@ -428,31 +524,50 @@ export default function CampaignDetailPage() {
         rotate: isMoreThanMonth ? 0 : -45,
         rotateAlways: !isMoreThanMonth && perfChartCategories.length > 15,
       },
+      tooltip: {
+        enabled: false,
+      },
     },
-    yaxis: { labels: { style: { fontSize: '11px', colors: '#94a3b8' }, formatter: (val) => '$' + (val >= 1000 ? (val / 1000).toFixed(1) + 'K' : val.toFixed(0)) } },
+    yaxis: { labels: { style: { fontSize: '11px', colors: '#94a3b8' }, formatter: (val) => currSymbol + (val >= 1000 ? (val / 1000).toFixed(1) + 'K' : val.toFixed(0)) } },
     grid: { borderColor: 'rgba(0,0,0,0.06)', strokeDashArray: 4 },
     tooltip: {
+      theme: 'dark',
       x: {
+        show: true,
         formatter: (val, opts) => {
           const idx = opts?.dataPointIndex;
           const point = chartData[idx];
           return point?.fullDate || (point?.date ? `${point.date}, 2026` : val);
         },
       },
-      y: { formatter: (val) => '$' + val.toLocaleString() },
+      y: { formatter: (val) => currSymbol + val.toLocaleString() },
     },
     legend: { show: false },
   };
-  const barChartSeries = [
-    { name: 'Spend', data: chartData.map((d) => d.spend) },
-    { name: 'Revenue', data: chartData.map((d) => d.revenue) },
-  ];
+  const renderAdSetSortTH = (field, label, align = 'end', width) => {
+    const isActive = adSetSortField === field;
+    return (
+      <th
+        className={`text-body fw-bold user-select-none ${align === 'center' ? 'text-center' : 'text-end'} ${isActive ? 'text-primary' : ''}`}
+        style={{ cursor: 'pointer', whiteSpace: 'nowrap', width }}
+        onClick={() => handleAdSetSort(field)}
+        title={`Sort by ${label} (${isActive && adSetSortDir === 'desc' ? 'Ascending' : 'Descending'})`}
+      >
+        <div className={`d-inline-flex align-items-center gap-1 ${align === 'center' ? 'justify-content-center' : 'justify-content-end'}`}>
+          <span>{label}</span>
+          <span className={`small ${isActive ? 'text-primary fw-bold' : 'text-secondary opacity-50'}`} style={{ fontSize: '0.7rem' }}>
+            {isActive ? (adSetSortDir === 'asc' ? '▲' : '▼') : '↕'}
+          </span>
+        </div>
+      </th>
+    );
+  };
 
   return (
     <DashboardLayout
       pageTitle={clientName}
       title={`${campaign.name} - Campaign Details | Dasher`}
-      clientSwitcher={{ currentClientId: clientId, currentClientName: clientName }}
+      clientSwitcher={{ currentClientId: resolvedClientId, currentClientName: clientName }}
     >
       <div className="w-100 py-3">
         <style>{`
@@ -486,11 +601,11 @@ export default function CampaignDetailPage() {
                 </Link>
               </li>
               <li className="breadcrumb-item text-truncate" style={{ maxWidth: 220 }}>
-                <Link to={`/clients/${clientId}`} className="text-decoration-none fw-semibold text-secondary hover-primary" title={clientName}>
+                <Link to={`/clients/${resolvedClientId}`} className="text-decoration-none fw-semibold text-secondary hover-primary" title={clientName}>
                   {clientName}
                 </Link>
               </li>
-              <li className="breadcrumb-item active text-success fw-semibold" aria-current="page">
+              <li className="breadcrumb-item active text-success fw-semibold" aria-current="page" title={campaign?.name || 'Campaign'}>
                 Campaigns
               </li>
             </ol>
@@ -521,7 +636,7 @@ export default function CampaignDetailPage() {
           <div className="d-flex align-items-center gap-3">
             <button
               className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center p-2 rounded-circle no-print shadow-sm"
-              onClick={() => navigate(`/clients/${clientId}`)}
+              onClick={() => navigate(`/clients/${resolvedClientId}`)}
               title="Back to Client"
               aria-label="Back to Client"
             >
@@ -547,9 +662,6 @@ export default function CampaignDetailPage() {
                 <h1 className="h3 mb-0 fw-bold text-body-emphasis me-1">{campaign.name}</h1>
                 <span className={`badge rounded-pill border px-2.5 py-1 fw-bold small ${campStatus === 'Active' ? 'bg-success-subtle text-success-emphasis border-success-subtle' : campStatus === 'Paused' ? 'bg-warning-subtle text-warning-emphasis border-warning-subtle' : 'bg-secondary-subtle text-secondary border-secondary-subtle'}`}>
                   {campStatus}
-                </span>
-                <span className="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle rounded-pill px-2.5 py-1 fw-semibold small">
-                  {campObjective}
                 </span>
               </div>
 
@@ -605,7 +717,7 @@ export default function CampaignDetailPage() {
               const kpiData = kpiDataMap[key];
               if (!kpiDef || !kpiData) return null;
               const isPositive = kpiData.change >= 0;
-              const isCostKPI = ['cpa', 'cpc', 'spend'].includes(key);
+              const isCostKPI = ['cpa', 'cpc', 'spend', 'cpm'].includes(key);
               const isGood = isCostKPI ? !isPositive : isPositive;
               return (
                 <div key={key}>
@@ -615,7 +727,7 @@ export default function CampaignDetailPage() {
                         <span className="text-secondary fw-semibold small text-truncate" title={kpiDef.label}>{kpiDef.label}</span>
                         <KpiMetricBadge metricKey={kpiDef.key} color={kpiDef.color} label={kpiDef.label} size={34} />
                       </div>
-                      <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">{formatKPIValue(kpiData.value, kpiDef.format)}</div>
+                      <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">{formatKPIValue(kpiData.value, kpiDef.format, campCurrency)}</div>
                       <div className="d-flex align-items-center justify-content-between pt-1 border-top border-light-subtle mt-1">
                         <div className={`d-flex align-items-center gap-1 fw-semibold small ${isGood ? 'text-success' : 'text-danger'}`}>
                           {isPositive ? <IconUp /> : <IconDown />}
@@ -640,7 +752,7 @@ export default function CampaignDetailPage() {
                 <h5 className="mb-1 fw-bold">Performance Over Time</h5>
                 <small className="text-secondary">Campaign trend by selected metric</small>
               </div>
-              <span className="badge bg-primary-subtle text-primary-emphasis px-2.5 py-1.5 rounded-pill fw-semibold shadow-xs" style={{ fontSize: '0.8rem' }}>
+              <span className="badge px-2.5 py-1.5 rounded-pill fw-semibold shadow-xs" style={{ fontSize: '0.8rem', backgroundColor: 'rgba(28, 37, 46, 0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', color: '#f8fafc', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
                 {monthBadgeText}
               </span>
             </div>
@@ -698,13 +810,13 @@ export default function CampaignDetailPage() {
                   <tr>
                     <th className="ps-4 text-body fw-bold" style={{ minWidth: 260 }}>Ad Set</th>
                     <th className="text-body fw-bold text-center" style={{ width: 80 }}>Status</th>
-                    <th className="text-body fw-bold text-end" style={{ width: 100 }}>Spend</th>
-                    <th className="text-body fw-bold text-end" style={{ width: 110 }}>Impressions</th>
-                    <th className="text-body fw-bold text-end" style={{ width: 80 }}>Clicks</th>
-                    <th className="text-body fw-bold text-end" style={{ width: 100 }}>Conversions</th>
-                    <th className="text-body fw-bold text-end" style={{ width: 80 }}>CPA</th>
-                    <th className="text-body fw-bold text-end" style={{ width: 100 }}>Revenue</th>
-                    <th className="text-body fw-bold text-center" style={{ width: 80 }}>ROAS</th>
+                    {renderAdSetSortTH('spend', 'Spend', 'end', 100)}
+                    {renderAdSetSortTH('impressions', 'Impressions', 'end', 110)}
+                    {renderAdSetSortTH('clicks', 'Clicks', 'end', 80)}
+                    {renderAdSetSortTH('conversions', 'Conversions', 'end', 100)}
+                    {renderAdSetSortTH('cpa', 'CPA', 'end', 80)}
+                    {renderAdSetSortTH('revenue', 'Revenue', 'end', 100)}
+                    {renderAdSetSortTH('roas', 'ROAS', 'center', 80)}
                     <th className="pe-4 text-end text-body fw-bold" style={{ width: 40 }}></th>
                   </tr>
                 </thead>
@@ -713,7 +825,7 @@ export default function CampaignDetailPage() {
                     <tr><td colSpan="10" className="text-center py-4 text-secondary small">No ad sets match your criteria.</td></tr>
                   ) : (
                     filteredAdSets.map((as) => (
-                      <tr key={as.id} className="adset-clickable-row" onClick={() => navigate(`/clients/${clientId}/campaigns/${campaignId}/adsets/${as.id}`)} title={`Open ${as.name} details`}>
+                      <tr key={as.id} className="adset-clickable-row" onClick={() => navigate(`/Adsets/${as.id}`, { state: { clientId: resolvedClientId, campaignId } })} title={`Open ${as.name} details`}>
                         <td className="ps-4">
                           <div className="d-flex flex-column">
                             <span className="fw-bold text-primary text-truncate" style={{ maxWidth: 350, fontSize: '0.9rem' }}>{as.name}</span>
@@ -723,12 +835,12 @@ export default function CampaignDetailPage() {
                         <td className="text-center">
                           <span className={`badge rounded-pill border px-2 py-0.5 fw-semibold ${as.status === 'Active' ? 'bg-success-subtle text-success-emphasis border-success-subtle' : 'bg-secondary-subtle text-secondary'}`} style={{ fontSize: '0.72rem' }}>{as.status}</span>
                         </td>
-                        <td className="text-end fw-bold text-danger text-nowrap" style={{ fontSize: '0.88rem' }}>${as.spend.toLocaleString()}</td>
+                        <td className="text-end fw-bold text-danger text-nowrap" style={{ fontSize: '0.88rem' }}>{currSymbol}{as.spend.toLocaleString()}</td>
                         <td className="text-end text-body fw-medium" style={{ fontSize: '0.85rem' }}>{(as.impressions / 1000).toFixed(0)}K</td>
                         <td className="text-end text-body fw-medium" style={{ fontSize: '0.85rem' }}>{(as.clicks / 1000).toFixed(1)}K</td>
                         <td className="text-end text-body-emphasis fw-bold" style={{ fontSize: '0.88rem' }}>{as.conversions.toLocaleString()}</td>
-                        <td className="text-end text-body fw-semibold" style={{ fontSize: '0.85rem' }}>${Number(as.cpa).toFixed(2)}</td>
-                        <td className="text-end fw-semibold text-success text-nowrap" style={{ fontSize: '0.88rem' }}>${as.revenue.toLocaleString()}</td>
+                        <td className="text-end text-body fw-semibold" style={{ fontSize: '0.85rem' }}>{currSymbol}{Number(as.cpa).toFixed(2)}</td>
+                        <td className="text-end fw-semibold text-success text-nowrap" style={{ fontSize: '0.88rem' }}>{currSymbol}{as.revenue.toLocaleString()}</td>
                         <td className="text-center">
                           <span className="badge bg-primary-subtle text-primary border border-primary-subtle fw-bold px-2 py-0.5" style={{ fontSize: '0.78rem' }}>{Number(as.roas).toFixed(1)}x</span>
                         </td>

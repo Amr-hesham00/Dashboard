@@ -15,15 +15,6 @@ public class ClientTargetController : ControllerBase
         _clientTargetService = clientTargetService;
     }
 
-    /// <summary>
-    /// Get list of all client targets.
-    /// </summary>
-    [HttpGet]
-    public async Task<IActionResult> GetAll()
-    {
-        var targets = await _clientTargetService.GetAllTargetsAsync();
-        return Ok(targets);
-    }
 
     /// <summary>
     /// Get target by Target ID.

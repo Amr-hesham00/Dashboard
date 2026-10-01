@@ -15,6 +15,9 @@ public class AdConfig : IEntityTypeConfiguration<Ad>
                .IsRequired()
                .HasMaxLength(200);
 
+        builder.Property(a => a.ExternalId)
+               .HasMaxLength(100);
+
         builder.Property(a => a.Headline)
                .IsRequired()
                .HasMaxLength(200);

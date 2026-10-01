@@ -1,5 +1,5 @@
-using System.ComponentModel.DataAnnotations;
 using Dashboard.Domain.Enums;
+using System.ComponentModel.DataAnnotations;
 
 namespace Dashboard.Application.DTOs;
 
@@ -7,7 +7,7 @@ public class AssociateProfileDTO
 {
     public string Id { get; set; } = null!;
     public AssociateStatus Status { get; set; }
-    public DateTime CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
     public int TeamId { get; set; }
 }
 

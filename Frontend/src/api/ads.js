@@ -30,9 +30,43 @@ export async function getAdByIdApi(id) {
   return mockAds[0];
 }
 
-export async function getAdsByAdSetIdApi(adSetId) {
+export async function getAdsByAdSetIdApi(adSetId, startDate, endDate) {
   try {
-    const response = await apiFetch(`${API_BASE_URL}/Ad/adset/${adSetId}`);
+    const params = new URLSearchParams();
+    if (startDate) params.append('start', startDate);
+    if (endDate) params.append('end', endDate);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await apiFetch(`${API_BASE_URL}/Ad/adset/${adSetId}${query}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.adRow) && data.adRow.length > 0) return data.adRow;
+    }
+  } catch {
+    // Fall through
+  }
+  return mockAds.filter((a) => String(a.adSetId) === String(adSetId));
+}
+
+export async function getAdSetPageDataApi(adSetId, startDate, endDate) {
+  try {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start', startDate);
+    if (endDate) params.append('end', endDate);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await apiFetch(`${API_BASE_URL}/Ad/adset/${adSetId}${query}`);
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch {
+    // Fall through
+  }
+  return null;
+}
+
+export async function getAdsByClientIdApi(clientId) {
+  try {
+    const response = await apiFetch(`${API_BASE_URL}/Ad/Clients/${clientId}`);
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data)) return data;
@@ -40,7 +74,7 @@ export async function getAdsByAdSetIdApi(adSetId) {
   } catch {
     // Fall through
   }
-  return mockAds.filter((a) => String(a.adSetId) === String(adSetId));
+  return mockAds.filter((a) => String(a.clientId) === String(clientId));
 }
 
 export async function createAdApi(adDto) {

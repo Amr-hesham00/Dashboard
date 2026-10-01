@@ -563,6 +563,18 @@ export default function ClientsPage() {
   };
 
   // Search and Filter Logic
+  const [clientSortField, setClientSortField] = useState(null);
+  const [clientSortDir, setClientSortDir] = useState('desc');
+
+  const handleClientSort = (field) => {
+    if (clientSortField === field) {
+      setClientSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setClientSortField(field);
+      setClientSortDir('desc');
+    }
+  };
+
   const filteredClients = clients.filter((c) => {
     const matchesSearch =
       c.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -575,6 +587,43 @@ export default function ClientsPage() {
 
     return matchesSearch && matchesStatus;
   });
+
+  const sortedClients = useMemo(() => {
+    if (!clientSortField) return filteredClients;
+    return [...filteredClients].sort((a, b) => {
+      const getVal = (client, f) => {
+        const metrics = getClientMetrics(client);
+        if (f === 'spend') return Number(metrics.spend) || 0;
+        if (f === 'revenue') return Number(metrics.revenue) || 0;
+        if (f === 'conversions') return Number(metrics.conversions) || 0;
+        if (f === 'roas') return Number(metrics.targetRoasAchieved) || 0;
+        return 0;
+      };
+      const aVal = getVal(a, clientSortField);
+      const bVal = getVal(b, clientSortField);
+      return clientSortDir === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+  }, [filteredClients, clientSortField, clientSortDir, clientTargetsMap]);
+
+  const renderClientSortTH = (field, label) => {
+    const isActive = clientSortField === field;
+    return (
+      <th
+        scope="col"
+        className={`user-select-none text-nowrap ${isActive ? 'text-primary' : ''}`}
+        style={{ cursor: 'pointer' }}
+        onClick={() => handleClientSort(field)}
+        title={`Sort by ${label} (${isActive && clientSortDir === 'desc' ? 'Ascending' : 'Descending'})`}
+      >
+        <div className="d-inline-flex align-items-center gap-1">
+          <span>{label}</span>
+          <span className={`small ${isActive ? 'text-primary fw-bold' : 'text-secondary opacity-50'}`} style={{ fontSize: '0.7rem' }}>
+            {isActive ? (clientSortDir === 'asc' ? '▲' : '▼') : '↕'}
+          </span>
+        </div>
+      </th>
+    );
+  };
 
 
   return (
@@ -779,11 +828,11 @@ export default function ClientsPage() {
                 <tr>
                   <th scope="col" className="ps-4">Client</th>
                   <th scope="col">Platforms</th>
-                  <th scope="col">Spend</th>
-                  <th scope="col">Revenue</th>
-                  <th scope="col">Conversions</th>
+                  {renderClientSortTH('spend', 'Spend')}
+                  {renderClientSortTH('revenue', 'Revenue')}
+                  {renderClientSortTH('conversions', 'Conversions')}
                   <th scope="col">Status</th>
-                  <th scope="col">Achieved ROAS</th>
+                  {renderClientSortTH('roas', 'Achieved ROAS')}
                   <th scope="col" className="text-end pe-4">Actions</th>
                 </tr>
               </thead>
@@ -796,14 +845,14 @@ export default function ClientsPage() {
                       </div>
                     </td>
                   </tr>
-                ) : filteredClients.length === 0 ? (
+                ) : sortedClients.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="text-center py-5 text-secondary">
                       No clients found matching your search or filters.
                     </td>
                   </tr>
                 ) : (
-                  filteredClients.map((client, index) => {
+                  sortedClients.map((client, index) => {
                     const statusName =
                       typeof client.status === 'number'
                         ? statuses[client.status] || 'Active'
@@ -888,7 +937,8 @@ export default function ClientsPage() {
                                   className="platform-chip-btn p-0 border-0"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    navigate(`/clients/${client.id}?tab=${platform.key}`);
+                                    const tabName = platform.key === 'meta' ? 'Meta' : platform.key === 'tiktok' ? 'TikTok' : platform.key === 'google' ? 'Google' : 'Snapchat';
+                                    navigate(`/clients/${client.id}/${tabName}`);
                                   }}
                                   title={`View ${client.companyName} ${platform.name} tab`}
                                   aria-label={`View ${platform.name} tab`}
