@@ -24,6 +24,7 @@ public class AppDbContext : IdentityDbContext
     public DbSet<ClientTarget> ClientTargets { get; set; }
     public DbSet<AdDailyMetrics> AdDailyMetrics { get; set; }
     public DbSet<SearchTerm> SearchTerms { get; set; }
+    public DbSet<ExchangeRate> ExchangeRates { get; set; }
 
     //protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     //{

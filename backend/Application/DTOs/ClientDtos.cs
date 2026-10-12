@@ -3,57 +3,116 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Dashboard.Application.DTOs;
 
+
 public class ClientDTO
 {
-    public int Id { get; set; }
+    public int ClientId { get; set; }
     public string CompanyName { get; set; } = null!;
     public string? Logo { get; set; }
-    public string Website { get; set; } = null!;
-    public string Email { get; set; } = null!;
-    public string Phone { get; set; } = null!;
-    public string Country { get; set; } = null!;
-    public Currency Currency { get; set; }
+    public BusinessModel Model { get; set; }
+    public int ActiveCampaigns { get; set; }
     public ClientStatus Status { get; set; }
-    public BusinessModel BusinessModel { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public string? Notes { get; set; }
-    public string ManagerId { get; set; } = null!;
-    public ClientTargetDTO? Target { get; set; }
-    public List<PlatformDTO> Platforms { get; set; } = new();
 
-    // Performance & ROAS Target Metrics (Calculated on Backend)
-    public decimal Spend { get; set; }
-    public decimal Revenue { get; set; }
-    public int Conversions { get; set; }
+    // Detail fields — populated by GetClientByIdAsync
+    public string? Website { get; set; }
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
+    public string? Country { get; set; }
+    public string? Currency { get; set; }
+    public string? Notes { get; set; }
+    public string? ManagerId { get; set; }
+    public DateTimeOffset? CreatedAt { get; set; }
+    public List<ClientPlatformDTO>? Platforms { get; set; }
+
+    // Aggregated metrics
+    public double Spend { get; set; }
+    public double Revenue { get; set; }
     public int Impressions { get; set; }
     public int Clicks { get; set; }
-    public double CTR { get; set; }
-    public double CPC { get; set; }
-    public double CPM { get; set; }
-    public double CPA { get; set; }
-    public double ActualROAS { get; set; }
-    public double TargetROAS { get; set; }
-    public double AchievedROAS { get; set; }
+    public int Conversions { get; set; }
+    public double ROAS { get; set; }
+    public double? TargetROAS { get; set; }
+    public double? AchievedROAS { get; set; }
+    public int? TargetConversions { get; set; }
+}
+public class ManagerClientsDTO
+{
 
-    // Target Progress Percentages (Calculated on Backend)
-    public double BudgetProgress { get; set; }
-    public double RevenueProgress { get; set; }
-    public double ConversionsProgress { get; set; }
-    public double CPAProgress { get; set; }
+    //KPIs
+    public int TotalClients { get; set; }
+    public int ActiveCampaigns { get; set; }
+
+
+    //clients table
+    public IEnumerable<ManagerClientsTable>? Row { get; set; }
+
+
+}
+public class ClientPlatformDTO
+{
+    public int Id { get; set; }
+    public string PlatformType { get; set; } = null!;
+    public string Key { get; set; } = null!;
+    public string Status { get; set; } = null!;
+    public bool Connected { get; set; }
 }
 
-public class ManagerClientsDTO : ClientDTO { }
-public class AdminClientsDTO : ClientDTO { }
-public class AssociateClientsDTO : ClientDTO { }
+public class AdminClientsDTO
+{
+    public int TotalClients { get; set; }
+    public int ActiveCampaigns { get; set; }
+    public IEnumerable<ManagerClientsTable>? Row { get; set; }
+    public string? Name { set; get; }
+    public string? Email { set; get; }
+    public string? Role { set; get; }
+    public string? Phone { set; get; }
+    public ClientStatus? Status { set; get; }
+}
+
+public class AssociateClientsDTO
+{
+    public int TotalClients { get; set; }
+    public int ActiveCampaigns { get; set; }
+    public IEnumerable<ManagerClientsTable>? Row { get; set; }
+}
+
+public class ManagerClientsTable
+{
+    public int ClientId { get; set; }
+    public int Id => ClientId;
+    public string CompanyName { get; set; } = null!;
+    public string? Logo { get; set; }
+    public string? Website { get; set; }
+    public string? Country { get; set; }
+    public string? Currency { get; set; }
+    public BusinessModel Model { get; set; }
+
+    public int ActiveCampaigns { get; set; }
+    public ClientStatus Status { get; set; }
+
+    public List<ClientPlatformDTO> Platforms { get; set; } = new();
+
+    public double Spend { get; set; }
+    public double Revenue { get; set; }
+    public int Conversions { get; set; }
+    public int TargetConversions { get; set; }
+
+    public double ROAS { get; set; }
+    public double TargetROAS { get; set; }
+    public double AchievedROAS { get; set; }
+}
+
+
 public class CreateClientDTO
 {
+    public int ClientId { get; set; }
+
     [Required]
     public string CompanyName { get; set; } = null!;
 
     public string? Logo { get; set; }
 
     [Required]
-    [Url]
     public string Website { get; set; } = null!;
 
     [Required]
@@ -61,7 +120,6 @@ public class CreateClientDTO
     public string Email { get; set; } = null!;
 
     [Required]
-    [Phone]
     public string Phone { get; set; } = null!;
 
     [Required]
@@ -75,8 +133,7 @@ public class CreateClientDTO
 
     public string? Notes { get; set; }
 
-    [Required]
-    public string ManagerId { get; set; } = null!;
+    public string? ManagerId { get; set; }
 }
 
 public class UpdateClientDTO
@@ -87,7 +144,6 @@ public class UpdateClientDTO
     public string? Logo { get; set; }
 
     [Required]
-    [Url]
     public string Website { get; set; } = null!;
 
     [Required]
@@ -95,7 +151,6 @@ public class UpdateClientDTO
     public string Email { get; set; } = null!;
 
     [Required]
-    [Phone]
     public string Phone { get; set; } = null!;
 
     [Required]
@@ -109,6 +164,5 @@ public class UpdateClientDTO
 
     public string? Notes { get; set; }
 
-    [Required]
-    public string ManagerId { get; set; } = null!;
+    public string? ManagerId { get; set; }
 }

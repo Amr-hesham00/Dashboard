@@ -52,6 +52,7 @@ public class ClientTargetService : IClientTargetService
         var target = new ClientTarget
         {
             ClientId = dto.ClientId,
+            Currency = dto.Currency,
             TargetROAS = dto.TargetROAS,
             TargetCPA = dto.TargetCPA,
             MonthlyBudget = dto.MonthlyBudget,
@@ -75,6 +76,7 @@ public class ClientTargetService : IClientTargetService
             return (false, $"Client target with ID '{id}' not found.");
         }
 
+        target.Currency = dto.Currency;
         target.TargetROAS = dto.TargetROAS;
         target.TargetCPA = dto.TargetCPA;
         target.MonthlyBudget = dto.MonthlyBudget;
@@ -103,6 +105,7 @@ public class ClientTargetService : IClientTargetService
             target = new ClientTarget
             {
                 ClientId = clientId,
+                Currency = dto.Currency,
                 TargetROAS = dto.TargetROAS,
                 TargetCPA = dto.TargetCPA,
                 MonthlyBudget = dto.MonthlyBudget,
@@ -118,6 +121,7 @@ public class ClientTargetService : IClientTargetService
             return (true, "Client target created successfully.", MapToDTO(target, client.CompanyName));
         }
 
+        target.Currency = dto.Currency;
         target.TargetROAS = dto.TargetROAS;
         target.TargetCPA = dto.TargetCPA;
         target.MonthlyBudget = dto.MonthlyBudget;
@@ -151,6 +155,7 @@ public class ClientTargetService : IClientTargetService
         return new ClientTargetDTO
         {
             Id = target.Id,
+            Currency = target.Currency,
             TargetROAS = target.TargetROAS,
             TargetCPA = target.TargetCPA,
             MonthlyBudget = target.MonthlyBudget,

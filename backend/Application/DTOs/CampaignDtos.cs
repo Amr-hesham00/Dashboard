@@ -1,4 +1,3 @@
-using Dashboard.Domain.Entities;
 using Dashboard.Domain.Enums;
 
 namespace Dashboard.Application.DTOs;
@@ -32,10 +31,10 @@ public class ClientPageDTO : PageDTO
         = Array.Empty<ChartPoint>();
 
     // platforms comparison table
-    public IEnumerable<PlatformsTable> PlatformRow { get; set; }
+    public IEnumerable<PlatformsTable>? PlatformRow { get; set; }
 
     // camps table
-    public IEnumerable<CampsTable> CampRow { get; set; }
+    public IEnumerable<CampsTable>? CampRow { get; set; }
 
 }
 public class PlatformPageDTO : PageDTO
@@ -45,38 +44,6 @@ public class PlatformPageDTO : PageDTO
     // camps table
     public IEnumerable<CampsTable> CampRow { get; set; }
 
-}
-public class CampaignDTO
-{
-    public int Id { get; set; }
-    public string? ExternalId { get; set; }
-    public string Name { get; set; } = null!;
-    public CampaignObjective Objective { get; set; }
-    public CampaignStatus Status { get; set; }
-    public DateTime StartDate { get; set; }
-    public DateTime EndDate { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public int PlatformId { get; set; }
-    public PlatformType PlatformType { get; set; }
-    public string? PlatformName { get; set; }
-
-    public ClientTarget target { get; set; } = null!;
-
-    // KPIs
-    public int Impressions { get; set; }
-    public int Clicks { get; set; }
-    public int Conversions { get; set; }
-    public double Spend { get; set; }
-    public double Revenue { get; set; }
-
-    // derived metrics
-    public double ROAS { get; set; }
-    public double CTR { get; set; }
-    public double CPC { get; set; }
-    public double CPM { get; set; }
-    public double CPA { get; set; }
-    public double AOV { get; set; }
-    public double ConversionRate { get; set; }
 }
 
 

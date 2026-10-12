@@ -13,6 +13,6 @@ public enum BusinessModel
 
 public enum Currency
 {
-    USD, EUR, EGP, GBP, AED, SAR, KWD, QAR
+    USD, EUR, EGP, AED, SAR, KWD, QAR
 }
 

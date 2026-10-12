@@ -6,7 +6,7 @@ public class Platform
     public int Id { get; set; }
     public PlatformType PlatformType { get; set; }
     public PlatformStatus Status { get; set; }
-    public Currency Currency { get; set; } = Currency.USD;
+    public Currency Currency { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 
     public int ClientId { get; set; }

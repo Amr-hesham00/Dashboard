@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import DashboardLayout from './DashboardLayout';
@@ -12,9 +12,19 @@ import {
   getUsersApi,
   getClientTargetsApi,
   updateClientTargetsApi,
+  uploadClientLogoApi,
 } from '../api/clients';
 import { getCampaignsApi } from '../api/campaigns';
-import { defaultClientTargets, getClientTargets } from '../mock/mockData';
+const DEFAULT_CLIENT_TARGETS = {
+  targetRoas: 4.0,
+  targetCpa: 50.0,
+  monthlyBudget: 10000,
+  targetRevenue: 40000,
+  targetConversions: 200,
+  targetCtr: 2.5,
+  targetCpc: 1.5,
+  currency: 'USD',
+};
 import metaIcon from '../assets/meta-icon.webp';
 
 // ─── Supported Advertising Platforms ─────────────────────────────────
@@ -99,8 +109,8 @@ export default function ClientsPage() {
   const [clients, setClients] = useState([]);
   const [users, setUsers] = useState([]);
   const [campaigns, setCampaigns] = useState([]);
-  const [statuses, setStatuses] = useState(['Active', 'Inactive', 'Lead', 'Archived']);
-  const [currencies, setCurrencies] = useState(['USD', 'EUR', 'GBP']);
+  const [statuses, setStatuses] = useState(['Active', 'Inactive', 'Archived']);
+  const [currencies, setCurrencies] = useState(['USD', 'EUR', 'EGP', 'AED', 'SAR', 'KWD', 'QAR']);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -134,7 +144,21 @@ export default function ClientsPage() {
     };
   }, []);
 
-  const getClientPlatformsData = (clientId) => {
+  const getClientPlatformsData = (clientOrId) => {
+    if (clientOrId && typeof clientOrId === 'object' && Array.isArray(clientOrId.platforms) && clientOrId.platforms.length > 0) {
+      const map = {};
+      clientOrId.platforms.forEach((p) => {
+        const key = (p.key || p.platformType || '').toLowerCase().replace('ads', '');
+        map[key] = {
+          connected: p.connected ?? (p.status === 'Connected'),
+          accountId: p.accountId || '',
+          lastSync: 'Active',
+          autoSync: true,
+        };
+      });
+      return map;
+    }
+    const clientId = typeof clientOrId === 'object' ? (clientOrId?.id ?? clientOrId?.clientId) : clientOrId;
     try {
       const saved = localStorage.getItem(`client_platforms_${clientId}`);
       return saved ? JSON.parse(saved) : getDefaultPlatforms();
@@ -174,6 +198,9 @@ export default function ClientsPage() {
   const [editClient, setEditClient] = useState(null); // null if creating
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoUploadError, setLogoUploadError] = useState('');
+  const logoInputRef = useRef(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -181,13 +208,44 @@ export default function ClientsPage() {
     website: '',
     email: '',
     phone: '',
-    country: '',
-    currency: 0, // Enum or string
-    status: 0,   // Enum or string
+    countryCode: '+1',
+    country: 'United States',
+    currency: 0,
+    status: 0,
+    businessModel: 0,
+    logo: '',
     notes: '',
     managerId: '',
-    logo: '',
   });
+
+  const handleLogoFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setLogoUploadError('Please select a valid image file (PNG, JPG, SVG, WebP, GIF).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoUploadError('Image size exceeds 5MB limit.');
+      return;
+    }
+
+    try {
+      setLogoUploading(true);
+      setLogoUploadError('');
+      const res = await uploadClientLogoApi(file);
+      if (res && res.url) {
+        setFormData((prev) => ({ ...prev, logo: res.url }));
+      }
+    } catch (err) {
+      setLogoUploadError(err.message || 'Failed to upload logo.');
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
 
   // Delete State
   const [clientToDelete, setClientToDelete] = useState(null);
@@ -198,7 +256,7 @@ export default function ClientsPage() {
   const [targetClient, setTargetClient] = useState(null);
   const [targetLoading, setTargetLoading] = useState(false);
   const [targetError, setTargetError] = useState('');
-  const [targetFormData, setTargetFormData] = useState(defaultClientTargets);
+  const [targetFormData, setTargetFormData] = useState(DEFAULT_CLIENT_TARGETS);
 
   const getCurrencySymbol = (curr) => {
     if (!curr) return '$';
@@ -222,9 +280,9 @@ export default function ClientsPage() {
     try {
       const targets = await getClientTargetsApi(client.id);
       const curr = typeof client.currency === 'string' ? client.currency : 'USD';
-      setTargetFormData(targets || { ...defaultClientTargets, currency: curr });
+      setTargetFormData(targets || { ...DEFAULT_CLIENT_TARGETS, currency: curr });
     } catch {
-      setTargetFormData({ ...defaultClientTargets, currency: 'USD' });
+      setTargetFormData({ ...DEFAULT_CLIENT_TARGETS, currency: 'USD' });
     } finally {
       setTargetLoading(false);
     }
@@ -297,7 +355,7 @@ export default function ClientsPage() {
       }));
     } else if (presetType === 'default') {
       setTargetFormData({
-        ...defaultClientTargets,
+        ...DEFAULT_CLIENT_TARGETS,
         currency: targetFormData.currency || 'USD',
       });
     }
@@ -309,13 +367,19 @@ export default function ClientsPage() {
       setError('');
       const [clientList, userList, statusList, currList, campaignList] = await Promise.all([
         getClientsApi(),
-        getUsersApi(),
-        getClientStatusesApi(),
-        getClientCurrenciesApi(),
+        getUsersApi().catch(() => []),
+        getClientStatusesApi().catch(() => ['Active', 'Inactive', 'Archived']),
+        getClientCurrenciesApi().catch(() => ['USD', 'EUR', 'EGP', 'AED', 'SAR', 'KWD', 'QAR']),
         getCampaignsApi().catch(() => []),
       ]);
 
-      setClients(clientList || []);
+      const normalizedClients = (clientList || []).map((c) => ({
+        ...c,
+        id: c.id ?? c.clientId,
+        clientId: c.clientId ?? c.id,
+      }));
+
+      setClients(normalizedClients);
       setUsers(userList || []);
       setCampaigns(campaignList || []);
       if (Array.isArray(statusList) && statusList.length) setStatuses(statusList);
@@ -328,51 +392,56 @@ export default function ClientsPage() {
   };
 
   const getClientMetrics = (client) => {
+    const clientId = client.id ?? client.clientId;
     const clientCampaigns = (campaigns || []).filter(
       (c) =>
-        String(c.clientId) === String(client.id) ||
+        String(c.clientId) === String(clientId) ||
         (client.companyName && String(c.clientName || '').toLowerCase() === String(client.companyName).toLowerCase())
     );
 
     // Spend
     const campSpend = clientCampaigns.reduce((acc, c) => acc + (Number(c.spend) || 0), 0);
-    const spend = client.spend !== undefined && Number(client.spend) > 0
+    const spend = client.spend !== undefined && client.spend !== null
       ? Number(client.spend)
       : (campSpend > 0 ? campSpend : (Number(client.budget) || 0));
 
     // Revenue
     const campRevenue = clientCampaigns.reduce((acc, c) => acc + (Number(c.revenue) || 0), 0);
-    const revenue = client.revenue !== undefined && Number(client.revenue) > 0
+    const revenue = client.revenue !== undefined && client.revenue !== null
       ? Number(client.revenue)
       : (campRevenue > 0 ? campRevenue : (spend > 0 ? Math.round(spend * 4.0) : 0));
 
     // Conversions
     const campConversions = clientCampaigns.reduce((acc, c) => acc + (Number(c.conversions) || 0), 0);
-    const conversions = client.conversions !== undefined && Number(client.conversions) > 0
+    const conversions = client.conversions !== undefined && client.conversions !== null
       ? Number(client.conversions)
       : (campConversions > 0 ? campConversions : (spend > 0 ? Math.round(spend / 65) : 0));
 
     // Active Campaigns
-    const activeCampaigns = clientCampaigns.filter(
-      (c) => c.status === 0 || String(c.status).toLowerCase() === 'active'
-    ).length;
+    const activeCampaigns = client.activeCampaigns !== undefined && client.activeCampaigns !== null
+      ? Number(client.activeCampaigns)
+      : clientCampaigns.filter(
+          (c) => c.status === 0 || String(c.status).toLowerCase() === 'active'
+        ).length;
 
     // Target ROAS
-    const targets = getClientTargets(client.id);
-    const targetRoas = Number(client.targetRoas) || Number(client.target?.targetROAS) || Number(targets?.targetRoas) || 4.0;
+    const targetRoas = Number(client.targetROAS) || Number(client.targetRoas) || Number(client.target?.targetROAS) || 4.0;
 
     // Actual ROAS
-    const actualRoas = Number(client.actualRoas) || (spend > 0 ? (revenue / spend) : (Number(client.roas) || 4.0));
+    const actualRoas = client.roas !== undefined && client.roas !== null
+      ? Number(client.roas)
+      : (spend > 0 ? (revenue / spend) : (Number(client.actualRoas) || 0));
 
     // Achieved ROAS (%) = current ROAS * 100 / target ROAS
-    const targetRoasAchieved = Number(client.achievedROAS) || (targetRoas > 0 ? Math.round((actualRoas * 100) / targetRoas) : 0);
+    const targetRoasAchieved = client.achievedROAS !== undefined && client.achievedROAS !== null
+      ? Number(client.achievedROAS)
+      : (targetRoas > 0 ? Math.round((actualRoas * 100) / targetRoas) : 0);
 
     // Target/Total Conversions
     const targetConversions =
-      Number(targets?.targetConversions) ||
       Number(client.targetConversions) ||
       Number(client.target?.targetConversions) ||
-      Math.max(conversions, Math.round(spend / Math.max(0.1, Number(targets?.targetCpa) || 5.5)) || 500);
+      Math.max(conversions, 0);
 
     return {
       spend,
@@ -398,32 +467,56 @@ export default function ClientsPage() {
       website: '',
       email: '',
       phone: '',
+      countryCode: '+1',
       country: 'United States',
       currency: 0,
       status: 0,
-      notes: '',
-      managerId: users[0]?.id || user?.id || '',
+      businessModel: 0,
       logo: '',
+      notes: '',
+      managerId: user?.id || user?.userId || users[0]?.id || '',
     });
     setModalError('');
+    setLogoUploadError('');
     setShowModal(true);
   };
 
   const openEditModal = (client) => {
     setEditClient(client);
+    const clientCurrIdx = typeof client.currency === 'number'
+      ? client.currency
+      : currencies.indexOf(client.currency) >= 0
+        ? currencies.indexOf(client.currency)
+        : 0;
+
+    const clientStatusIdx = typeof client.status === 'number'
+      ? client.status
+      : statuses.indexOf(client.status) >= 0
+        ? statuses.indexOf(client.status)
+        : 0;
+
+    const clientModelIdx = typeof client.model === 'number'
+      ? client.model
+      : (client.model === 'Lead' || client.businessModel === 'Lead' || client.businessModel === 1)
+        ? 1
+        : 0;
+
     setFormData({
       companyName: client.companyName || '',
       website: client.website || '',
       email: client.email || '',
       phone: client.phone || '',
-      country: client.country || '',
-      currency: typeof client.currency === 'number' ? client.currency : currencies.indexOf(client.currency) >= 0 ? currencies.indexOf(client.currency) : 0,
-      status: typeof client.status === 'number' ? client.status : statuses.indexOf(client.status) >= 0 ? statuses.indexOf(client.status) : 0,
-      notes: client.notes || '',
-      managerId: client.managerId || user?.id || '',
+      countryCode: '+1',
+      country: client.country || 'United States',
+      currency: clientCurrIdx,
+      status: clientStatusIdx,
+      businessModel: clientModelIdx,
       logo: client.logo || '',
+      notes: client.notes || '',
+      managerId: client.managerId || user?.id || user?.userId || '',
     });
     setModalError('');
+    setLogoUploadError('');
     setShowModal(true);
   };
 
@@ -431,17 +524,46 @@ export default function ClientsPage() {
     e.preventDefault();
     setModalError('');
 
-    if (!formData.companyName || !formData.email || !formData.phone || !formData.website) {
-      setModalError('Please fill in all required fields.');
+    if (!formData.companyName?.trim()) {
+      setModalError('Company Name is required.');
       return;
     }
+    if (!formData.email?.trim()) {
+      setModalError('Email is required.');
+      return;
+    }
+    if (!formData.phone?.trim()) {
+      setModalError('Phone is required.');
+      return;
+    }
+    if (!formData.country?.trim()) {
+      setModalError('Country is required.');
+      return;
+    }
+
+    let formattedWebsite = (formData.website || '').trim();
+    if (formattedWebsite && !/^https?:\/\//i.test(formattedWebsite)) {
+      formattedWebsite = `https://${formattedWebsite}`;
+    }
+
+    const fullPhone = formData.phone.trim().startsWith('+')
+      ? formData.phone.trim()
+      : `${formData.countryCode || '+1'} ${formData.phone.trim()}`;
 
     setModalLoading(true);
     try {
       const payload = {
-        ...formData,
+        companyName: formData.companyName.trim(),
+        website: formattedWebsite || 'https://example.com',
+        email: formData.email.trim(),
+        phone: fullPhone,
+        country: formData.country.trim(),
         currency: Number(formData.currency),
         status: Number(formData.status),
+        businessModel: Number(formData.businessModel),
+        logo: formData.logo?.trim() || null,
+        notes: formData.notes?.trim() || null,
+        managerId: formData.managerId || user?.id || user?.userId || users[0]?.id || '',
       };
 
       if (editClient) {
@@ -603,7 +725,7 @@ export default function ClientsPage() {
       const bVal = getVal(b, clientSortField);
       return clientSortDir === 'asc' ? aVal - bVal : bVal - aVal;
     });
-  }, [filteredClients, clientSortField, clientSortDir, clientTargetsMap]);
+  }, [filteredClients, clientSortField, clientSortDir, campaigns]);
 
   const renderClientSortTH = (field, label) => {
     const isActive = clientSortField === field;
@@ -865,7 +987,7 @@ export default function ClientsPage() {
                           ? 'badge text-secondary-emphasis bg-secondary-subtle'
                           : 'badge text-info-emphasis bg-info-subtle';
 
-                    const clientPlatforms = getClientPlatformsData(client.id);
+                    const clientPlatforms = getClientPlatformsData(client);
                     const connectedCount = AD_PLATFORMS.filter(
                       (p) => clientPlatforms[p.key]?.connected !== false
                     ).length;
@@ -884,6 +1006,28 @@ export default function ClientsPage() {
                         {/* 1. Company */}
                         <td className="ps-4">
                           <div className="d-flex align-items-center gap-3">
+                            {client.logo ? (
+                              <img
+                                src={client.logo}
+                                alt={client.companyName}
+                                className="shadow-sm flex-shrink-0"
+                                style={{
+                                  width: 42,
+                                  height: 42,
+                                  borderRadius: 12,
+                                  objectFit: 'contain',
+                                  backgroundColor: '#fff',
+                                  border: '1px solid rgba(0,0,0,0.08)',
+                                  padding: '2px',
+                                }}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  if (e.currentTarget.nextSibling) {
+                                    e.currentTarget.nextSibling.style.display = 'flex';
+                                  }
+                                }}
+                              />
+                            ) : null}
                             <div
                               className="d-flex align-items-center justify-content-center text-white fw-bold shadow-sm flex-shrink-0"
                               style={{
@@ -893,6 +1037,7 @@ export default function ClientsPage() {
                                 background: getClientGradient(client.companyName),
                                 fontSize: '0.9rem',
                                 letterSpacing: '0.5px',
+                                display: client.logo ? 'none' : 'flex',
                               }}
                             >
                               {getClientInitials(client.companyName)}
@@ -1005,12 +1150,12 @@ export default function ClientsPage() {
                           <div className="d-flex flex-column gap-1" style={{ minWidth: 125, maxWidth: 145 }}>
                             <div className="d-flex align-items-center justify-content-between">
                               <span className={`fw-bold small ${metrics.targetRoasAchieved >= 100
-                                  ? 'text-success'
-                                  : metrics.targetRoasAchieved >= 80
-                                    ? 'text-primary'
-                                    : metrics.targetRoasAchieved >= 60
-                                      ? 'text-warning'
-                                      : 'text-danger'
+                                ? 'text-success'
+                                : metrics.targetRoasAchieved >= 80
+                                  ? 'text-primary'
+                                  : metrics.targetRoasAchieved >= 60
+                                    ? 'text-warning'
+                                    : 'text-danger'
                                 }`}>
                                 {metrics.targetRoasAchieved}%
                               </span>
@@ -1021,12 +1166,12 @@ export default function ClientsPage() {
                             <div className="progress" style={{ height: 4, borderRadius: 2 }}>
                               <div
                                 className={`progress-bar ${metrics.targetRoasAchieved >= 100
-                                    ? 'bg-success'
-                                    : metrics.targetRoasAchieved >= 80
-                                      ? 'bg-primary'
-                                      : metrics.targetRoasAchieved >= 60
-                                        ? 'bg-warning'
-                                        : 'bg-danger'
+                                  ? 'bg-success'
+                                  : metrics.targetRoasAchieved >= 80
+                                    ? 'bg-primary'
+                                    : metrics.targetRoasAchieved >= 60
+                                      ? 'bg-warning'
+                                      : 'bg-danger'
                                   }`}
                                 role="progressbar"
                                 style={{ width: `${Math.min(100, Math.max(5, metrics.targetRoasAchieved))}%` }}
@@ -1210,7 +1355,7 @@ export default function ClientsPage() {
 
                     <div className="row g-3">
                       <div className="col-md-6">
-                        <label className="form-label">
+                        <label className="form-label fw-semibold small">
                           Company Name <span className="text-danger">*</span>
                         </label>
                         <input
@@ -1223,8 +1368,84 @@ export default function ClientsPage() {
                         />
                       </div>
 
+                      <div className="col-12">
+                        <label className="form-label fw-semibold small">Company Logo</label>
+                        <div className="p-3 rounded-3 border bg-light d-flex flex-column flex-sm-row align-items-sm-center gap-3">
+                          <div
+                            className="position-relative d-flex align-items-center justify-content-center rounded-3 border bg-white flex-shrink-0 shadow-sm"
+                            style={{ width: 56, height: 56, overflow: 'hidden' }}
+                          >
+                            {formData.logo ? (
+                              <img
+                                src={formData.logo}
+                                alt="Logo preview"
+                                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="d-flex align-items-center justify-content-center text-muted fw-bold" style={{ fontSize: '1.1rem' }}>
+                                {formData.companyName ? formData.companyName.charAt(0).toUpperCase() : '🏢'}
+                              </div>
+                            )}
+                            {logoUploading && (
+                              <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-white bg-opacity-75">
+                                <span className="spinner-border spinner-border-sm text-primary" role="status"></span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex-grow-1">
+                            <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                              <input
+                                type="file"
+                                ref={logoInputRef}
+                                className="d-none"
+                                accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                                onChange={handleLogoFileChange}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1.5"
+                                onClick={() => logoInputRef.current?.click()}
+                                disabled={logoUploading}
+                              >
+                                {logoUploading ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm" role="status"></span>
+                                    <span>Uploading...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span>{formData.logo ? 'Change Logo Image' : 'Upload Logo Image'}</span>
+                                  </>
+                                )}
+                              </button>
+                              {formData.logo && (
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-danger"
+                                  onClick={() => setFormData((prev) => ({ ...prev, logo: '' }))}
+                                  disabled={logoUploading}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+                            <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+                              Supports PNG, JPG, WebP, SVG, GIF (max 5MB)
+                            </div>
+                            {logoUploadError && (
+                              <div className="text-danger small mt-1">{logoUploadError}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="col-md-6">
-                        <label className="form-label">
+                        <label className="form-label fw-semibold small">
                           Website <span className="text-danger">*</span>
                         </label>
                         <input
@@ -1238,7 +1459,7 @@ export default function ClientsPage() {
                       </div>
 
                       <div className="col-md-6">
-                        <label className="form-label">
+                        <label className="form-label fw-semibold small">
                           Email <span className="text-danger">*</span>
                         </label>
                         <input
@@ -1252,13 +1473,13 @@ export default function ClientsPage() {
                       </div>
 
                       <div className="col-md-6">
-                        <label className="form-label">
+                        <label className="form-label fw-semibold small">
                           Phone <span className="text-danger">*</span>
                         </label>
                         <div className="input-group">
                           <select
                             className="form-select"
-                            style={{ maxWidth: '110px' }}
+                            style={{ maxWidth: '105px' }}
                             value={formData.countryCode || '+1'}
                             onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
                           >
@@ -1270,9 +1491,8 @@ export default function ClientsPage() {
                             <option value="+61">🇦🇺 +61</option>
                             <option value="+971">🇦🇪 +971</option>
                             <option value="+966">🇸🇦 +966</option>
-                            <option value="+81">🇯🇵 +81</option>
-                            <option value="+86">🇨🇳 +86</option>
-                            <option value="+55">🇧🇷 +55</option>
+                            <option value="+965">🇰🇼 +965</option>
+                            <option value="+974">🇶🇦 +974</option>
                             <option value="+20">🇪🇬 +20</option>
                           </select>
                           <input
@@ -1286,8 +1506,8 @@ export default function ClientsPage() {
                         </div>
                       </div>
 
-                      <div className="col-md-4">
-                        <label className="form-label">
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold small">
                           Country <span className="text-danger">*</span>
                         </label>
                         <input
@@ -1301,11 +1521,23 @@ export default function ClientsPage() {
                       </div>
 
                       <div className="col-md-4">
-                        <label className="form-label">Currency</label>
+                        <label className="form-label fw-semibold small">Business Model</label>
+                        <select
+                          className="form-select"
+                          value={formData.businessModel}
+                          onChange={(e) => setFormData({ ...formData, businessModel: Number(e.target.value) })}
+                        >
+                          <option value={0}>E-Commerce</option>
+                          <option value={1}>Lead Generation</option>
+                        </select>
+                      </div>
+
+                      <div className="col-md-4">
+                        <label className="form-label fw-semibold small">Currency</label>
                         <select
                           className="form-select"
                           value={formData.currency}
-                          onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                          onChange={(e) => setFormData({ ...formData, currency: Number(e.target.value) })}
                         >
                           {currencies.map((curr, idx) => (
                             <option key={curr || idx} value={idx}>
@@ -1316,11 +1548,11 @@ export default function ClientsPage() {
                       </div>
 
                       <div className="col-md-4">
-                        <label className="form-label">Status</label>
+                        <label className="form-label fw-semibold small">Status</label>
                         <select
                           className="form-select"
                           value={formData.status}
-                          onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                          onChange={(e) => setFormData({ ...formData, status: Number(e.target.value) })}
                         >
                           {statuses.map((st, idx) => (
                             <option key={st || idx} value={idx}>
@@ -1331,23 +1563,7 @@ export default function ClientsPage() {
                       </div>
 
                       <div className="col-md-12">
-                        <label className="form-label">Assigned Manager</label>
-                        <select
-                          className="form-select"
-                          value={formData.managerId}
-                          onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
-                        >
-                          {users.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : u.userName} ({u.email})
-                            </option>
-                          ))}
-                          {users.length === 0 && <option value={user?.id || 'admin'}>Current Account User</option>}
-                        </select>
-                      </div>
-
-                      <div className="col-md-12">
-                        <label className="form-label">Notes</label>
+                        <label className="form-label fw-semibold small">Notes</label>
                         <textarea
                           className="form-control"
                           rows="3"

@@ -255,11 +255,13 @@ export async function apiFetch(url, options = {}) {
   const customHeaders = options.headers || {};
   const isRetry = Boolean(options._isRetry);
 
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+
   const fetchOptions = {
     ...options,
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(inMemoryAccessToken ? { Authorization: `Bearer ${inMemoryAccessToken}` } : {}),
       ...customHeaders,
     },

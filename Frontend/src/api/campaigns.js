@@ -22,11 +22,20 @@ export async function getCampaignsByClientIdApi(clientId) {
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.campRow)) {
+        return data.campRow.map((c) => ({
+          ...c,
+          id: c.campaignId ?? c.id,
+          name: c.campaignName ?? c.name,
+          platformType: c.platform != null ? c.platform : c.platformType,
+          platformName: c.platform != null ? c.platform : c.platformName,
+        }));
+      }
     }
   } catch {
     // Fall through
   }
-  return mockCampaigns.filter((c) => String(c.clientId) === String(clientId));
+  return [];
 }
 
 export async function getCampaignByIdApi(id) {

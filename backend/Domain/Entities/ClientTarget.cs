@@ -1,9 +1,12 @@
+using Dashboard.Domain.Enums;
+
 namespace Dashboard.Domain.Entities;
 
 public class ClientTarget
 {
     public int Id { get; set; }
 
+    public Currency Currency { get; set; } = Currency.USD;
 
     public double? TargetROAS { get; set; }
     public double? TargetCPA { get; set; }

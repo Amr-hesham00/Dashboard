@@ -35,7 +35,7 @@ public class ClientConfig : IEntityTypeConfiguration<Client>
                .IsRequired()
                .HasMaxLength(100);
 
-        builder.Property(c => c.Currency)
+        builder.Property(c => c.UnitCurrency)
                .IsRequired()
                .HasConversion<string>();
 

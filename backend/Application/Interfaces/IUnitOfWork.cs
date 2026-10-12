@@ -17,6 +17,7 @@ public interface IUnitOfWork : IDisposable
     IClientTargetRepo ClientTarget { get; }
     IAdDailyMetricsRepo AdDailyMetrics { get; }
     ISearchTermRepo SearchTerm { get; }
+    IExchangeRateRepo ExchangeRate { get; }
 
     Task Complete();
 }

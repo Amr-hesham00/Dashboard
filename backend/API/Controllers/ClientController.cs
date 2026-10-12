@@ -12,10 +12,12 @@ namespace Dashboard.API.Controllers;
 public class ClientController : ControllerBase
 {
     private readonly IClientService _clientService;
+    private readonly IWebHostEnvironment _environment;
 
-    public ClientController(IClientService clientService)
+    public ClientController(IClientService clientService, IWebHostEnvironment environment)
     {
         _clientService = clientService;
+        _environment = environment;
     }
 
     /// <summary>
@@ -23,7 +25,7 @@ public class ClientController : ControllerBase
     /// Admins receive all clients; Managers & Associates receive their assigned clients.
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetByUser() // Client	Platforms	Spend	Revenue	Conversions	Status	Achieved ROAS	Actions
+    public async Task<IActionResult> GetByUser() // Client	Active_Campaigns	Status	ROAS	Conversions(%)	Target_Achievement
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var role = User.FindFirstValue(ClaimTypes.Role);
@@ -32,20 +34,18 @@ public class ClientController : ControllerBase
             return Unauthorized(new { message = "User identity or role not found in token." });
         }
 
-        IEnumerable<ClientDTO> clients = new List<ClientDTO>();
         switch (role)
         {
             case "Admin":
-                clients = await _clientService.GetAdminClientasync(userId);
-                break;
+                var adminClients = await _clientService.GetAdminClientasync(userId);
+                return Ok(adminClients);
             case "Manager":
-                clients = await _clientService.GetManagerClientasync(userId);
-                break;
+                var managerClients = await _clientService.GetManagerClientasync(userId);
+                return Ok(managerClients);
             default:
-                clients = await _clientService.GetAssociateClientasync(userId);
-                break;
+                var associateClients = await _clientService.GetAssociateClientasync(userId);
+                return Ok(associateClients);
         }
-        return Ok(clients);
     }
 
     /// <summary>
@@ -79,6 +79,12 @@ public class ClientController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateClientDTO dto)
     {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(dto.ManagerId) && !string.IsNullOrEmpty(userId))
+        {
+            dto.ManagerId = userId;
+        }
+
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
@@ -90,7 +96,7 @@ public class ClientController : ControllerBase
             return BadRequest(new { message });
         }
 
-        return CreatedAtAction(nameof(GetById), new { id = client!.Id }, client);
+        return CreatedAtAction(nameof(GetById), new { id = client!.ClientId }, client);
     }
 
     /// <summary>
@@ -128,5 +134,46 @@ public class ClientController : ControllerBase
         return Ok(new { message });
     }
 
+    /// <summary>
+    /// Upload client logo image.
+    /// </summary>
+    [HttpPost("upload-logo")]
+    public async Task<IActionResult> UploadLogo(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "No file uploaded." });
+        }
+
+        var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif" };
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowedExtensions.Contains(extension))
+        {
+            return BadRequest(new { message = "Invalid file type. Allowed formats: .png, .jpg, .jpeg, .webp, .svg, .gif" });
+        }
+
+        if (file.Length > 5 * 1024 * 1024)
+        {
+            return BadRequest(new { message = "File size exceeds 5MB limit." });
+        }
+
+        var webRoot = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        var logosDir = Path.Combine(webRoot, "Logos");
+        if (!Directory.Exists(logosDir))
+        {
+            Directory.CreateDirectory(logosDir);
+        }
+
+        var fileName = $"{Guid.NewGuid()}{extension}";
+        var filePath = Path.Combine(logosDir, fileName);
+
+        using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream);
+        }
+
+        var logoUrl = $"/Logos/{fileName}";
+        return Ok(new { url = logoUrl, fileName });
+    }
 
 }

@@ -728,13 +728,6 @@ export default function CampaignDetailPage() {
                         <KpiMetricBadge metricKey={kpiDef.key} color={kpiDef.color} label={kpiDef.label} size={34} />
                       </div>
                       <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">{formatKPIValue(kpiData.value, kpiDef.format, campCurrency)}</div>
-                      <div className="d-flex align-items-center justify-content-between pt-1 border-top border-light-subtle mt-1">
-                        <div className={`d-flex align-items-center gap-1 fw-semibold small ${isGood ? 'text-success' : 'text-danger'}`}>
-                          {isPositive ? <IconUp /> : <IconDown />}
-                          <span>{Math.abs(kpiData.change).toFixed(1)}%</span>
-                        </div>
-                        <span className="text-secondary small" style={{ fontSize: '0.75rem' }}>vs prev</span>
-                      </div>
                     </div>
                   </div>
                 </div>

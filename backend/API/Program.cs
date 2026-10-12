@@ -5,6 +5,7 @@ using Dashboard.Application.Services;
 using Dashboard.Domain.Enums;
 using Dashboard.Infrastructure;
 using Dashboard.Infrastructure.Repositories;
+using Dashboard.Infrastructure.Workers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,7 @@ builder.Services.AddScoped<IRefreshTokenRepo, RefreshTokenRepo>();
 builder.Services.AddScoped<IClientTargetRepo, ClientTargetRepo>();
 builder.Services.AddScoped<IAdDailyMetricsRepo, AdDailyMetricsRepo>();
 builder.Services.AddScoped<ISearchTermRepo, SearchTermRepo>();
+builder.Services.AddScoped<IExchangeRateRepo, ExchangeRateRepo>();
 #endregion
 //-----------------------------------Services------------------------------------
 #region Services
@@ -48,6 +50,15 @@ builder.Services.AddScoped<IAssociateProfileService, AssociateProfileService>();
 builder.Services.AddScoped<IAssociateTeamService, AssociateTeamService>();
 builder.Services.AddScoped<IAssignmentService, AssignmentService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
+builder.Services.AddHostedService<ExchangeRateSyncWorker>();
+builder.Services.AddHttpClient<IExchangeRateApiService, ExchangeRateApiService>(client =>
+{
+    var baseUrl = builder.Configuration["ExchangeRateApi:BaseUrl"] ?? "https://v6.exchangerate-api.com/v6/";
+    if (!baseUrl.EndsWith('/')) baseUrl += "/";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 #endregion
 //-----------------------------------DbContext, Identity------------------------------------
 builder.Services.AddDbContext<AppDbContext>(
@@ -233,7 +244,12 @@ using (var scope = app.Services.CreateScope())
                 $"Failed to assign Admin role: {errors}");
         }
     }
-}//---------------------------------------------------------------------------------
+
+    // 5. Seed sample client-level data (platforms, campaigns, adsets, ads, metrics, search terms)
+    //var dbContext = services.GetRequiredService<AppDbContext>();
+    //await DataSeeder.SeedClientDataAsync(dbContext, admin.Id);
+}
+//---------------------------------------------------------------------------------
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -251,6 +267,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+
 app.Run();
 
 

@@ -12,6 +12,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/Logos': {
+        target: 'https://localhost:7057',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 });

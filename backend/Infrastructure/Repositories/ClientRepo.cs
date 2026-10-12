@@ -18,16 +18,18 @@ public class ClientRepo : GenericRepo<Client>, IClientRepo
             .Include(client => client.Platforms)
             .FirstOrDefaultAsync(client => client.Id == clientId);
     }
-    /// <summary>
-    /// returns a list of clients based on the user's role.
-    /// </summary>
     public async Task<List<Client>> GetClientsByUserAsync(string userId, string? role)
     {
         var query = dbset
+            .AsNoTracking()
             .Include(c => c.Platforms)
                 .ThenInclude(p => p.Campaigns)
+                    .ThenInclude(camp => camp.AdSets)
+                        .ThenInclude(adset => adset.Ads)
+                            .ThenInclude(ad => ad.DailyMetrics)
             .Include(c => c.Target)
             .Include(c => c.Assignments)
+            .AsSplitQuery()
             .AsQueryable();
 
         if (string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase))
@@ -46,20 +48,30 @@ public class ClientRepo : GenericRepo<Client>, IClientRepo
     public async Task<List<Client>> GetAllWithDetailsAsync()
     {
         return await dbset
+            .AsNoTracking()
             .Include(c => c.Platforms)
                 .ThenInclude(p => p.Campaigns)
+                    .ThenInclude(camp => camp.AdSets)
+                        .ThenInclude(adset => adset.Ads)
+                            .ThenInclude(ad => ad.DailyMetrics)
             .Include(c => c.Target)
             .Include(c => c.Assignments)
+            .AsSplitQuery()
             .ToListAsync();
     }
 
     public async Task<Client?> GetByIdWithDetailsAsync(int id)
     {
         return await dbset
+            .AsNoTracking()
             .Include(c => c.Platforms)
                 .ThenInclude(p => p.Campaigns)
+                    .ThenInclude(camp => camp.AdSets)
+                        .ThenInclude(adset => adset.Ads)
+                            .ThenInclude(ad => ad.DailyMetrics)
             .Include(c => c.Target)
             .Include(c => c.Assignments)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(c => c.Id == id);
     }
 }

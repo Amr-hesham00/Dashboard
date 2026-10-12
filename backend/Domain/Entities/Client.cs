@@ -10,7 +10,7 @@ public class Client
     public string Email { get; set; } = null!;
     public string Phone { get; set; } = null!;
     public string Country { get; set; } = null!;
-    public Currency Currency { get; set; }
+    public Currency UnitCurrency { get; set; } = Currency.USD;
     public ClientStatus Status { get; set; }
     public BusinessModel BusinessModel { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

@@ -50,20 +50,6 @@ public class AdController : ControllerBase
         return Ok(ad);
     }
 
-    /// <summary>
-    /// Delete an ad by Ad ID.
-    /// </summary>
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(int id)
-    {
-        var (success, message) = await _adService.DeleteAdAsync(id);
-        if (!success)
-        {
-            return BadRequest(new { message });
-        }
-
-        return Ok(new { message });
-    }
 
     // under process
     /// <summary>

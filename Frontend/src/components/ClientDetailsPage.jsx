@@ -10,20 +10,13 @@ import {
   getClientCurrenciesApi,
   getClientTargetsApi,
   updateClientTargetsApi,
+  uploadClientLogoApi,
 } from '../api/clients';
 import { getCampaignsByClientIdApi } from '../api/campaigns';
 import {
-  mockClients,
   availableKPIs,
   defaultPinnedKPIs,
-  mockClientKPIs,
-  mockPlatformPerformance,
-  mockClientPlatformPerformance,
-  getClientPlatformPerformance,
-  mockClientTrends,
   mockClientInsights,
-  mockClientNotes,
-  defaultClientTargets,
   generateClientTimeSeries,
   aggregateTimeSeriesByMonth,
 } from '../mock/mockData';
@@ -347,6 +340,9 @@ export default function ClientDetailsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoUploadError, setLogoUploadError] = useState('');
+  const logoInputRef = useRef(null);
   const [users, setUsers] = useState([]);
   const [statuses, setStatuses] = useState(['Active', 'Inactive', 'Lead', 'Archived']);
   const [currencies, setCurrencies] = useState(['USD', 'EUR', 'GBP']);
@@ -363,6 +359,35 @@ export default function ClientDetailsPage() {
     logo: '',
     countryCode: '+1',
   });
+
+  const handleLogoFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setLogoUploadError('Please select a valid image file (PNG, JPG, SVG, WebP, GIF).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoUploadError('Image size exceeds 5MB limit.');
+      return;
+    }
+
+    try {
+      setLogoUploading(true);
+      setLogoUploadError('');
+      const res = await uploadClientLogoApi(file);
+      if (res && res.url) {
+        setFormData((prev) => ({ ...prev, logo: res.url }));
+      }
+    } catch (err) {
+      setLogoUploadError(err.message || 'Failed to upload logo.');
+    } finally {
+      setLogoUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = '';
+    }
+  };
 
   // ─── UI State ───────────────────────────────────────────────────
   const searchTab = new URLSearchParams(location.search).get('tab');
@@ -467,7 +492,7 @@ export default function ClientDetailsPage() {
 
   // ─── Target Settings State ─────────────────────────────────────
   const [showTargetModal, setShowTargetModal] = useState(false);
-  const [targetSettings, setTargetSettings] = useState(() => defaultClientTargets[id] || defaultClientTargets['cli-101'] || {
+  const [targetSettings, setTargetSettings] = useState({
     businessModel: 'ecommerce',
     mainConversionEvent: 'Purchases',
     monthlyBudget: 50000,
@@ -724,8 +749,18 @@ export default function ClientDetailsPage() {
         getClientTargetsApi(id).catch(() => null),
         getCampaignsByClientIdApi(id).catch(() => []),
       ]);
-      const finalClient = clientData || mockClients.find((c) => String(c.id) === String(id) || c.companyId === id) || mockClients[0];
-      setClient(finalClient);
+      const finalClient = clientData;
+      if (!finalClient) {
+        setError(`Client with ID ${id} not found.`);
+        setClient(null);
+        return;
+      }
+      const normalizedClient = {
+        ...finalClient,
+        id: finalClient.id ?? finalClient.clientId,
+        clientId: finalClient.clientId ?? finalClient.id,
+      };
+      setClient(normalizedClient);
       setUsers(usersList || []);
       setRealCampaigns(Array.isArray(campaignsData) ? campaignsData : []);
       if (Array.isArray(statusList) && statusList.length) setStatuses(statusList);
@@ -735,17 +770,26 @@ export default function ClientDetailsPage() {
         setTargetFormData(targetsData);
       }
 
-      const found = usersList?.find((u) => String(u.id) === String(finalClient?.managerId));
-      setManager(found || { id: finalClient?.managerId || 'usr-001', userName: 'System Admin', email: 'admin@dashboard.com', firstName: 'System', lastName: 'Admin' });
+      const found = usersList?.find((u) => String(u.id) === String(normalizedClient?.managerId));
+      setManager(found || (normalizedClient?.managerId ? { id: normalizedClient.managerId, userName: normalizedClient.managerName || 'Account Manager', email: '', firstName: '', lastName: '' } : null));
 
-      // Load notes from mock
-      const clientNotes = mockClientNotes.filter((n) => n.clientId === String(id));
-      setNotes(clientNotes.length > 0 ? clientNotes : mockClientNotes.filter((n) => n.clientId === 'cli-101'));
+      // Load notes from client record if available
+      if (normalizedClient?.notes) {
+        setNotes([
+          {
+            id: 'note-1',
+            text: normalizedClient.notes,
+            author: normalizedClient.managerName || 'Account Manager',
+            role: 'Manager',
+            date: normalizedClient.createdAt ? new Date(normalizedClient.createdAt).toLocaleDateString() : 'Initial Note',
+          },
+        ]);
+      } else {
+        setNotes([]);
+      }
     } catch (err) {
-      console.warn('Network issue loading client details, using mock fallback:', err);
-      const fallbackClient = mockClients.find((c) => String(c.id) === String(id) || c.companyId === id) || mockClients[0];
-      setClient(fallbackClient);
-      setError('');
+      setError(err.message || 'Failed to load client details.');
+      setClient(null);
     } finally {
       setLoading(false);
     }
@@ -782,7 +826,7 @@ export default function ClientDetailsPage() {
   // ─── Get KPI values & Trend Data for this client ─────────────────
   const clientKPIs = useMemo(() => {
     // Consume backend-calculated metrics directly from client
-    if (client && (client.spend !== undefined || client.actualROAS !== undefined)) {
+    if (client) {
       const sp = Number(client.spend) || 0;
       const rev = Number(client.revenue) || 0;
       const clk = Number(client.clicks) || 0;
@@ -793,13 +837,16 @@ export default function ClientDetailsPage() {
       const cpmVal = Number(client.cpm) || (imp > 0 ? (sp / imp) * 1000 : 0);
       const cpaVal = Number(client.cpa) || (conv > 0 ? sp / conv : 0);
       const convRateVal = Number(client.conversionRate) || (clk > 0 ? (conv / clk) * 100 : 0);
+      const roasVal = client.roas !== undefined && client.roas !== null
+        ? Number(client.roas)
+        : (sp > 0 ? rev / sp : (Number(client.actualROAS) || 0));
 
       return {
         spend: { value: sp, change: 0 },
         totalSpend: { value: sp, change: 0 },
         revenue: { value: rev, change: 0 },
         totalRevenue: { value: rev, change: 0 },
-        roas: { value: Number(client.actualROAS) || 0, change: 0 },
+        roas: { value: roasVal, change: 0 },
         impressions: { value: imp, change: 0 },
         clicks: { value: clk, change: 0 },
         conversions: { value: conv, change: 0 },
@@ -810,16 +857,22 @@ export default function ClientDetailsPage() {
         conversionRate: { value: convRateVal, change: 0 },
       };
     }
-    // Fallback for mock client IDs
-    const mock = mockClientKPIs[id] || mockClientKPIs['cli-101'];
     return {
-      ...mock,
-      spend: mock.spend || mock.totalSpend,
-      totalSpend: mock.totalSpend || mock.spend,
-      revenue: mock.revenue || mock.totalRevenue,
-      totalRevenue: mock.totalRevenue || mock.revenue,
+      spend: { value: 0, change: 0 },
+      totalSpend: { value: 0, change: 0 },
+      revenue: { value: 0, change: 0 },
+      totalRevenue: { value: 0, change: 0 },
+      roas: { value: 0, change: 0 },
+      impressions: { value: 0, change: 0 },
+      clicks: { value: 0, change: 0 },
+      conversions: { value: 0, change: 0 },
+      ctr: { value: 0, change: 0 },
+      cpc: { value: 0, change: 0 },
+      cpm: { value: 0, change: 0 },
+      cpa: { value: 0, change: 0 },
+      conversionRate: { value: 0, change: 0 },
     };
-  }, [client, id]);
+  }, [client]);
 
   // ─── Spend vs Revenue Chart Config ──────────────────────────────
   const isMoreThanMonth = periodConfig.days > 31;
@@ -953,56 +1006,71 @@ export default function ClientDetailsPage() {
     },
   };
 
-  // ─── Platform Performance & Campaigns for this specific client ───
-  const mockPlatPerf = getClientPlatformPerformance(
-    id,
-    client?.companyName || client?.name,
-    client?.category
-  );
-
   const clientPlatformPerformance = useMemo(() => {
-    if (client && Array.isArray(client.platforms) && client.platforms.length > 0) {
-      const platforms = {
-        meta: { label: 'Meta Ads', currency: 'USD', campaigns: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
-        google: { label: 'Google Ads', currency: 'EUR', campaigns: [], searchTerms: mockPlatPerf?.google?.searchTerms || [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
-        tiktok: { label: 'TikTok Ads', currency: 'EGP', campaigns: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
-        snapchat: { label: 'Snapchat Ads', currency: 'SAR', campaigns: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
-      };
+    const platforms = {
+      meta: { label: 'Meta Ads', currency: client?.currency || 'USD', campaigns: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
+      google: { label: 'Google Ads', currency: client?.currency || 'EUR', campaigns: [], searchTerms: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
+      tiktok: { label: 'TikTok Ads', currency: client?.currency || 'EGP', campaigns: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
+      snapchat: { label: 'Snapchat Ads', currency: client?.currency || 'SAR', campaigns: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
+    };
 
-      // Direct backend-calculated platform performance
+    if (client && Array.isArray(client.platforms)) {
       client.platforms.forEach((p) => {
-        const pKey = mapPlatformTypeToKey(p.platformType, p.platformName);
+        const pKey = mapPlatformTypeToKey(p.platformType || p.key, p.platformName);
         if (platforms[pKey]) {
-          platforms[pKey].currency = p.currency || client.currency || (pKey === 'google' ? 'EUR' : pKey === 'snapchat' ? 'SAR' : pKey === 'tiktok' ? 'EGP' : 'USD');
-          platforms[pKey].kpis = {
-            spend: Number(p.spend) || 0,
-            revenue: Number(p.revenue) || 0,
-            roas: Number(p.roas) || 0,
-            impressions: Number(p.impressions) || 0,
-            clicks: Number(p.clicks) || 0,
-            ctr: Number(p.ctr) || 0,
-            conversions: Number(p.conversions) || 0,
-            cpa: Number(p.cpa) || 0,
-            cpc: Number(p.cpc) || 0,
-            cpm: Number(p.cpm) || 0,
-          };
+          platforms[pKey].currency = p.currency || client.currency || platforms[pKey].currency;
+          platforms[pKey].connected = p.connected ?? (p.status === 'Connected');
+          if (p.spend !== undefined) {
+            platforms[pKey].kpis = {
+              spend: Number(p.spend) || 0,
+              revenue: Number(p.revenue) || 0,
+              roas: Number(p.roas) || 0,
+              impressions: Number(p.impressions) || 0,
+              clicks: Number(p.clicks) || 0,
+              ctr: Number(p.ctr) || 0,
+              conversions: Number(p.conversions) || 0,
+              cpa: Number(p.cpa) || 0,
+              cpc: Number(p.cpc) || 0,
+              cpm: Number(p.cpm) || 0,
+            };
+          }
         }
       });
-
-      // Attach any campaign items to their platform
-      if (Array.isArray(realCampaigns)) {
-        realCampaigns.forEach((c) => {
-          const pKey = mapPlatformTypeToKey(c.platformType, c.platformName);
-          if (platforms[pKey]) {
-            platforms[pKey].campaigns.push(c);
-          }
-        });
-      }
-
-      return platforms;
     }
-    return mockPlatPerf;
-  }, [client, realCampaigns, mockPlatPerf]);
+
+    if (Array.isArray(realCampaigns) && realCampaigns.length > 0) {
+      realCampaigns.forEach((c) => {
+        const pKey = mapPlatformTypeToKey(c.platformType, c.platformName);
+        if (platforms[pKey]) {
+          platforms[pKey].campaigns.push(c);
+          const k = platforms[pKey].kpis;
+          k.spend += Number(c.spend) || 0;
+          k.revenue += Number(c.revenue) || 0;
+          k.conversions += Number(c.conversions) || 0;
+          k.impressions += Number(c.impressions) || 0;
+          k.clicks += Number(c.clicks) || 0;
+        }
+      });
+      Object.values(platforms).forEach((plat) => {
+        const k = plat.kpis;
+        if (k.spend > 0) {
+          k.roas = Number((k.revenue / k.spend).toFixed(2));
+        }
+        if (k.impressions > 0) {
+          k.ctr = Number(((k.clicks / k.impressions) * 100).toFixed(2));
+          k.cpm = Number(((k.spend / k.impressions) * 1000).toFixed(2));
+        }
+        if (k.clicks > 0) {
+          k.cpc = Number((k.spend / k.clicks).toFixed(2));
+        }
+        if (k.conversions > 0) {
+          k.cpa = Number((k.spend / k.conversions).toFixed(2));
+        }
+      });
+    }
+
+    return platforms;
+  }, [client, realCampaigns]);
 
   // ─── ROAS by Platform Chart Config ──────────────────────────────
   const platformKeys = Object.keys(clientPlatformPerformance);
@@ -1301,20 +1369,40 @@ export default function ClientDetailsPage() {
 
   const openEditModal = () => {
     if (!client) return;
+    const clientCurrIdx = typeof client.currency === 'number'
+      ? client.currency
+      : currencies.indexOf(client.currency) >= 0
+        ? currencies.indexOf(client.currency)
+        : 0;
+
+    const clientStatusIdx = typeof client.status === 'number'
+      ? client.status
+      : statuses.indexOf(client.status) >= 0
+        ? statuses.indexOf(client.status)
+        : 0;
+
+    const clientModelIdx = typeof client.model === 'number'
+      ? client.model
+      : (client.model === 'Lead' || client.businessModel === 'Lead' || client.businessModel === 1)
+        ? 1
+        : 0;
+
     setFormData({
       companyName: client.companyName || '',
       website: client.website || '',
       email: client.email || '',
       phone: client.phone || '',
-      country: client.country || '',
-      currency: typeof client.currency === 'number' ? client.currency : currencies.indexOf(client.currency) >= 0 ? currencies.indexOf(client.currency) : 0,
-      status: typeof client.status === 'number' ? client.status : statuses.indexOf(client.status) >= 0 ? statuses.indexOf(client.status) : 0,
+      country: client.country || 'United States',
+      currency: clientCurrIdx,
+      status: clientStatusIdx,
+      businessModel: clientModelIdx,
       notes: client.notes || '',
       managerId: client.managerId || users[0]?.id || '',
       logo: client.logo || '',
       countryCode: '+1',
     });
     setEditError('');
+    setLogoUploadError('');
     setShowEditModal(true);
   };
 
@@ -1322,15 +1410,28 @@ export default function ClientDetailsPage() {
     e.preventDefault();
     setEditError('');
 
-    if (!formData.companyName || !formData.email || !formData.phone || !formData.website) {
+    if (!formData.companyName?.trim() || !formData.email?.trim() || !formData.phone?.trim() || !formData.website?.trim()) {
       setEditError('Please fill in all required fields (Company Name, Website, Email, Phone).');
       return;
     }
 
+    let formattedWebsite = (formData.website || '').trim();
+    if (formattedWebsite && !/^https?:\/\//i.test(formattedWebsite)) {
+      formattedWebsite = `https://${formattedWebsite}`;
+    }
+
     try {
       setEditLoading(true);
-      const updated = await updateClientApi(client.id, formData);
-      setClient(updated || { ...client, ...formData });
+      const payload = {
+        ...formData,
+        website: formattedWebsite,
+        currency: Number(formData.currency),
+        status: Number(formData.status),
+        businessModel: Number(formData.businessModel),
+        managerId: formData.managerId || client.managerId || '',
+      };
+      const updated = await updateClientApi(client.id, payload);
+      setClient(updated || { ...client, ...payload });
       setShowEditModal(false);
       setToastMsg('Client details updated successfully!');
       setTimeout(() => setToastMsg(''), 3000);
@@ -1644,7 +1745,30 @@ export default function ClientDetailsPage() {
               <IconBack />
             </button>
 
-            {/* Modern Gradient Avatar with Squircle & Initials */}
+            {/* Modern Gradient Avatar with Squircle & Initials / Logo */}
+            {client.logo ? (
+              <img
+                src={client.logo}
+                alt={client.companyName}
+                className="shadow-sm flex-shrink-0"
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 14,
+                  objectFit: 'contain',
+                  backgroundColor: '#fff',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  padding: '3px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                }}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  if (e.currentTarget.nextSibling) {
+                    e.currentTarget.nextSibling.style.display = 'flex';
+                  }
+                }}
+              />
+            ) : null}
             <div
               className="d-flex align-items-center justify-content-center text-white fw-bold shadow-sm flex-shrink-0"
               style={{
@@ -1655,6 +1779,7 @@ export default function ClientDetailsPage() {
                 fontSize: '1.15rem',
                 letterSpacing: '0.5px',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                display: client.logo ? 'none' : 'flex',
               }}
             >
               {getClientInitials(client.companyName)}
@@ -1679,32 +1804,38 @@ export default function ClientDetailsPage() {
 
               {/* Subheader Metadata Spans (Email, Currency, Website) */}
               <div className="d-flex align-items-center gap-3 text-secondary small flex-wrap" style={{ fontSize: '0.80rem' }}>
-                <a
-                  href={`mailto:${client.email}`}
-                  className="text-body-secondary text-decoration-none d-inline-flex align-items-center gap-2"
-                  title="Email Client"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-body-tertiary flex-shrink-0"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
-                  <span>{client.email}</span>
-                </a>
+                {client.email && (
+                  <a
+                    href={`mailto:${client.email}`}
+                    className="text-body-secondary text-decoration-none d-inline-flex align-items-center gap-2"
+                    title="Email Client"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-body-tertiary flex-shrink-0"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
+                    <span>{client.email}</span>
+                  </a>
+                )}
 
-                <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
-                <span className="badge bg-body-tertiary text-body-secondary border rounded-2 px-2.5 py-0.5 fw-semibold" style={{ fontSize: '0.74rem' }}>
-                  {getCurrencyName(client.currency)}
-                </span>
+                {client.currency && (
+                  <>
+                    {client.email && <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>}
+                    <span className="badge bg-body-tertiary text-body-secondary border rounded-2 px-2.5 py-0.5 fw-semibold" style={{ fontSize: '0.74rem' }}>
+                      {getCurrencyName(client.currency)}
+                    </span>
+                  </>
+                )}
 
-                {(client.website || 'https://acmeglobal.com') && (
+                {client.website && (
                   <>
                     <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
                     <a
-                      href={(client.website || 'https://acmeglobal.com').startsWith('http') ? (client.website || 'https://acmeglobal.com') : `https://${client.website}`}
+                      href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-primary text-decoration-none d-inline-flex align-items-center gap-2 fw-medium"
                       title="Open Website"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
-                      <span>{(client.website || 'acmeglobal.com').replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+                      <span>{client.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
                       <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="ms-0.5 flex-shrink-0" style={{ opacity: 0.7 }}><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
                     </a>
                   </>
@@ -2049,13 +2180,6 @@ export default function ClientDetailsPage() {
                           </div>
                           <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">
                             {formatKPIValue(kpiData.value, kpiDef.format)}
-                          </div>
-                          <div className="d-flex align-items-center justify-content-between pt-1 border-top border-light-subtle mt-1">
-                            <div className={`d-flex align-items-center gap-1 fw-semibold small ${isGood ? 'text-success' : 'text-danger'}`}>
-                              {isPositive ? <IconUp /> : <IconDown />}
-                              <span>{Math.abs(kpiData.change).toFixed(1)}%</span>
-                            </div>
-                            <span className="text-secondary small" style={{ fontSize: '0.75rem' }}>vs prev</span>
                           </div>
                         </div>
                       </div>
@@ -2800,7 +2924,7 @@ export default function ClientDetailsPage() {
                           <span className={`badge ${insight.priority === 'High' ? 'bg-danger' : insight.priority === 'Medium' ? 'bg-warning text-dark' : 'bg-info'}`}>{insight.priority}</span>
                           <span className="badge bg-light text-dark border">{insight.category}</span>
                         </div>
-                        <span className="badge bg-light text-secondary border small">{mockPlatformPerformance[insight.platform]?.label || insight.platform}</span>
+                        <span className="badge bg-light text-secondary border small">{{ meta: 'Meta Ads', google: 'Google Ads', tiktok: 'TikTok Ads', snapchat: 'Snapchat Ads' }[insight.platform] || insight.platform}</span>
                       </div>
                       <h6 className="fw-bold mb-2">{insight.title}</h6>
                       <p className="text-secondary small mb-3" style={{ lineHeight: 1.6 }}>{insight.description}</p>
@@ -2976,7 +3100,83 @@ export default function ClientDetailsPage() {
                       </div>
                     </div>
 
-                    <div className="col-md-4">
+                    <div className="col-12">
+                      <label className="form-label small fw-semibold">Company Logo</label>
+                      <div className="p-3 rounded-3 border bg-light d-flex flex-column flex-sm-row align-items-sm-center gap-3">
+                        <div
+                          className="position-relative d-flex align-items-center justify-content-center rounded-3 border bg-white flex-shrink-0 shadow-sm"
+                          style={{ width: 56, height: 56, overflow: 'hidden' }}
+                        >
+                          {formData.logo ? (
+                            <img
+                              src={formData.logo}
+                              alt="Logo preview"
+                              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                            />
+                          ) : (
+                            <div className="d-flex align-items-center justify-content-center text-muted fw-bold" style={{ fontSize: '1.1rem' }}>
+                              {formData.companyName ? formData.companyName.charAt(0).toUpperCase() : '🏢'}
+                            </div>
+                          )}
+                          {logoUploading && (
+                            <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-white bg-opacity-75">
+                              <span className="spinner-border spinner-border-sm text-primary" role="status"></span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-grow-1">
+                          <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                            <input
+                              type="file"
+                              ref={logoInputRef}
+                              className="d-none"
+                              accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                              onChange={handleLogoFileChange}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1.5"
+                              onClick={() => logoInputRef.current?.click()}
+                              disabled={logoUploading}
+                            >
+                              {logoUploading ? (
+                                <>
+                                  <span className="spinner-border spinner-border-sm" role="status"></span>
+                                  <span>Uploading...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                  <span>{formData.logo ? 'Change Logo Image' : 'Upload Logo Image'}</span>
+                                </>
+                              )}
+                            </button>
+                            {formData.logo && (
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-danger"
+                                onClick={() => setFormData((prev) => ({ ...prev, logo: '' }))}
+                                disabled={logoUploading}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                          <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+                            Supports PNG, JPG, WebP, SVG, GIF (max 5MB)
+                          </div>
+                          {logoUploadError && (
+                            <div className="text-danger small mt-1">{logoUploadError}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="col-md-6">
                       <label className="form-label small fw-semibold">
                         Country <span className="text-danger">*</span>
                       </label>
@@ -2988,6 +3188,18 @@ export default function ClientDetailsPage() {
                         placeholder="United States"
                         required
                       />
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label small fw-semibold">Business Model</label>
+                      <select
+                        className="form-select"
+                        value={formData.businessModel}
+                        onChange={(e) => setFormData({ ...formData, businessModel: parseInt(e.target.value, 10) })}
+                      >
+                        <option value={0}>E-Commerce</option>
+                        <option value={1}>Lead Generation</option>
+                      </select>
                     </div>
 
                     <div className="col-md-4">
@@ -3017,22 +3229,6 @@ export default function ClientDetailsPage() {
                             {st}
                           </option>
                         ))}
-                      </select>
-                    </div>
-
-                    <div className="col-md-12">
-                      <label className="form-label small fw-semibold">Assigned Manager</label>
-                      <select
-                        className="form-select"
-                        value={formData.managerId}
-                        onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
-                      >
-                        {users.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : u.userName} ({u.email})
-                          </option>
-                        ))}
-                        {users.length === 0 && <option value="admin">System Admin (admin@dashboard.com)</option>}
                       </select>
                     </div>
 
@@ -3665,21 +3861,6 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
                     </div>
                     <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">
                       {formatValue(rawVal, kpiDef.format)}
-                    </div>
-                    <div className="d-flex align-items-center justify-content-between pt-1 border-top border-light-subtle mt-1">
-                      {isConnected ? (
-                        <div className={`d-flex align-items-center gap-1 fw-semibold small ${isGood ? 'text-success' : 'text-danger'}`}>
-                          {isPositive ? <IconUp /> : <IconDown />}
-                          <span>{Math.abs(mockChange).toFixed(1)}%</span>
-                        </div>
-                      ) : (
-                        <span className="badge bg-secondary-subtle text-secondary border px-1.5 py-0.5" style={{ fontSize: '0.66rem' }}>
-                          Saved snapshot
-                        </span>
-                      )}
-                      <span className="text-secondary small" style={{ fontSize: '0.75rem' }}>
-                        {isConnected ? `vs prev ${platform.label}` : 'last sync'}
-                      </span>
                     </div>
                   </div>
                 </div>
