@@ -9,6 +9,16 @@ public class AdSetRepo : GenericRepo<AdSet>, IAdSetRepo
     {
     }
 
+    public override async Task<AdSet?> GetById(int id)
+    {
+        return await dbset
+            .AsNoTracking()
+            .Include(x => x.Campaign)
+                .ThenInclude(c => c.Platform)
+                    .ThenInclude(p => p.Client)
+            .FirstOrDefaultAsync(x => x.Id == id);
+    }
+
     public async Task<IEnumerable<AdSet>> GetByCampaignIdAsync(int campaignId, DateOnly startDate, DateOnly endDate)
     {
         return await dbset

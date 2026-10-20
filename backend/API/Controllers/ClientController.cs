@@ -12,20 +12,21 @@ namespace Dashboard.API.Controllers;
 public class ClientController : ControllerBase
 {
     private readonly IClientService _clientService;
-    private readonly IWebHostEnvironment _environment;
+    private readonly ILogoService _logoService;
 
-    public ClientController(IClientService clientService, IWebHostEnvironment environment)
+    public ClientController(IClientService clientService, ILogoService logoService)
     {
         _clientService = clientService;
-        _environment = environment;
+        _logoService = logoService;
     }
 
     /// <summary>
     ///  Get clients accessible to the current authenticated user.
-    /// Admins receive all clients; Managers & Associates receive their assigned clients.
+    /// Admins receive all clients; Managers &amp; Associates receive their assigned clients.
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetByUser() // Client	Active_Campaigns	Status	ROAS	Conversions(%)	Target_Achievement
+    public async Task<IActionResult> GetByUser()
+
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         var role = User.FindFirstValue(ClaimTypes.Role);
@@ -81,18 +82,31 @@ public class ClientController : ControllerBase
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(dto.ManagerId) && !string.IsNullOrEmpty(userId))
-        {
             dto.ManagerId = userId;
-        }
 
         if (!ModelState.IsValid)
-        {
             return BadRequest(ModelState);
+
+        // Handle logo file upload if provided directly
+        if (dto.LogoFile != null)
+        {
+            try
+            {
+                dto.Logo = await _logoService.SaveAsync(dto.LogoFile);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         var (success, message, client) = await _clientService.CreateClientAsync(dto);
         if (!success)
         {
+            // Clean up the saved logo if client creation failed
+            if (!string.IsNullOrEmpty(dto.Logo))
+                await _logoService.DeleteAsync(dto.Logo);
+
             return BadRequest(new { message });
         }
 
@@ -106,8 +120,36 @@ public class ClientController : ControllerBase
     public async Task<IActionResult> Update(int id, [FromBody] UpdateClientDTO dto)
     {
         if (!ModelState.IsValid)
-        {
             return BadRequest(ModelState);
+
+        dto.ClientId ??= id;
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(dto.ManagerId) && !string.IsNullOrEmpty(userId))
+            dto.ManagerId = userId;
+
+        // Fetch existing client to handle logo cleanup if changed
+        var existingClient = await _clientService.GetClientByIdAsync(id);
+        var oldLogoUrl = existingClient?.Logo;
+
+        if (dto.LogoFile != null)
+        {
+            try
+            {
+                dto.Logo = await _logoService.SaveAsync(dto.LogoFile);
+
+                if (!string.IsNullOrEmpty(oldLogoUrl))
+                    await _logoService.DeleteAsync(oldLogoUrl);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+        else if (oldLogoUrl != null && dto.Logo != oldLogoUrl)
+        {
+            // Logo was changed or removed
+            await _logoService.DeleteAsync(oldLogoUrl);
         }
 
         var (success, message) = await _clientService.UpdateClientAsync(id, dto);
@@ -118,6 +160,7 @@ public class ClientController : ControllerBase
 
         return Ok(new { message });
     }
+
 
     /// <summary>
     /// Delete a client by Client ID.
@@ -134,46 +177,6 @@ public class ClientController : ControllerBase
         return Ok(new { message });
     }
 
-    /// <summary>
-    /// Upload client logo image.
-    /// </summary>
-    [HttpPost("upload-logo")]
-    public async Task<IActionResult> UploadLogo(IFormFile file)
-    {
-        if (file == null || file.Length == 0)
-        {
-            return BadRequest(new { message = "No file uploaded." });
-        }
 
-        var allowedExtensions = new[] { ".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif" };
-        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        if (!allowedExtensions.Contains(extension))
-        {
-            return BadRequest(new { message = "Invalid file type. Allowed formats: .png, .jpg, .jpeg, .webp, .svg, .gif" });
-        }
-
-        if (file.Length > 5 * 1024 * 1024)
-        {
-            return BadRequest(new { message = "File size exceeds 5MB limit." });
-        }
-
-        var webRoot = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-        var logosDir = Path.Combine(webRoot, "Logos");
-        if (!Directory.Exists(logosDir))
-        {
-            Directory.CreateDirectory(logosDir);
-        }
-
-        var fileName = $"{Guid.NewGuid()}{extension}";
-        var filePath = Path.Combine(logosDir, fileName);
-
-        using (var stream = new FileStream(filePath, FileMode.Create))
-        {
-            await file.CopyToAsync(stream);
-        }
-
-        var logoUrl = $"/Logos/{fileName}";
-        return Ok(new { url = logoUrl, fileName });
-    }
 
 }

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getClientsApi } from '../api/clients';
-import { mockClients } from '../mock/mockData';
 
 export default function ClientSwitcher({
   currentClientId,
@@ -13,7 +12,7 @@ export default function ClientSwitcher({
 }) {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
-  const [clients, setClients] = useState(() => (mockClients && mockClients.length > 0 ? mockClients : []));
+  const [clients, setClients] = useState([]);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -24,7 +23,7 @@ export default function ClientSwitcher({
           setClients(data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
     return () => {
       isMounted = false;
     };
@@ -46,7 +45,7 @@ export default function ClientSwitcher({
 
   const handleSelectClient = (client) => {
     setIsOpen(false);
-    if (String(client.id) !== String(currentClientId)) {
+    if (client?.id && String(client.id) !== String(currentClientId)) {
       navigate(`/clients/${client.id}`);
     }
   };
@@ -76,18 +75,18 @@ export default function ClientSwitcher({
         style={
           isTopbar
             ? {
-                letterSpacing: '-0.025em',
-                fontSize: '1.5rem',
-                fontWeight: 700,
-                lineHeight: 1.2,
-                cursor: 'pointer',
-                gap: '0.4rem',
-                color: '#c4cdd5',
-              }
+              letterSpacing: '-0.025em',
+              fontSize: '1.5rem',
+              fontWeight: 700,
+              lineHeight: 1.2,
+              cursor: 'pointer',
+              gap: '0.4rem',
+              color: '#c4cdd5',
+            }
             : {
-                cursor: 'pointer',
-                gap: '0.25rem',
-              }
+              cursor: 'pointer',
+              gap: '0.25rem',
+            }
         }
         title={`Switch client (Current: ${currentClientName})`}
         aria-expanded={isOpen}
@@ -206,9 +205,8 @@ export default function ClientSwitcher({
                       key={client.id}
                       type="button"
                       onClick={() => handleSelectClient(client)}
-                      className={`dropdown-item client-switcher-item d-flex align-items-center justify-content-between text-start w-100 border-0 ${
-                        isSelected ? 'selected' : ''
-                      }`}
+                      className={`dropdown-item client-switcher-item d-flex align-items-center justify-content-between text-start w-100 border-0 ${isSelected ? 'selected' : ''
+                        }`}
                       style={{ fontSize: '0.875rem' }}
                     >
                       <span className="text-truncate me-2" title={clientName}>

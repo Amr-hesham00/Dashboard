@@ -1,4 +1,4 @@
-import { apiFetch } from './auth';
+import { apiFetch, isAdmin, getStoredUser } from './auth';
 
 const API_BASE_URL = '/api';
 
@@ -11,20 +11,46 @@ function resolveCurrencyName(val) {
   return CURRENCY_ENUM[val] || null;
 }
 
+let clientsCache = null;
+let clientsInFlightPromise = null;
+
+export function invalidateClientsCache() {
+  clientsCache = null;
+  clientsInFlightPromise = null;
+}
+
 /**
  * Load clients for the current authenticated user (role-based).
  * Backend returns { totalClients, activeCampaigns, row: [...] }.
+ * Deduplicates concurrent calls and caches results to avoid redundant network hits.
  */
-export async function getClientsApi() {
-  const response = await apiFetch(`${API_BASE_URL}/Client`);
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || `Failed to load clients (${response.status}).`);
+export async function getClientsApi(forceRefresh = false) {
+  if (!forceRefresh && clientsCache) {
+    return clientsCache;
   }
-  const data = await response.json();
-  if (Array.isArray(data)) return data;
-  if (data && Array.isArray(data.row)) return data.row;
-  return [];
+  if (!forceRefresh && clientsInFlightPromise) {
+    return clientsInFlightPromise;
+  }
+
+  clientsInFlightPromise = (async () => {
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/Client`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || `Failed to load clients (${response.status}).`);
+      }
+      const data = await response.json();
+      let result = [];
+      if (Array.isArray(data)) result = data;
+      else if (data && Array.isArray(data.row)) result = data.row;
+      clientsCache = result;
+      return result;
+    } finally {
+      clientsInFlightPromise = null;
+    }
+  })();
+
+  return clientsInFlightPromise;
 }
 
 /**
@@ -52,6 +78,7 @@ export async function createClientApi(clientDto) {
   if (!response.ok) {
     throw new Error(data.message || 'Failed to create client.');
   }
+  invalidateClientsCache();
   return data;
 }
 
@@ -67,6 +94,7 @@ export async function updateClientApi(id, clientDto) {
   if (!response.ok) {
     throw new Error(data.message || 'Failed to update client.');
   }
+  invalidateClientsCache();
   return data;
 }
 
@@ -81,6 +109,7 @@ export async function deleteClientApi(id) {
   if (!response.ok) {
     throw new Error(data.message || 'Failed to delete client.');
   }
+  invalidateClientsCache();
   return data;
 }
 
@@ -102,12 +131,17 @@ export function getClientCurrenciesApi() {
 
 /**
  * Load users list.
+ * Only calls backend /api/User if current user has the Admin role,
+ * completely avoiding 403 Forbidden console errors for Managers and Associates.
  */
 export async function getUsersApi() {
+  const currentUser = getStoredUser();
+  if (!isAdmin(currentUser)) {
+    return [];
+  }
   const response = await apiFetch(`${API_BASE_URL}/User`);
   if (!response.ok) {
     if (response.status === 403) {
-      // Current user is not an Admin; return empty list gracefully
       return [];
     }
     const data = await response.json().catch(() => ({}));

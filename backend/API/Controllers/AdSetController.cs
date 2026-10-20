@@ -16,11 +16,10 @@ public class AdSetController : ControllerBase
     }
 
     /// <summary>
-    /// Get all ad sets belonging to a specific campaign.
+    /// Get all ad sets belonging to a specific client.
     /// </summary>
-    /// <param name="campId">The campaign ID.</param>
-    [HttpGet("Campaigns/{campId:int}")]
-
+    /// <param name="clientId">The client ID.</param>
+    [HttpGet("Clients/{clientId:int}")]
     public async Task<IActionResult> GetByClient(int clientId)
     {
         if (clientId <= 0)
@@ -67,25 +66,34 @@ public class AdSetController : ControllerBase
         return Ok(new { message });
     }
 
-    // done
     /// <summary>
-    /// Get all ad sets belonging to a specific client.
+    /// Get campaign page details (KPIs, charts, ad sets table) by campaign ID.
     /// </summary>
-    /// <param name="clientId">The client ID.</param>
-    [HttpGet("Clients/{clientId:int}")]
-    public async Task<IActionResult> GetByCampaign(int campId, DateOnly startDate, DateOnly endDate)
+    /// <param name="campId">The campaign ID.</param>
+    [HttpGet("Campaigns/{campId:int}")]
+    public async Task<IActionResult> GetByCampaign(int campId, [FromQuery] DateOnly startDate, [FromQuery] DateOnly endDate)
     {
         if (campId <= 0)
         {
             return BadRequest(new { message = "Campaign ID must be a positive integer." });
         }
 
-        var adSets = await _adSetService.GetByCampaignIdAsync(campId, startDate, endDate);
-        if (adSets == null)
+        if (startDate == default && endDate == default)
+        {
+            endDate = DateOnly.FromDateTime(DateTime.UtcNow);
+            startDate = endDate.AddDays(-30);
+        }
+        else if (startDate > endDate)
+        {
+            return BadRequest(new { message = "startDate must not be greater than endDate." });
+        }
+
+        var campPage = await _adSetService.GetByCampaignIdAsync(campId, startDate, endDate);
+        if (campPage == null)
         {
             return NotFound(new { message = $"Campaign with ID '{campId}' not found." });
         }
 
-        return Ok(adSets);
+        return Ok(campPage);
     }
 }

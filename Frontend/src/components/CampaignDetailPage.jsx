@@ -6,16 +6,13 @@ import { getClientByIdApi } from '../api/clients';
 import { getCampaignByIdApi } from '../api/campaigns';
 import { getAdSetsApi } from '../api/adsets';
 import {
-  resolveClientAndCampaign,
-  getCampaignAdSets,
   availableCampaignKPIs,
   defaultCampaignPinnedKPIs,
-  generateCampaignTimeSeries,
   aggregateTimeSeriesByMonth,
 } from '../mock/mockData';
 import metaIcon from '../assets/meta-icon.webp';
 import KpiMetricBadge from './KpiMetricBadge';
-import PeriodSelector from './PeriodSelector';
+import PeriodSelector, { getPresetDates } from './PeriodSelector';
 
 // ─── ApexCharts React Wrapper ───────────────────────────────────────
 function ApexChart({ options, series, type, height = 310 }) {
@@ -200,13 +197,7 @@ export default function CampaignDetailPage() {
     }
   });
   const [showKPISelector, setShowKPISelector] = useState(false);
-  const [periodConfig, setPeriodConfig] = useState({
-    label: 'Last 30 Days',
-    days: 30,
-    isCustom: false,
-    startDate: '2026-08-02',
-    endDate: '2026-08-31',
-  });
+  const [periodConfig, setPeriodConfig] = useState(() => getPresetDates('Last 30 Days'));
 
   // Chart State
   const [selectedMetrics, setSelectedMetrics] = useState(['spend', 'revenue']);
@@ -251,31 +242,48 @@ export default function CampaignDetailPage() {
       try {
         setLoading(true);
         setError(null);
-        const [clientRes, campaignApiRes] = await Promise.all([
-          initialClientId ? getClientByIdApi(initialClientId).catch(() => null) : Promise.resolve(null),
-          getCampaignByIdApi(campaignId).catch(() => null),
-        ]);
-        const resolved = resolveClientAndCampaign(initialClientId, campaignId);
-        let finalClient = clientRes || resolved.client;
-        const finalCampaign = (campaignApiRes && String(campaignApiRes.id) === String(campaignId))
-          ? { ...campaignApiRes, platformKey: resolved.platformKey, platformLabel: resolved.campaign?.platformLabel || 'Ad Platform' }
-          : resolved.campaign;
+        const finalCampaign = await getCampaignByIdApi(campaignId, periodConfig.startDate, periodConfig.endDate);
         if (!finalCampaign) throw new Error(`Campaign with ID '${campaignId}' was not found.`);
 
-        const targetClientId = finalCampaign?.clientId || finalCampaign?.target?.clientId;
-        if ((!finalClient || finalClient.id === 'cli-101') && targetClientId && targetClientId !== 'cli-101') {
+        const targetClientId = finalCampaign?.clientId || initialClientId;
+        let finalClient = null;
+
+        if (finalCampaign?.clientId && finalCampaign?.clientName) {
+          finalClient = {
+            id: finalCampaign.clientId,
+            companyName: finalCampaign.clientName,
+            name: finalCampaign.clientName,
+          };
+        } else if (targetClientId) {
           try {
-            const fetchedClient = await getClientByIdApi(targetClientId);
-            if (fetchedClient) finalClient = fetchedClient;
+            finalClient = await getClientByIdApi(targetClientId);
           } catch {
-            // keep finalClient
+            // fallback
           }
+        }
+
+        let finalAdSets = [];
+        if (Array.isArray(finalCampaign?.adsetRows) && finalCampaign.adsetRows.length > 0) {
+          finalAdSets = finalCampaign.adsetRows.map((as) => ({
+            ...as,
+            id: as.id || `adset-${as.name}`,
+            name: as.name,
+            status: as.status,
+            spend: Number(as.spend) || 0,
+            impressions: Number(as.impressions) || 0,
+            clicks: Number(as.clicks) || 0,
+            conversions: Number(as.conversions) || 0,
+            cpa: Number(as.cpa) || 0,
+            revenue: Number(as.revenue) || 0,
+            roas: Number(as.roas) || 0,
+            campaignId: Number(campaignId),
+          }));
         }
 
         if (isMounted) {
           setClient(finalClient);
           setCampaign(finalCampaign);
-          setAdSets(getCampaignAdSets(campaignId, finalCampaign));
+          setAdSets(finalAdSets);
         }
       } catch (err) {
         if (isMounted) setError(err.message || 'Failed to load campaign data.');
@@ -285,7 +293,7 @@ export default function CampaignDetailPage() {
     }
     loadData();
     return () => { isMounted = false; };
-  }, [initialClientId, campaignId]);
+  }, [initialClientId, campaignId, periodConfig.startDate, periodConfig.endDate]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -334,13 +342,24 @@ export default function CampaignDetailPage() {
     });
 
   // Generate time series data for charts based on selected period
-  const timeSeries = campaign
-    ? generateCampaignTimeSeries(
-        campaign,
-        periodConfig.days,
-        periodConfig.endDate || null,
-        periodConfig.startDate || null
-      )
+  const timeSeries = campaign?.points?.length
+    ? campaign.points.map((p) => {
+      const d = new Date(p.date);
+      return {
+        date: p.date,
+        day: isNaN(d.getDate()) ? 1 : d.getDate(),
+        monthShort: isNaN(d.getTime()) ? 'Aug' : d.toLocaleString('en-US', { month: 'short' }),
+        monthNum: isNaN(d.getTime()) ? '08' : String(d.getMonth() + 1).padStart(2, '0'),
+        spend: Number(p.spend) || 0,
+        revenue: Number(p.revenue) || 0,
+        conversions: Number(p.conversions) || 0,
+        roas: Number(p.roas) || 0,
+        cpa: Number(p.cpa) || 0,
+        ctr: Number(p.ctr) || 0,
+        impressions: Number(p.impressions) || 0,
+        clicks: Number(p.clicks) || 0,
+      };
+    })
     : [];
 
   // Compute campaign metrics scaled to selected period
@@ -356,7 +375,7 @@ export default function CampaignDetailPage() {
   const cAov = cConversions > 0 ? cRevenue / cConversions : 0;
   const cCpm = cImpressions > 0 ? (cSpend / cImpressions) * 1000 : 0;
   const cConversionRate = cClicks > 0 ? (cConversions / cClicks) * 100 : 0;
-  const resolvedClientId = client?.id || initialClientId || 'cli-101';
+  const resolvedClientId = client?.id || initialClientId || campaign?.clientId || null;
 
   // KPI data map (value + simulated change)
   const kpiDataMap = {
@@ -398,14 +417,18 @@ export default function CampaignDetailPage() {
             </div>
             <h4 className="fw-bold mb-2">Campaign Not Found</h4>
             <p className="text-secondary mb-4">{error || 'This campaign does not belong to the specified client.'}</p>
-            <Link to={`/clients/${resolvedClientId}`} className="btn btn-primary px-4 rounded-2">Return to Client</Link>
+            {resolvedClientId ? (
+              <Link to={`/clients/${resolvedClientId}`} className="btn btn-primary px-4 rounded-2">Return to Client</Link>
+            ) : (
+              <Link to="/clients" className="btn btn-primary px-4 rounded-2">Return to Clients</Link>
+            )}
           </div>
         </div>
       </DashboardLayout>
     );
   }
 
-  const clientName = client?.companyName || 'Client';
+  const clientName = client?.companyName || client?.name || campaign?.clientName || 'Client';
   const campStatus = normalizeStatus(campaign.status);
   const platformLabel = PLATFORMS_MAP[campaign.platformId] || campaign.platformLabel || 'Platform';
   const platformKey = PLATFORM_KEYS_MAP[campaign.platformId] || campaign.platformKey || 'meta';
@@ -418,10 +441,10 @@ export default function CampaignDetailPage() {
   const chartData = isMoreThanMonth ? aggregateTimeSeriesByMonth(timeSeries) : timeSeries;
   const hasMultipleMonths = new Set(timeSeries.map((d) => d.monthShort)).size > 1;
 
-  // Horizontal axis categories: Months if > 31 days, else days corresponding to selected period
+  // Horizontal axis categories: Months if > 31 days, else just day numbers
   const perfChartCategories = isMoreThanMonth
     ? chartData.map((d) => d.monthShort)
-    : chartData.map((d) => (hasMultipleMonths ? `${d.day}/${d.monthNum || '08'}` : d.day));
+    : chartData.map((d) => d.day);
 
   const getMonthBadgeText = () => {
     if (isMoreThanMonth) {
@@ -600,11 +623,13 @@ export default function CampaignDetailPage() {
                   Clients
                 </Link>
               </li>
-              <li className="breadcrumb-item text-truncate" style={{ maxWidth: 220 }}>
-                <Link to={`/clients/${resolvedClientId}`} className="text-decoration-none fw-semibold text-secondary hover-primary" title={clientName}>
-                  {clientName}
-                </Link>
-              </li>
+              {resolvedClientId ? (
+                <li className="breadcrumb-item text-truncate" style={{ maxWidth: 220 }}>
+                  <Link to={`/clients/${resolvedClientId}`} className="text-decoration-none fw-semibold text-secondary hover-primary" title={clientName}>
+                    {clientName}
+                  </Link>
+                </li>
+              ) : null}
               <li className="breadcrumb-item active text-success fw-semibold" aria-current="page" title={campaign?.name || 'Campaign'}>
                 Campaigns
               </li>
@@ -636,7 +661,13 @@ export default function CampaignDetailPage() {
           <div className="d-flex align-items-center gap-3">
             <button
               className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center p-2 rounded-circle no-print shadow-sm"
-              onClick={() => navigate(`/clients/${resolvedClientId}`)}
+              onClick={() => {
+                if (resolvedClientId) {
+                  navigate(`/clients/${resolvedClientId}`);
+                } else {
+                  navigate('/clients');
+                }
+              }}
               title="Back to Client"
               aria-label="Back to Client"
             >

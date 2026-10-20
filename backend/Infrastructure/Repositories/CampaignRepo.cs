@@ -14,6 +14,7 @@ public class CampaignRepo : GenericRepo<Campaign>, ICampaignRepo
         return await dbset
             .AsNoTracking()
             .Include(x => x.Platform)
+                .ThenInclude(p => p.Client)
             .FirstOrDefaultAsync(x => x.Id == id);
     }
 

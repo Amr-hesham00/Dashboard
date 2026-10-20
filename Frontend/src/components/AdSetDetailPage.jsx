@@ -2,25 +2,16 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import ApexCharts from 'apexcharts';
 import DashboardLayout from './DashboardLayout';
+import { getAdSetPageDataApi } from '../api/ads';
 import { getClientByIdApi } from '../api/clients';
-import { getCampaignByIdApi } from '../api/campaigns';
-import { getAdSetByIdApi } from '../api/adsets';
-import { getAdsByAdSetIdApi, getAdSetPageDataApi } from '../api/ads';
-import { getSearchTermsByAdSetIdApi } from '../api/searchTerms';
 import {
-  resolveClientAndCampaign,
-  resolveAdSetAndCampaignAndClient,
-  getCampaignAdSets,
-  getAdSetAds,
   availableAdSetKPIs,
   defaultAdSetPinnedKPIs,
-  generateAdSetTimeSeries,
   aggregateTimeSeriesByMonth,
-  getAdSetSearchTerms,
 } from '../mock/mockData';
 import metaIcon from '../assets/meta-icon.webp';
 import KpiMetricBadge from './KpiMetricBadge';
-import PeriodSelector from './PeriodSelector';
+import PeriodSelector, { getPresetDates } from './PeriodSelector';
 import AdDetailsModal from './AdDetailsModal';
 
 // ─── ApexCharts React Wrapper ───────────────────────────────────────
@@ -174,6 +165,7 @@ export default function AdSetDetailPage() {
   const [campaign, setCampaign] = useState(null);
   const [adSet, setAdSet] = useState(null);
   const [ads, setAds] = useState([]);
+  const [adSetPoints, setAdSetPoints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -206,13 +198,7 @@ export default function AdSetDetailPage() {
   });
   const [showKPISelector, setShowKPISelector] = useState(false);
   const [selectedMetrics, setSelectedMetrics] = useState(['spend', 'revenue']);
-  const [periodConfig, setPeriodConfig] = useState({
-    label: 'Last 30 Days',
-    days: 30,
-    isCustom: false,
-    startDate: '2026-08-02',
-    endDate: '2026-08-31',
-  });
+  const [periodConfig, setPeriodConfig] = useState(() => getPresetDates('Last 30 Days'));
 
   useEffect(() => { localStorage.setItem(kpiStorageKey, JSON.stringify(pinnedKPIs)); }, [pinnedKPIs, kpiStorageKey]);
 
@@ -256,7 +242,7 @@ export default function AdSetDetailPage() {
     else { setStSortField(field); setStSortDir('desc'); }
   };
 
-  // Load Data
+  // Load Data - Single unified request for AdSet, Campaign, Client, Ads, Points & SearchTerms
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
@@ -264,33 +250,98 @@ export default function AdSetDetailPage() {
         setLoading(true);
         setError(null);
 
-        const { client: resClient, campaign: resCampaign, adSet: resAdSet, campaignId: resolvedCampId } = resolveAdSetAndCampaignAndClient(
-          adSetId,
-          initialCampaignId,
-          initialClientId
-        );
+        // Single unified API request to get all ad set page data
+        const pageDataRes = await getAdSetPageDataApi(adSetId, periodConfig.startDate, periodConfig.endDate);
 
-        const [clientRes, campaignApiRes, adSetApiRes] = await Promise.all([
-          (initialClientId || resClient?.id) ? getClientByIdApi(initialClientId || resClient?.id).catch(() => null) : Promise.resolve(null),
-          resolvedCampId ? getCampaignByIdApi(resolvedCampId).catch(() => null) : Promise.resolve(null),
-          getAdSetByIdApi(adSetId).catch(() => null),
-        ]);
+        if (!pageDataRes) {
+          throw new Error(`Ad Set '${adSetId}' not found.`);
+        }
 
-        const finalClient = clientRes || resClient;
-        const finalCampaign = (campaignApiRes && String(campaignApiRes.id) === String(resolvedCampId))
-          ? { ...campaignApiRes, platformKey: resCampaign?.platformKey || 'meta', platformLabel: resCampaign?.platformLabel || 'Platform' }
-          : resCampaign;
-        const finalAdSet = adSetApiRes || resAdSet;
-        if (!finalAdSet) throw new Error(`Ad Set '${adSetId}' not found.`);
+        const platformTypeStr = String(pageDataRes.platformType || '');
+        const derivedPlatformKey = platformTypeStr.toLowerCase().includes('google')
+          ? 'google'
+          : platformTypeStr.toLowerCase().includes('snap')
+            ? 'snapchat'
+            : platformTypeStr.toLowerCase().includes('tiktok')
+              ? 'tiktok'
+              : 'meta';
 
-        const apiAds = await getAdsByAdSetIdApi(adSetId).catch(() => []);
-        const finalAds = apiAds.length > 0 ? apiAds : getAdSetAds(adSetId, finalAdSet, finalCampaign);
+        const finalClientId = pageDataRes.clientId || initialClientId || null;
+        const finalCampaignId = pageDataRes.campaignId || initialCampaignId || null;
+
+        let resolvedClientName = pageDataRes.clientName;
+        if (!resolvedClientName && finalClientId) {
+          try {
+            const clientRes = await getClientByIdApi(finalClientId);
+            if (clientRes?.companyName) {
+              resolvedClientName = clientRes.companyName;
+            }
+          } catch {}
+        }
+
+        const finalClient = finalClientId ? {
+          id: finalClientId,
+          companyName: resolvedClientName || 'Client',
+          name: resolvedClientName || 'Client',
+        } : null;
+
+        const finalCampaign = finalCampaignId ? {
+          id: finalCampaignId,
+          name: pageDataRes.campaignName || 'Campaign',
+          platformType: pageDataRes.platformType,
+          platformLabel: pageDataRes.platformType || 'Platform',
+          platformKey: derivedPlatformKey,
+          currency: pageDataRes.currency || 'USD',
+          startDate: pageDataRes.startDate,
+          endDate: pageDataRes.endDate,
+        } : null;
+
+        const finalAdSet = {
+          id: pageDataRes.adSetId || Number(adSetId),
+          name: pageDataRes.adSetName || `Ad Set ${adSetId}`,
+          status: pageDataRes.adSetStatus || 'Active',
+          audienceType: pageDataRes.audienceType,
+          ageRange: pageDataRes.ageRange,
+          gender: pageDataRes.gender,
+          location: pageDataRes.location,
+          startDate: pageDataRes.startDate,
+          endDate: pageDataRes.endDate,
+          currency: pageDataRes.currency || 'USD',
+          campaignId: pageDataRes.campaignId,
+          clientId: pageDataRes.clientId,
+          spend: pageDataRes.spend,
+          revenue: pageDataRes.revenue,
+          conversions: pageDataRes.conversions,
+          ctr: pageDataRes.ctr,
+          cpa: pageDataRes.cpa,
+          roas: pageDataRes.roas,
+        };
+
+        let finalAds = [];
+        if (Array.isArray(pageDataRes.adRow) && pageDataRes.adRow.length > 0) {
+          finalAds = pageDataRes.adRow.map((row) => ({
+            ...row,
+            id: row.id || `ad-${row.name}`,
+            headline: row.headline || row.name,
+            adSetId: Number(adSetId),
+          }));
+        }
+
+        const points = Array.isArray(pageDataRes.points) ? pageDataRes.points : [];
+        const directTerms = Array.isArray(pageDataRes.searchTermRows)
+          ? pageDataRes.searchTermRows
+          : Array.isArray(pageDataRes.searchTerms)
+            ? pageDataRes.searchTerms
+            : [];
 
         if (isMounted) {
           setClient(finalClient);
           setCampaign(finalCampaign);
           setAdSet(finalAdSet);
           setAds(finalAds);
+          setAdSetPoints(points);
+          setSearchTerms(directTerms);
+          setLoadingSearchTerms(false);
         }
       } catch (err) {
         if (isMounted) setError(err.message || 'Failed to load ad set data.');
@@ -300,7 +351,7 @@ export default function AdSetDetailPage() {
     }
     loadData();
     return () => { isMounted = false; };
-  }, [initialClientId, initialCampaignId, adSetId]);
+  }, [initialClientId, initialCampaignId, adSetId, periodConfig.startDate, periodConfig.endDate]);
 
   const handleRefresh = useCallback(() => { setRefreshing(true); setTimeout(() => setRefreshing(false), 1200); }, []);
 
@@ -317,47 +368,6 @@ export default function AdSetDetailPage() {
     campaign?.platformId === '2' ||
     String(adSet?.platformKey || '').toLowerCase() === 'google' ||
     String(adSet?.platform || '').toLowerCase().includes('google');
-
-  // Fetch search terms from database/API for Google Ads ad sets based on selected period
-  useEffect(() => {
-    let isMounted = true;
-    async function fetchSearchTerms() {
-      if (!isGoogle || !adSetId) {
-        setSearchTerms([]);
-        return;
-      }
-      try {
-        setLoadingSearchTerms(true);
-        const startDate = periodConfig.startDate || null;
-        const endDate = periodConfig.endDate || null;
-        const apiData = await getSearchTermsByAdSetIdApi(adSetId, startDate, endDate);
-        if (isMounted) {
-          if (Array.isArray(apiData) && apiData.length > 0) {
-            setSearchTerms(apiData);
-          } else {
-            const pageData = await getAdSetPageDataApi(adSetId, startDate, endDate).catch(() => null);
-            if (pageData && Array.isArray(pageData.searchTerms) && pageData.searchTerms.length > 0) {
-              setSearchTerms(pageData.searchTerms);
-            } else {
-              // Fallback from mock data for this specific ad set if backend returns empty
-              const fallbackTerms = getAdSetSearchTerms(adSetId, adSet, campaign, client);
-              setSearchTerms(fallbackTerms || []);
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching search terms:', err);
-        if (isMounted) {
-          const fallbackTerms = getAdSetSearchTerms(adSetId, adSet, campaign, client);
-          setSearchTerms(fallbackTerms || []);
-        }
-      } finally {
-        if (isMounted) setLoadingSearchTerms(false);
-      }
-    }
-    fetchSearchTerms();
-    return () => { isMounted = false; };
-  }, [isGoogle, adSetId, periodConfig.startDate, periodConfig.endDate, adSet, campaign, client]);
 
   const filteredSearchTerms = searchTerms
     .filter(
@@ -381,13 +391,24 @@ export default function AdSetDetailPage() {
     });
 
   // Generate time series data for charts based on selected period
-  const timeSeries = adSet
-    ? generateAdSetTimeSeries(
-        adSet,
-        periodConfig.days,
-        periodConfig.endDate || null,
-        periodConfig.startDate || null
-      )
+  const timeSeries = adSetPoints?.length
+    ? adSetPoints.map((p) => {
+      const d = new Date(p.date);
+      return {
+        date: p.date,
+        day: isNaN(d.getDate()) ? 1 : d.getDate(),
+        monthShort: isNaN(d.getTime()) ? 'Aug' : d.toLocaleString('en-US', { month: 'short' }),
+        monthNum: isNaN(d.getTime()) ? '08' : String(d.getMonth() + 1).padStart(2, '0'),
+        spend: Number(p.spend) || 0,
+        revenue: Number(p.revenue) || 0,
+        conversions: Number(p.conversions) || 0,
+        roas: Number(p.roas) || 0,
+        cpa: Number(p.cpa) || 0,
+        ctr: Number(p.ctr) || 0,
+        impressions: Number(p.impressions) || 0,
+        clicks: Number(p.clicks) || 0,
+      };
+    })
     : [];
 
   // Compute metrics scaled to selected period
@@ -434,15 +455,34 @@ export default function AdSetDetailPage() {
   if (adSet?.bidStrategy) targeting.push({ label: 'Bid Strategy', value: adSet.bidStrategy });
   if (adSet?.targetAudience) targeting.push({ label: 'Target Audience', value: adSet.targetAudience });
 
-  const resolvedCampaignId = campaign?.id || initialCampaignId || 'c101-m1';
-  const resolvedClientId = client?.id || initialClientId || 'cli-101';
+  const resolvedCampaignId = campaign?.id || initialCampaignId || adSet?.campaignId || null;
+  const resolvedClientId = client?.id || initialClientId || adSet?.clientId || null;
 
   // Loading/Error
   if (loading) {
     return (<DashboardLayout><div className="container-fluid py-5 text-center"><div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}><span className="visually-hidden">Loading...</span></div><p className="text-secondary fw-medium">Loading Ad Set details...</p></div></DashboardLayout>);
   }
   if (error || !adSet) {
-    return (<DashboardLayout><div className="container-fluid py-5"><div className="card border-0 shadow-sm rounded-3 mx-auto p-5 text-center" style={{ maxWidth: 540 }}><div className="mb-3 text-warning"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg></div><h4 className="fw-bold mb-2">Ad Set Not Found</h4><p className="text-secondary mb-4">{error || 'Could not load ad set.'}</p><Link to={`/Campaigns/${resolvedCampaignId}`} className="btn btn-primary px-4 rounded-2">Back to Campaign</Link></div></div></DashboardLayout>);
+    return (
+      <DashboardLayout>
+        <div className="container-fluid py-5">
+          <div className="card border-0 shadow-sm rounded-3 mx-auto p-5 text-center" style={{ maxWidth: 540 }}>
+            <div className="mb-3 text-warning">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+            </div>
+            <h4 className="fw-bold mb-2">Ad Set Not Found</h4>
+            <p className="text-secondary mb-4">{error || 'Could not load ad set.'}</p>
+            {resolvedCampaignId ? (
+              <Link to={`/Campaigns/${resolvedCampaignId}`} state={{ clientId: resolvedClientId }} className="btn btn-primary px-4 rounded-2">Back to Campaign</Link>
+            ) : resolvedClientId ? (
+              <Link to={`/clients/${resolvedClientId}`} className="btn btn-primary px-4 rounded-2">Back to Client</Link>
+            ) : (
+              <Link to="/clients" className="btn btn-primary px-4 rounded-2">Back to Clients</Link>
+            )}
+          </div>
+        </div>
+      </DashboardLayout>
+    );
   }
 
   const clientName = client?.companyName || 'Client';
@@ -484,10 +524,10 @@ export default function AdSetDetailPage() {
   };
   const monthBadgeText = getMonthBadgeText();
 
-  // Horizontal axis categories: Months if > 31 days, else days corresponding to selected period
+  // Horizontal axis categories: Months if > 31 days, else just day numbers
   const perfChartCategories = isMoreThanMonth
     ? chartData.map((d) => d.monthShort)
-    : chartData.map((d) => (hasMultipleMonths ? `${d.day}/${d.monthNum || '08'}` : d.day));
+    : chartData.map((d) => d.day);
 
   const primaryMetric = selectedMetrics[0] || 'spend';
   const metricType = PERF_CHART_METRICS[primaryMetric]?.type || 'currency';
@@ -608,16 +648,20 @@ export default function AdSetDetailPage() {
             <ol className="breadcrumb mb-0 py-0 bg-transparent small align-items-center">
               <li className="breadcrumb-item"><Link to="/" className="text-decoration-none fw-semibold text-secondary hover-primary">Dashboard</Link></li>
               <li className="breadcrumb-item"><Link to="/clients" className="text-decoration-none fw-semibold text-secondary hover-primary">Clients</Link></li>
-              <li className="breadcrumb-item text-truncate" style={{ maxWidth: 220 }}>
-                <Link to={`/clients/${resolvedClientId}`} className="text-decoration-none fw-semibold text-secondary hover-primary" title={clientName}>
-                  {clientName}
-                </Link>
-              </li>
-              <li className="breadcrumb-item">
-                <Link to={`/Campaigns/${resolvedCampaignId}`} className="text-decoration-none fw-semibold text-secondary hover-primary" title={campName || 'Campaign'}>
-                  Campaigns
-                </Link>
-              </li>
+              {resolvedClientId ? (
+                <li className="breadcrumb-item text-truncate" style={{ maxWidth: 220 }}>
+                  <Link to={`/clients/${resolvedClientId}`} className="text-decoration-none fw-semibold text-secondary hover-primary" title={clientName}>
+                    {clientName}
+                  </Link>
+                </li>
+              ) : null}
+              {resolvedCampaignId ? (
+                <li className="breadcrumb-item">
+                  <Link to={`/Campaigns/${resolvedCampaignId}`} state={{ clientId: resolvedClientId }} className="text-decoration-none fw-semibold text-secondary hover-primary" title={campName || 'Campaign'}>
+                    Campaigns
+                  </Link>
+                </li>
+              ) : null}
               <li className="breadcrumb-item active text-success fw-semibold" aria-current="page" title={adSet?.name || 'Ad Set'}>
                 Adsets
               </li>
@@ -649,7 +693,15 @@ export default function AdSetDetailPage() {
           <div className="d-flex align-items-center gap-3">
             <button
               className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center p-2 rounded-circle no-print shadow-sm"
-              onClick={() => navigate(`/Campaigns/${resolvedCampaignId}`)}
+              onClick={() => {
+                if (resolvedCampaignId) {
+                  navigate(`/Campaigns/${resolvedCampaignId}`, { state: { clientId: resolvedClientId } });
+                } else if (resolvedClientId) {
+                  navigate(`/clients/${resolvedClientId}`);
+                } else {
+                  navigate(-1);
+                }
+              }}
               title="Back to Campaign"
               aria-label="Back to Campaign"
             >

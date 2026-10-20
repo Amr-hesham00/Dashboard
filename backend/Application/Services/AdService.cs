@@ -74,7 +74,7 @@ public class AdService : IAdService
         var searchTerms = await _unitOfWork.SearchTerm
             .GetByAdSetIdAsync(adSetId, start, end);
 
-        return MapToDTO(ads, metrics, searchTerms, start, end);
+        return MapToDTO(adSet, ads, metrics, searchTerms, start, end);
     }
 
     public async Task<AdDTO?> GetAdByIdAsync(int id)
@@ -132,6 +132,7 @@ public class AdService : IAdService
     }
 
     private AdSetPageDTO MapToDTO(
+         AdSet adSet,
          IEnumerable<Ad> ads,
     IEnumerable<AdDailyMetrics> metrics,
     IEnumerable<SearchTerm> searchTerms,
@@ -201,6 +202,7 @@ public class AdService : IAdService
 
             return new TableRow
             {
+                Id = ad.Id,
                 Name = ad.Name,
                 Status = ad.Status,
                 Spend = adSpend,
@@ -217,6 +219,22 @@ public class AdService : IAdService
 
         return new AdSetPageDTO
         {
+            AdSetId = adSet.Id,
+            AdSetName = adSet.Name,
+            AdSetStatus = adSet.Status.ToString(),
+            AudienceType = adSet.AudienceType,
+            AgeRange = adSet.AgeRange,
+            Gender = adSet.Gender.ToString(),
+            Location = adSet.Location,
+            CampaignId = adSet.CampaignId,
+            CampaignName = adSet.Campaign?.Name ?? string.Empty,
+            ClientId = adSet.Campaign?.Platform?.ClientId ?? 0,
+            ClientName = adSet.Campaign?.Platform?.Client?.CompanyName ?? string.Empty,
+            PlatformType = adSet.Campaign?.Platform?.PlatformType.ToString(),
+            Currency = adSet.Campaign?.Currency.ToString(),
+            StartDate = DateOnly.FromDateTime(adSet.StartDate.DateTime),
+            EndDate = adSet.EndDate.HasValue ? DateOnly.FromDateTime(adSet.EndDate.Value.DateTime) : null,
+
             Spend = spend,
             Revenue = revenue,
             Conversions = conversions,
