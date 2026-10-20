@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import ApexCharts from 'apexcharts';
 import DashboardLayout from './DashboardLayout';
+import ClientAvatar from './ClientAvatar';
 import {
   getClientByIdApi,
   getUsersApi,
@@ -12,54 +13,70 @@ import {
   updateClientTargetsApi,
   uploadClientLogoApi,
 } from '../api/clients';
-import { getCampaignsByClientIdApi } from '../api/campaigns';
+import {
+  getCampaignsByClientIdApi,
+  getClientOverviewPageDataApi,
+  getCampaignsByPlatformApi,
+} from '../api/campaigns';
 import {
   availableKPIs,
   defaultPinnedKPIs,
-  mockClientInsights,
-  generateClientTimeSeries,
   aggregateTimeSeriesByMonth,
 } from '../mock/mockData';
 import metaIcon from '../assets/meta-icon.webp';
 import KpiMetricBadge from './KpiMetricBadge';
-import PeriodSelector from './PeriodSelector';
+import PeriodSelector, { getPresetDates } from './PeriodSelector';
 
 // ─── ApexCharts React Wrapper ───────────────────────────────────────
 function ApexChart({ options, series, type, height = 310 }) {
   const chartRef = useRef(null);
   const chartInstance = useRef(null);
+  const prevOptionsJsonRef = useRef('');
 
   useEffect(() => {
     if (!chartRef.current) return;
 
-    if (chartInstance.current) {
-      chartInstance.current.destroy();
-      chartInstance.current = null;
-    }
-
     const mergedOptions = {
       ...options,
-      legend: { ...(options.legend || {}), show: false },
+      legend: { ...(options?.legend || {}), show: false },
       chart: {
-        ...(options.chart || {}),
+        ...(options?.chart || {}),
         type,
         height,
         toolbar: { show: false },
         fontFamily: 'inherit',
       },
-      series,
+      series: series || [],
     };
 
-    chartInstance.current = new ApexCharts(chartRef.current, mergedOptions);
-    chartInstance.current.render();
+    const optionsJson = JSON.stringify({ ...mergedOptions, series: undefined });
 
+    if (!chartInstance.current) {
+      chartInstance.current = new ApexCharts(chartRef.current, mergedOptions);
+      chartInstance.current.render().catch(() => { });
+      prevOptionsJsonRef.current = optionsJson;
+    } else {
+      if (prevOptionsJsonRef.current !== optionsJson) {
+        prevOptionsJsonRef.current = optionsJson;
+        chartInstance.current.updateOptions(mergedOptions, false, true, true);
+      } else if (series) {
+        chartInstance.current.updateSeries(series, true);
+      }
+    }
+  }, [options, series, type, height]);
+
+  useEffect(() => {
     return () => {
       if (chartInstance.current) {
-        chartInstance.current.destroy();
+        try {
+          chartInstance.current.destroy();
+        } catch {
+          // ignore
+        }
         chartInstance.current = null;
       }
     };
-  }, [options, series, type, height]);
+  }, []);
 
   return <div ref={chartRef} />;
 }
@@ -153,23 +170,17 @@ function getPlatformLogo(platformKey, size = 20) {
   }
 }
 
-// ─── KPI Formatter ──────────────────────────────────────────────────
-function formatKPIValue(value, format) {
-  if (value == null) return '—';
-  switch (format) {
-    case 'currency': return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: value >= 100 ? 0 : 2 });
-    case 'percent': return `${value.toFixed(2)}%`;
-    case 'multiplier': return `${value.toFixed(2)}x`;
-    case 'number': return value >= 1000000 ? `${(value / 1000000).toFixed(2)}M` : value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toLocaleString();
-    case 'decimal': return value.toFixed(2);
-    default: return String(value);
-  }
+// ─── Currency Helpers ──────────────────────────────────────────────
+function getCurrencyName(currency) {
+  if (!currency && currency !== 0) return 'USD';
+  if (typeof currency === 'string') return currency;
+  const list = ['USD', 'EUR', 'EGP', 'AED', 'SAR', 'KWD', 'QAR'];
+  return list[currency] || 'USD';
 }
 
-// ─── Currency Helpers ──────────────────────────────────────────────
 function getCurrencySymbol(currency) {
-  if (!currency) return '$';
-  const c = String(currency).toUpperCase();
+  if (!currency && currency !== 0) return '$';
+  const c = typeof currency === 'number' ? getCurrencyName(currency) : String(currency).toUpperCase();
   switch (c) {
     case 'USD': return '$';
     case 'EUR': return '€';
@@ -178,16 +189,27 @@ function getCurrencySymbol(currency) {
     case 'SAR': return 'SAR ';
     case 'CAD': return 'C$';
     case 'AUD': return 'A$';
-    case 'EGP': return 'EGP ';
-    default: return '$';
+    case 'EGP':
+    case 'EGY': return 'EGP ';
+    case 'KWD': return 'KWD ';
+    case 'QAR': return 'QAR ';
+    default: return `${c} `;
   }
 }
 
-function getCurrencyName(currency) {
-  if (!currency && currency !== 0) return 'USD';
-  if (typeof currency === 'string') return currency;
-  const list = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'AED', 'SAR', 'EGP'];
-  return list[currency] || 'USD';
+// ─── KPI Formatter ──────────────────────────────────────────────────
+function formatKPIValue(value, format, currency = 'USD') {
+  if (value == null) return '—';
+  const sym = getCurrencySymbol(currency);
+  switch (format) {
+    case 'currency':
+      return `${sym}${value >= 100 ? Math.round(value).toLocaleString('en-US') : Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    case 'percent': return `${value.toFixed(2)}%`;
+    case 'multiplier': return `${value.toFixed(2)}x`;
+    case 'number': return value >= 1000000 ? `${(value / 1000000).toFixed(2)}M` : value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toLocaleString();
+    case 'decimal': return value.toFixed(2);
+    default: return String(value);
+  }
 }
 
 // ─── Tab Definitions (Descriptive Icons & Clean Titles) ─────────────
@@ -303,13 +325,21 @@ const CAMPAIGN_OBJECTIVES = ['Awareness', 'Traffic', 'Engagement', 'Leads', 'App
 const getCampaignObjectiveName = (obj) => typeof obj === 'number' ? CAMPAIGN_OBJECTIVES[obj] || 'Sales' : String(obj || 'Sales');
 
 const mapPlatformTypeToKey = (type, name) => {
-  if (typeof name === 'string') {
-    const lower = name.toLowerCase();
-    if (lower.includes('google')) return 'google';
-    if (lower.includes('facebook') || lower.includes('meta')) return 'meta';
-    if (lower.includes('tiktok')) return 'tiktok';
-    if (lower.includes('snapchat') || lower.includes('snap')) return 'snapchat';
-  }
+  const checkStr = (val) => {
+    if (typeof val === 'string') {
+      const lower = val.toLowerCase();
+      if (lower.includes('google')) return 'google';
+      if (lower.includes('facebook') || lower.includes('meta')) return 'meta';
+      if (lower.includes('tiktok')) return 'tiktok';
+      if (lower.includes('snapchat') || lower.includes('snap')) return 'snapchat';
+    }
+    return null;
+  };
+  const fromType = checkStr(type);
+  if (fromType) return fromType;
+  const fromName = checkStr(name);
+  if (fromName) return fromName;
+
   switch (Number(type)) {
     case 0: return 'google';
     case 1: return 'meta';
@@ -325,7 +355,7 @@ const mapPlatformTypeToKey = (type, name) => {
 
 export default function ClientDetailsPage() {
   const { id: paramId, clientId: paramClientId, tab } = useParams();
-  const id = paramClientId || paramId || 'cli-101';
+  const id = paramClientId || paramId || null;
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -333,6 +363,8 @@ export default function ClientDetailsPage() {
   const [client, setClient] = useState(null);
   const [manager, setManager] = useState(null);
   const [realCampaigns, setRealCampaigns] = useState([]);
+  const [overviewPoints, setOverviewPoints] = useState([]);
+  const [overviewPlatformRows, setOverviewPlatformRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -433,13 +465,7 @@ export default function ClientDetailsPage() {
       navigate(`/clients/${id}/${routeSegment}`);
     }
   };
-  const [periodConfig, setPeriodConfig] = useState({
-    label: 'Last 30 Days',
-    days: 30,
-    isCustom: false,
-    startDate: '2026-08-02',
-    endDate: '2026-08-31',
-  });
+  const [periodConfig, setPeriodConfig] = useState(() => getPresetDates('Last 30 Days'));
   const dateRange = periodConfig.label;
   const [refreshing, setRefreshing] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
@@ -535,9 +561,340 @@ export default function ClientDetailsPage() {
   });
   const [platformRefreshing, setPlatformRefreshing] = useState({});
 
-  const handleRefreshPlatform = (platformKey) => {
+  // ─── Tab-Level Caching & Independent Fetching State ──────────────
+  // Cache dictionary scoped by `${id}_${tabKey}_${startDate || ''}_${endDate || ''}`
+  const tabDataCacheRef = useRef({});
+  const inFlightRequestsRef = useRef({});
+
+  // Platform tab states: loading, error, data per platformKey ('meta', 'google', 'snapchat', 'tiktok')
+  const [platformTabState, setPlatformTabState] = useState({});
+
+  // ─── Fetch Shared Client Info (Header, targets, static options) ────
+  const sharedClientLoadedRef = useRef(null);
+
+  const loadSharedClientInfo = useCallback(async (clientIdToLoad) => {
+    if (!clientIdToLoad || clientIdToLoad === 'cli-101') return null;
+    try {
+      const [clientData, targetsData, statusList, currList, usersList] = await Promise.all([
+        getClientByIdApi(clientIdToLoad).catch(() => null),
+        getClientTargetsApi(clientIdToLoad).catch(() => null),
+        getClientStatusesApi().catch(() => ['Active', 'Inactive', 'Lead', 'Archived']),
+        getClientCurrenciesApi().catch(() => ['USD', 'EUR', 'GBP']),
+        getUsersApi().catch(() => []),
+      ]);
+
+      if (Array.isArray(statusList) && statusList.length) setStatuses(statusList);
+      if (Array.isArray(currList) && currList.length) setCurrencies(currList);
+      if (Array.isArray(usersList)) setUsers(usersList);
+
+      if (targetsData) {
+        setTargetSettings(targetsData);
+        setTargetFormData(targetsData);
+      }
+
+      if (clientData) {
+        const rawClientObj = clientData?.client || clientData;
+        const normalized = {
+          ...rawClientObj,
+          id: rawClientObj?.id ?? rawClientObj?.clientId ?? clientIdToLoad,
+          clientId: rawClientObj?.clientId ?? rawClientObj?.id ?? clientIdToLoad,
+          companyName: rawClientObj?.companyName || rawClientObj?.name || '',
+          platforms: clientData.platforms || rawClientObj?.platforms || [],
+        };
+        setClient((prev) => ({
+          ...(prev || {}),
+          ...normalized,
+          platforms: normalized.platforms || prev?.platforms || [],
+        }));
+
+        const found = usersList?.find((u) => String(u.id) === String(normalized?.managerId));
+        setManager(found || (normalized?.managerId ? { id: normalized.managerId, userName: normalized.managerName || 'Account Manager', email: '', firstName: '', lastName: '' } : null));
+
+        if (normalized?.notes) {
+          setNotes([
+            {
+              id: 'note-1',
+              text: normalized.notes,
+              author: normalized.managerName || 'Account Manager',
+              role: 'Manager',
+              date: normalized.createdAt ? new Date(normalized.createdAt).toLocaleDateString() : 'Initial Note',
+            },
+          ]);
+        }
+        return normalized;
+      }
+      return null;
+    } catch (err) {
+      console.error('Failed to load shared client info:', err);
+      return null;
+    }
+  }, []);
+
+  // ─── Fetch Overview Tab Data ─────────────────────────────────────
+  const loadOverviewData = useCallback(async (forceRefresh = false) => {
+    if (!id || id === 'cli-101') return;
+    const startDate = periodConfig.startDate || null;
+    const endDate = periodConfig.endDate || null;
+    const cacheKey = `${id}_overview_${startDate || ''}_${endDate || ''}`;
+
+    if (!forceRefresh && tabDataCacheRef.current[cacheKey]) {
+      const cached = tabDataCacheRef.current[cacheKey];
+      setClient((prev) => ({ ...(prev || {}), ...cached.client }));
+      setRealCampaigns(cached.realCampaigns || []);
+      setOverviewPoints(cached.overviewPoints || []);
+      setOverviewPlatformRows(cached.overviewPlatformRows || []);
+      if (cached.target) {
+        setTargetSettings(cached.target);
+        setTargetFormData(cached.target);
+      }
+      return;
+    }
+
+    if (inFlightRequestsRef.current[cacheKey]) {
+      return inFlightRequestsRef.current[cacheKey];
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const overviewData = await getClientOverviewPageDataApi(id, startDate, endDate).catch(() => null);
+
+        let finalClient = overviewData?.client || null;
+        if (!finalClient) {
+          finalClient = await getClientByIdApi(id).catch(() => null);
+        }
+
+        if (!finalClient) {
+          setError(`Client with ID ${id} not found.`);
+          setClient(null);
+          return;
+        }
+
+        const rawClientObj = (overviewData?.client) || (finalClient?.client) || finalClient;
+        const normalizedClient = {
+          ...rawClientObj,
+          id: rawClientObj?.id ?? rawClientObj?.clientId ?? id,
+          clientId: rawClientObj?.clientId ?? rawClientObj?.id ?? id,
+          companyName: rawClientObj?.companyName || rawClientObj?.name || '',
+          spend: overviewData?.spend ?? rawClientObj?.spend ?? 0,
+          revenue: overviewData?.revenue ?? rawClientObj?.revenue ?? 0,
+          impressions: overviewData?.impressions ?? rawClientObj?.impressions ?? 0,
+          clicks: overviewData?.clicks ?? rawClientObj?.clicks ?? 0,
+          conversions: overviewData?.conversions ?? rawClientObj?.conversions ?? 0,
+          roas: overviewData?.roas ?? rawClientObj?.roas ?? 0,
+          actualROAS: overviewData?.roas ?? rawClientObj?.actualROAS ?? rawClientObj?.roas ?? 0,
+          ctr: overviewData?.ctr ?? rawClientObj?.ctr ?? 0,
+          cpc: overviewData?.cpc ?? rawClientObj?.cpc ?? 0,
+          cpm: overviewData?.cpm ?? rawClientObj?.cpm ?? 0,
+          cpa: overviewData?.cpa ?? rawClientObj?.cpa ?? 0,
+          conversionRate: overviewData?.conversionRate ?? rawClientObj?.conversionRate ?? 0,
+          currency: overviewData?.currency ?? rawClientObj?.currency ?? 0,
+        };
+
+        let mappedCampaigns = [];
+        let mappedPoints = [];
+        let mappedPlatformRows = [];
+
+        if (overviewData) {
+          if (Array.isArray(overviewData.campRow)) {
+            mappedCampaigns = overviewData.campRow.map((c) => ({
+              ...c,
+              id: c.campaignId ?? c.id,
+              name: c.campaignName ?? c.name,
+              platformType: c.platform != null ? c.platform : c.platformType,
+              platformName: c.platform != null ? c.platform : c.platformName,
+            }));
+          }
+          if (Array.isArray(overviewData.points)) mappedPoints = overviewData.points;
+          if (Array.isArray(overviewData.platformRow)) mappedPlatformRows = overviewData.platformRow;
+          if (overviewData.target) {
+            setTargetSettings(overviewData.target);
+            setTargetFormData(overviewData.target);
+          }
+        }
+
+        setClient((prev) => ({
+          ...(prev || {}),
+          ...normalizedClient,
+          platforms: prev?.platforms || normalizedClient.platforms || [],
+        }));
+        setRealCampaigns(mappedCampaigns);
+        setOverviewPoints(mappedPoints);
+        setOverviewPlatformRows(mappedPlatformRows);
+
+        tabDataCacheRef.current[cacheKey] = {
+          client: normalizedClient,
+          realCampaigns: mappedCampaigns,
+          overviewPoints: mappedPoints,
+          overviewPlatformRows: mappedPlatformRows,
+          target: overviewData?.target || null,
+        };
+      } catch (err) {
+        setError(err.message || 'Failed to load client overview.');
+      } finally {
+        setLoading(false);
+        delete inFlightRequestsRef.current[cacheKey];
+      }
+    })();
+
+    inFlightRequestsRef.current[cacheKey] = fetchPromise;
+    return fetchPromise;
+  }, [id, periodConfig.startDate, periodConfig.endDate]);
+
+  const clientRef = useRef(client);
+  clientRef.current = client;
+
+  // ─── Fetch Platform Tab Data (Meta, Google, Snapchat, TikTok) ────
+  const loadPlatformData = useCallback(async (platformKey, forceRefresh = false) => {
+    if (!id || id === 'cli-101' || !['meta', 'google', 'snapchat', 'tiktok'].includes(platformKey)) return;
+
+    const startDate = periodConfig.startDate || null;
+    const endDate = periodConfig.endDate || null;
+    const cacheKey = `${id}_${platformKey}_${startDate || ''}_${endDate || ''}`;
+
+    if (!forceRefresh && tabDataCacheRef.current[cacheKey]) {
+      const cached = tabDataCacheRef.current[cacheKey];
+      setPlatformTabState((prev) => ({
+        ...prev,
+        [platformKey]: { loading: false, error: null, data: cached },
+      }));
+      return;
+    }
+
+    if (inFlightRequestsRef.current[cacheKey]) {
+      return inFlightRequestsRef.current[cacheKey];
+    }
+
+    // Set loading state for this tab only
+    setPlatformTabState((prev) => ({
+      ...prev,
+      [platformKey]: {
+        loading: true,
+        error: null,
+        data: prev[platformKey]?.data || null,
+      },
+    }));
+
+    const fetchPromise = (async () => {
+      try {
+        // Resolve platformId from client.platforms or fetch client details if missing
+        let currentClient = clientRef.current;
+        if (!currentClient || !Array.isArray(currentClient.platforms) || currentClient.platforms.length === 0) {
+          currentClient = await loadSharedClientInfo(id);
+        }
+
+        const platformRecord = currentClient?.platforms?.find((p) => {
+          const k = mapPlatformTypeToKey(p.platformType || p.key, p.platformName);
+          return k === platformKey;
+        });
+
+        const platformId = platformRecord?.id ?? platformRecord?.platformId;
+
+        if (!platformId) {
+          // If no platform ID exists, fallback to empty / not configured
+          const emptyData = {
+            currency: 'USD',
+            campaigns: [],
+            kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0, conversionRate: 0 },
+            connected: platformRecord?.connected ?? false,
+          };
+          tabDataCacheRef.current[cacheKey] = emptyData;
+          setPlatformTabState((prev) => ({
+            ...prev,
+            [platformKey]: { loading: false, error: null, data: emptyData },
+          }));
+          return;
+        }
+
+        const pData = await getCampaignsByPlatformApi(id, platformId, startDate, endDate);
+
+        if (!pData) {
+          throw new Error(`Failed to load ${platformKey} data.`);
+        }
+
+        // Map backend PlatformPageDTO to platform structure
+        const mappedCampaigns = Array.isArray(pData.campRow)
+          ? pData.campRow.map((c) => ({
+            ...c,
+            id: c.campaignId ?? c.id,
+            name: c.campaignName ?? c.name,
+            platformType: c.platform != null ? c.platform : c.platformType,
+            platformName: c.platform != null ? c.platform : c.platformName,
+            status: c.status,
+            objective: c.objective,
+            spend: Number(c.spend) || 0,
+            revenue: Number(c.revenue) || 0,
+            roas: Number(c.roas) || 0,
+            startDate: c.startDate,
+          }))
+          : [];
+
+        const currencyName = getCurrencyName(pData.currency);
+
+        const structuredData = {
+          currency: currencyName,
+          platformId,
+          connected: platformRecord?.connected ?? (platformRecord?.status === 'Connected'),
+          campaigns: mappedCampaigns,
+          kpis: {
+            spend: Number(pData.spend) || 0,
+            revenue: Number(pData.revenue) || 0,
+            roas: Number(pData.roas) || 0,
+            impressions: Number(pData.impressions) || 0,
+            clicks: Number(pData.clicks) || 0,
+            ctr: Number(pData.ctr) || 0,
+            cpc: Number(pData.cpc) || 0,
+            cpm: Number(pData.cpm) || 0,
+            cpa: Number(pData.cpa) || 0,
+            conversions: Number(pData.conversions) || 0,
+            conversionRate: Number(pData.conversionRate) || 0,
+          },
+        };
+
+        tabDataCacheRef.current[cacheKey] = structuredData;
+        setPlatformTabState((prev) => ({
+          ...prev,
+          [platformKey]: { loading: false, error: null, data: structuredData },
+        }));
+      } catch (err) {
+        setPlatformTabState((prev) => ({
+          ...prev,
+          [platformKey]: { loading: false, error: err.message || 'Failed to fetch platform data', data: null },
+        }));
+      } finally {
+        delete inFlightRequestsRef.current[cacheKey];
+      }
+    })();
+
+    inFlightRequestsRef.current[cacheKey] = fetchPromise;
+    return fetchPromise;
+  }, [id, periodConfig.startDate, periodConfig.endDate, loadSharedClientInfo]);
+
+  // Initial client load & reload on id change
+  useEffect(() => {
+    if (id && sharedClientLoadedRef.current !== id) {
+      sharedClientLoadedRef.current = id;
+      loadSharedClientInfo(id);
+    }
+  }, [id, loadSharedClientInfo]);
+
+  // ─── Lazy Loading Effect: only load active tab's data ─────────────
+  useEffect(() => {
+    if (!id || id === 'cli-101') return;
+    if (activeTab === 'overview') {
+      loadOverviewData();
+    } else if (['meta', 'google', 'snapchat', 'tiktok'].includes(activeTab)) {
+      loadPlatformData(activeTab);
+    }
+  }, [activeTab, id, periodConfig.startDate, periodConfig.endDate, loadOverviewData, loadPlatformData]);
+
+  const handleRefreshPlatform = async (platformKey) => {
     setPlatformRefreshing((prev) => ({ ...prev, [platformKey]: true }));
-    setTimeout(() => {
+    try {
+      await loadPlatformData(platformKey, true);
+      const now = 'Just now';
+      const nowDate = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       setPlatformsState((prev) => {
         const current = prev[platformKey] || {};
         const updated = {
@@ -545,20 +902,21 @@ export default function ClientDetailsPage() {
           [platformKey]: {
             ...current,
             connected: true,
-            lastSync: 'Just now',
-            lastSyncDate: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            lastSync: now,
+            lastSyncDate: nowDate,
           },
         };
-        try {
-          localStorage.setItem(platformsStorageKey, JSON.stringify(updated));
-        } catch { }
+        try { localStorage.setItem(platformsStorageKey, JSON.stringify(updated)); } catch { }
         return updated;
       });
-      setPlatformRefreshing((prev) => ({ ...prev, [platformKey]: false }));
       const platformLabel = TABS.find((t) => t.key === platformKey)?.label || platformKey;
       setToastMsg(`${platformLabel} data refreshed successfully!`);
       setTimeout(() => setToastMsg(''), 3000);
-    }, 600);
+    } catch {
+      setToastMsg(`Failed to refresh ${platformKey} data.`);
+    } finally {
+      setPlatformRefreshing((prev) => ({ ...prev, [platformKey]: false }));
+    }
   };
 
   const handleReconnectPlatform = (platformKey) => {
@@ -736,68 +1094,10 @@ export default function ClientDetailsPage() {
     }
   };
 
-  // ─── Data Loading ───────────────────────────────────────────────
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const [clientData, usersList, statusList, currList, targetsData, campaignsData] = await Promise.all([
-        getClientByIdApi(id).catch(() => null),
-        getUsersApi().catch(() => []),
-        getClientStatusesApi().catch(() => ['Active', 'Inactive', 'Lead', 'Archived']),
-        getClientCurrenciesApi().catch(() => ['USD', 'EUR', 'GBP']),
-        getClientTargetsApi(id).catch(() => null),
-        getCampaignsByClientIdApi(id).catch(() => []),
-      ]);
-      const finalClient = clientData;
-      if (!finalClient) {
-        setError(`Client with ID ${id} not found.`);
-        setClient(null);
-        return;
-      }
-      const normalizedClient = {
-        ...finalClient,
-        id: finalClient.id ?? finalClient.clientId,
-        clientId: finalClient.clientId ?? finalClient.id,
-      };
-      setClient(normalizedClient);
-      setUsers(usersList || []);
-      setRealCampaigns(Array.isArray(campaignsData) ? campaignsData : []);
-      if (Array.isArray(statusList) && statusList.length) setStatuses(statusList);
-      if (Array.isArray(currList) && currList.length) setCurrencies(currList);
-      if (targetsData) {
-        setTargetSettings(targetsData);
-        setTargetFormData(targetsData);
-      }
 
-      const found = usersList?.find((u) => String(u.id) === String(normalizedClient?.managerId));
-      setManager(found || (normalizedClient?.managerId ? { id: normalizedClient.managerId, userName: normalizedClient.managerName || 'Account Manager', email: '', firstName: '', lastName: '' } : null));
 
-      // Load notes from client record if available
-      if (normalizedClient?.notes) {
-        setNotes([
-          {
-            id: 'note-1',
-            text: normalizedClient.notes,
-            author: normalizedClient.managerName || 'Account Manager',
-            role: 'Manager',
-            date: normalizedClient.createdAt ? new Date(normalizedClient.createdAt).toLocaleDateString() : 'Initial Note',
-          },
-        ]);
-      } else {
-        setNotes([]);
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to load client details.');
-      setClient(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    loadData();
-  }, [id, loadData]);
+  const targetSettingsRef = useRef(targetSettings);
+  targetSettingsRef.current = targetSettings;
 
   // Open targets modal if redirected with openTargets parameter
   useEffect(() => {
@@ -805,7 +1105,7 @@ export default function ClientDetailsPage() {
     if (searchParams.get('openTargets') === 'true' || location.state?.openTargets) {
       handleOpenTargetModal();
     }
-  }, [location.search, location.state, targetSettings]);
+  }, [location.search, location.state]);
 
   // Click outside handlers for main page dropdowns
   useEffect(() => {
@@ -877,14 +1177,27 @@ export default function ClientDetailsPage() {
   // ─── Spend vs Revenue Chart Config ──────────────────────────────
   const isMoreThanMonth = periodConfig.days > 31;
   const timeSeries = useMemo(() => {
-    return generateClientTimeSeries(
-      id,
-      clientKPIs,
-      periodConfig.days,
-      periodConfig.endDate || null,
-      periodConfig.startDate || null
-    );
-  }, [id, clientKPIs, periodConfig.days, periodConfig.endDate, periodConfig.startDate]);
+    if (Array.isArray(overviewPoints) && overviewPoints.length > 0) {
+      return overviewPoints.map((p) => {
+        const d = new Date(p.date);
+        return {
+          date: p.date,
+          day: isNaN(d.getDate()) ? 1 : d.getDate(),
+          monthShort: isNaN(d.getTime()) ? 'Aug' : d.toLocaleString('en-US', { month: 'short' }),
+          monthNum: isNaN(d.getTime()) ? '08' : String(d.getMonth() + 1).padStart(2, '0'),
+          spend: Number(p.spend) || 0,
+          revenue: Number(p.revenue) || 0,
+          conversions: Number(p.conversions) || 0,
+          roas: Number(p.roas) || 0,
+          cpa: Number(p.cpa) || 0,
+          ctr: Number(p.ctr) || 0,
+          impressions: Number(p.impressions) || 0,
+          clicks: Number(p.clicks) || 0,
+        };
+      });
+    }
+    return [];
+  }, [overviewPoints]);
 
   const chartData = useMemo(() => {
     return isMoreThanMonth ? aggregateTimeSeriesByMonth(timeSeries) : timeSeries;
@@ -894,12 +1207,12 @@ export default function ClientDetailsPage() {
     return new Set(timeSeries.map((d) => d.monthShort)).size > 1;
   }, [timeSeries]);
 
-  // Horizontal axis categories: Months if > 31 days, else days corresponding to selected period
+  // Horizontal axis categories: Months if > 31 days, else just day numbers
   const chartCategories = useMemo(() => {
     return isMoreThanMonth
       ? chartData.map((d) => d.monthShort)
-      : chartData.map((d) => (hasMultipleMonths ? `${d.day}/${d.monthNum || '08'}` : d.day));
-  }, [isMoreThanMonth, chartData, hasMultipleMonths]);
+      : chartData.map((d) => d.day);
+  }, [isMoreThanMonth, chartData]);
 
   const fullMonthText = useMemo(() => {
     if (isMoreThanMonth) {
@@ -936,7 +1249,7 @@ export default function ClientDetailsPage() {
   const primaryMetric = selectedMetrics[0] || 'revenue';
   const metricType = CHART_METRICS[primaryMetric]?.type || 'currency';
 
-  const spendVsRevenueOptions = {
+  const spendVsRevenueOptions = useMemo(() => ({
     chart: {
       type: 'area',
       height: 310,
@@ -972,7 +1285,8 @@ export default function ClientDetailsPage() {
     yaxis: {
       labels: {
         formatter: (val) => {
-          if (metricType === 'currency') return `$${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`;
+          const sym = getCurrencySymbol(client?.currency);
+          if (metricType === 'currency') return `${sym}${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`;
           if (metricType === 'ratio') return `${val}x`;
           if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
           if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
@@ -993,7 +1307,8 @@ export default function ClientDetailsPage() {
       },
       y: {
         formatter: (val) => {
-          if (metricType === 'currency') return `$${val.toLocaleString()}`;
+          const sym = getCurrencySymbol(client?.currency);
+          if (metricType === 'currency') return `${sym}${val.toLocaleString()}`;
           if (metricType === 'ratio') return `${Number(val).toFixed(2)}x`;
           return val.toLocaleString();
         },
@@ -1004,7 +1319,7 @@ export default function ClientDetailsPage() {
       borderColor: 'rgba(0,0,0,0.06)',
       strokeDashArray: 3,
     },
-  };
+  }), [spendVsRevenueSeries, activeColors, chartCategories, isMoreThanMonth, metricType, chartData, client?.currency]);
 
   const clientPlatformPerformance = useMemo(() => {
     const platforms = {
@@ -1014,10 +1329,31 @@ export default function ClientDetailsPage() {
       snapchat: { label: 'Snapchat Ads', currency: client?.currency || 'SAR', campaigns: [], kpis: { spend: 0, revenue: 0, roas: 0, impressions: 0, clicks: 0, ctr: 0, conversions: 0, cpa: 0, cpc: 0, cpm: 0 } },
     };
 
-    if (client && Array.isArray(client.platforms)) {
+    if (Array.isArray(overviewPlatformRows) && overviewPlatformRows.length > 0) {
+      overviewPlatformRows.forEach((row) => {
+        const pKey = mapPlatformTypeToKey(row.platformName ?? row.platformType);
+        if (platforms[pKey]) {
+          platforms[pKey].platformId = row.platformId;
+          platforms[pKey].currency = row.currency ? (typeof row.currency === 'string' ? row.currency : client?.currency || 'USD') : client?.currency || 'USD';
+          platforms[pKey].kpis = {
+            spend: Number(row.spend) || 0,
+            revenue: Number(row.revenue) || 0,
+            roas: Number(row.roas) || 0,
+            impressions: Number(row.impressions) || 0,
+            clicks: Number(row.clicks) || 0,
+            ctr: Number(row.ctr) || 0,
+            conversions: Number(row.conversions) || 0,
+            cpa: Number(row.cpa) || 0,
+            cpc: row.clicks > 0 ? Number((row.spend / row.clicks).toFixed(2)) : 0,
+            cpm: row.impressions > 0 ? Number(((row.spend / row.impressions) * 1000).toFixed(2)) : 0,
+          };
+        }
+      });
+    } else if (client && Array.isArray(client.platforms)) {
       client.platforms.forEach((p) => {
         const pKey = mapPlatformTypeToKey(p.platformType || p.key, p.platformName);
         if (platforms[pKey]) {
+          platforms[pKey].platformId = p.id ?? p.platformId;
           platforms[pKey].currency = p.currency || client.currency || platforms[pKey].currency;
           platforms[pKey].connected = p.connected ?? (p.status === 'Connected');
           if (p.spend !== undefined) {
@@ -1043,41 +1379,45 @@ export default function ClientDetailsPage() {
         const pKey = mapPlatformTypeToKey(c.platformType, c.platformName);
         if (platforms[pKey]) {
           platforms[pKey].campaigns.push(c);
-          const k = platforms[pKey].kpis;
-          k.spend += Number(c.spend) || 0;
-          k.revenue += Number(c.revenue) || 0;
-          k.conversions += Number(c.conversions) || 0;
-          k.impressions += Number(c.impressions) || 0;
-          k.clicks += Number(c.clicks) || 0;
+          if (!overviewPlatformRows || overviewPlatformRows.length === 0) {
+            const k = platforms[pKey].kpis;
+            k.spend += Number(c.spend) || 0;
+            k.revenue += Number(c.revenue) || 0;
+            k.conversions += Number(c.conversions) || 0;
+            k.impressions += Number(c.impressions) || 0;
+            k.clicks += Number(c.clicks) || 0;
+          }
         }
       });
-      Object.values(platforms).forEach((plat) => {
-        const k = plat.kpis;
-        if (k.spend > 0) {
-          k.roas = Number((k.revenue / k.spend).toFixed(2));
-        }
-        if (k.impressions > 0) {
-          k.ctr = Number(((k.clicks / k.impressions) * 100).toFixed(2));
-          k.cpm = Number(((k.spend / k.impressions) * 1000).toFixed(2));
-        }
-        if (k.clicks > 0) {
-          k.cpc = Number((k.spend / k.clicks).toFixed(2));
-        }
-        if (k.conversions > 0) {
-          k.cpa = Number((k.spend / k.conversions).toFixed(2));
-        }
-      });
+      if (!overviewPlatformRows || overviewPlatformRows.length === 0) {
+        Object.values(platforms).forEach((plat) => {
+          const k = plat.kpis;
+          if (k.spend > 0) {
+            k.roas = Number((k.revenue / k.spend).toFixed(2));
+          }
+          if (k.impressions > 0) {
+            k.ctr = Number(((k.clicks / k.impressions) * 100).toFixed(2));
+            k.cpm = Number(((k.spend / k.impressions) * 1000).toFixed(2));
+          }
+          if (k.clicks > 0) {
+            k.cpc = Number((k.spend / k.clicks).toFixed(2));
+          }
+          if (k.conversions > 0) {
+            k.cpa = Number((k.spend / k.conversions).toFixed(2));
+          }
+        });
+      }
     }
 
     return platforms;
-  }, [client, realCampaigns]);
+  }, [client, realCampaigns, overviewPlatformRows]);
 
   // ─── ROAS by Platform Chart Config ──────────────────────────────
-  const platformKeys = Object.keys(clientPlatformPerformance);
-  const roasCategories = platformKeys.map((k) => clientPlatformPerformance[k].label);
-  const roasValues = platformKeys.map((k) => clientPlatformPerformance[k].kpis.roas);
+  const platformKeys = useMemo(() => Object.keys(clientPlatformPerformance), [clientPlatformPerformance]);
+  const roasCategories = useMemo(() => platformKeys.map((k) => clientPlatformPerformance[k].label), [platformKeys, clientPlatformPerformance]);
+  const roasValues = useMemo(() => platformKeys.map((k) => clientPlatformPerformance[k].kpis.roas), [platformKeys, clientPlatformPerformance]);
 
-  const roasChartOptions = {
+  const roasChartOptions = useMemo(() => ({
     chart: {
       type: 'bar',
       height: 310,
@@ -1144,11 +1484,11 @@ export default function ClientDetailsPage() {
       borderColor: 'rgba(0,0,0,0.06)',
       strokeDashArray: 3,
     },
-  };
+  }), [roasCategories]);
 
-  const roasChartSeries = [
+  const roasChartSeries = useMemo(() => [
     { name: 'ROAS', data: roasValues },
-  ];
+  ], [roasValues]);
 
   // ─── Platform Comparison Totals ─────────────────────────────────
   const [platCompSortField, setPlatCompSortField] = useState(null);
@@ -1300,23 +1640,23 @@ export default function ClientDetailsPage() {
   // ─── Client Goals & Targets Calculations ─────────────────────────
   const currentRevenue = Number(client?.revenue) || 0;
   const targetRevenue = Number(targetSettings?.targetRevenue) || 0;
-  const revenuePct = Number(client?.revenueProgress) || 0;
+  const revenuePct = targetRevenue > 0 ? Math.round((currentRevenue * 100) / targetRevenue) : (Number(client?.revenueProgress) || 0);
 
   const currentSpend = Number(client?.spend) || 0;
   const targetMonthlyBudget = Number(targetSettings?.monthlyBudget) || 0;
-  const budgetPct = Number(client?.budgetProgress) || 0;
+  const budgetPct = targetMonthlyBudget > 0 ? Math.round((currentSpend * 100) / targetMonthlyBudget) : (Number(client?.budgetProgress) || 0);
 
-  const currentRoas = Number(client?.actualROAS) || 0;
-  const targetRoas = Number(targetSettings?.targetRoas) || 0;
-  const roasPct = Number(client?.achievedROAS) || 0;
+  const currentRoas = Number(client?.actualROAS ?? client?.roas) || 0;
+  const targetRoas = Number(targetSettings?.targetRoas ?? targetSettings?.targetROAS) || 0;
+  const roasPct = targetRoas > 0 ? Math.round((currentRoas * 100) / targetRoas) : (Number(client?.achievedROAS) || 0);
 
   const currentConversions = Number(client?.conversions) || 0;
   const targetConversions = Number(targetSettings?.targetConversions) || 0;
-  const conversionsPct = Number(client?.conversionsProgress) || 0;
+  const conversionsPct = targetConversions > 0 ? Math.round((currentConversions * 100) / targetConversions) : (Number(client?.conversionsProgress) || 0);
 
   const currentCpa = Number(client?.cpa) || 0;
-  const targetCpa = Number(targetSettings?.targetCpa) || 0;
-  const cpaPct = Number(client?.cpaProgress) || 0;
+  const targetCpa = Number(targetSettings?.targetCpa ?? targetSettings?.targetCPA) || 0;
+  const cpaPct = targetCpa > 0 ? Math.round((currentCpa * 100) / targetCpa) : (Number(client?.cpaProgress) || 0);
 
   // ─── Action Handlers ────────────────────────────────────────────
   const handleOpenTargetModal = () => {
@@ -1431,11 +1771,17 @@ export default function ClientDetailsPage() {
         managerId: formData.managerId || client.managerId || '',
       };
       const updated = await updateClientApi(client.id, payload);
-      setClient(updated || { ...client, ...payload });
+      setClient((prev) => ({ ...(prev || {}), ...(updated || payload) }));
       setShowEditModal(false);
       setToastMsg('Client details updated successfully!');
       setTimeout(() => setToastMsg(''), 3000);
-      await loadData();
+      tabDataCacheRef.current = {};
+      await loadSharedClientInfo(id);
+      if (activeTab === 'overview') {
+        await loadOverviewData(true);
+      } else if (['meta', 'google', 'snapchat', 'tiktok'].includes(activeTab)) {
+        await loadPlatformData(activeTab, true);
+      }
     } catch (err) {
       setEditError(err.message || 'Failed to update client.');
     } finally {
@@ -1445,7 +1791,7 @@ export default function ClientDetailsPage() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    tabDataCacheRef.current = {};
     const now = 'Just now';
     const nowDate = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const updatedOverview = { lastSync: now, lastSyncDate: nowDate };
@@ -1460,11 +1806,21 @@ export default function ClientDetailsPage() {
       try { localStorage.setItem(platformsStorageKey, JSON.stringify(updated)); } catch { }
       return updated;
     });
-    setTimeout(() => {
-      setRefreshing(false);
-      setToastMsg('All client & platform data refreshed!');
+
+    try {
+      await loadSharedClientInfo(id);
+      if (activeTab === 'overview') {
+        await loadOverviewData(true);
+      } else if (['meta', 'google', 'snapchat', 'tiktok'].includes(activeTab)) {
+        await loadPlatformData(activeTab, true);
+      }
+      setToastMsg('Data refreshed successfully!');
       setTimeout(() => setToastMsg(''), 3000);
-    }, 600);
+    } catch {
+      setToastMsg('Failed to refresh data.');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleShareReport = () => {
@@ -1550,8 +1906,6 @@ export default function ClientDetailsPage() {
     );
   };
 
-  const getCurrencyName = (c) => { const cs = ['USD', 'EUR', 'GBP']; return typeof c === 'number' ? cs[c] || 'USD' : String(c || 'USD'); };
-
   // ─── Loading / Error ────────────────────────────────────────────
   if (loading) {
     return (
@@ -1577,6 +1931,8 @@ export default function ClientDetailsPage() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
   const dynamicClientName = client?.companyName || client?.name || 'Client';
+  const clientReportingCurrency = getCurrencyName(client?.currency);
+  const clientCurrSymbol = getCurrencySymbol(clientReportingCurrency);
 
   return (
     <DashboardLayout
@@ -1746,44 +2102,16 @@ export default function ClientDetailsPage() {
             </button>
 
             {/* Modern Gradient Avatar with Squircle & Initials / Logo */}
-            {client.logo ? (
-              <img
-                src={client.logo}
-                alt={client.companyName}
-                className="shadow-sm flex-shrink-0"
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 14,
-                  objectFit: 'contain',
-                  backgroundColor: '#fff',
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  padding: '3px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-                }}
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  if (e.currentTarget.nextSibling) {
-                    e.currentTarget.nextSibling.style.display = 'flex';
-                  }
-                }}
-              />
-            ) : null}
-            <div
-              className="d-flex align-items-center justify-content-center text-white fw-bold shadow-sm flex-shrink-0"
+            <ClientAvatar
+              logo={client.logo}
+              name={client.companyName}
+              size={52}
+              borderRadius={14}
+              fontSize="1.15rem"
               style={{
-                width: 52,
-                height: 52,
-                borderRadius: 14,
-                background: getClientGradient(client.companyName),
-                fontSize: '1.15rem',
-                letterSpacing: '0.5px',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-                display: client.logo ? 'none' : 'flex',
               }}
-            >
-              {getClientInitials(client.companyName)}
-            </div>
+            />
 
             {/* Client Name & Header Action */}
             <div className="d-flex flex-column gap-2">
@@ -1815,14 +2143,14 @@ export default function ClientDetailsPage() {
                   </a>
                 )}
 
-                {client.currency && (
+                {(client.currency != null && client.currency !== '') ? (
                   <>
                     {client.email && <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>}
                     <span className="badge bg-body-tertiary text-body-secondary border rounded-2 px-2.5 py-0.5 fw-semibold" style={{ fontSize: '0.74rem' }}>
                       {getCurrencyName(client.currency)}
                     </span>
                   </>
-                )}
+                ) : null}
 
                 {client.website && (
                   <>
@@ -1855,9 +2183,9 @@ export default function ClientDetailsPage() {
                   <div className="d-flex align-items-baseline gap-1">
                     <span className="fw-semibold text-body-secondary small" style={{ fontSize: '0.76rem' }}>Budget:</span>
                     <span className="fw-bold small" style={{ fontSize: '0.84rem', color: '#6366f1' }}>
-                      ${currentSpend >= 1000 ? `${(currentSpend / 1000).toFixed(1)}k` : currentSpend.toLocaleString()}
+                      {clientCurrSymbol}{currentSpend >= 1000 ? `${(currentSpend / 1000).toFixed(1)}k` : currentSpend.toLocaleString()}
                     </span>
-                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/${targetMonthlyBudget >= 1000 ? `${(targetMonthlyBudget / 1000).toFixed(targetMonthlyBudget % 1000 !== 0 ? 1 : 0)}k` : targetMonthlyBudget.toLocaleString()}</span>
+                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/{clientCurrSymbol}{targetMonthlyBudget >= 1000 ? `${(targetMonthlyBudget / 1000).toFixed(targetMonthlyBudget % 1000 !== 0 ? 1 : 0)}k` : targetMonthlyBudget.toLocaleString()}</span>
                   </div>
                   <span
                     className="badge rounded-pill px-2 py-0.5 fw-bold ms-2"
@@ -1884,9 +2212,9 @@ export default function ClientDetailsPage() {
                   <div className="d-flex align-items-baseline gap-1">
                     <span className="fw-semibold text-body-secondary small" style={{ fontSize: '0.76rem' }}>Revenue:</span>
                     <span className="fw-bold small" style={{ fontSize: '0.84rem', color: '#00a76f' }}>
-                      ${currentRevenue >= 1000 ? `${(currentRevenue / 1000).toFixed(1)}k` : currentRevenue.toLocaleString()}
+                      {clientCurrSymbol}{currentRevenue >= 1000 ? `${(currentRevenue / 1000).toFixed(1)}k` : currentRevenue.toLocaleString()}
                     </span>
-                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/${targetRevenue >= 1000 ? `${(targetRevenue / 1000).toFixed(targetRevenue % 1000 !== 0 ? 1 : 0)}k` : targetRevenue.toLocaleString()}</span>
+                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/{clientCurrSymbol}{targetRevenue >= 1000 ? `${(targetRevenue / 1000).toFixed(targetRevenue % 1000 !== 0 ? 1 : 0)}k` : targetRevenue.toLocaleString()}</span>
                   </div>
                   <span
                     className="badge rounded-pill px-2 py-0.5 fw-bold ms-2"
@@ -1971,9 +2299,9 @@ export default function ClientDetailsPage() {
                   <div className="d-flex align-items-baseline gap-1">
                     <span className="fw-semibold text-body-secondary small" style={{ fontSize: '0.76rem' }}>CPA:</span>
                     <span className="fw-bold small" style={{ fontSize: '0.84rem', color: '#ef4444' }}>
-                      ${(Number(currentCpa) || 0).toFixed(2)}
+                      {clientCurrSymbol}{(Number(currentCpa) || 0).toFixed(2)}
                     </span>
-                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/${(Number(targetCpa) || 5.50).toFixed(2)}</span>
+                    <span className="text-body-secondary small fw-medium" style={{ fontSize: '0.74rem', opacity: 0.85 }}>/{clientCurrSymbol}{(Number(targetCpa) || 5.50).toFixed(2)}</span>
                   </div>
                   <span
                     className="badge rounded-pill px-2 py-0.5 fw-bold ms-2"
@@ -2179,7 +2507,7 @@ export default function ClientDetailsPage() {
                             <KpiMetricBadge metricKey={kpiDef.key} color={kpiDef.color} label={kpiDef.label} size={34} />
                           </div>
                           <div className="fs-3 fw-bold text-body-emphasis my-1 text-truncate">
-                            {formatKPIValue(kpiData.value, kpiDef.format)}
+                            {formatKPIValue(kpiData.value, kpiDef.format, clientReportingCurrency)}
                           </div>
                         </div>
                       </div>
@@ -2353,10 +2681,10 @@ export default function ClientDetailsPage() {
                               </div>
                             </td>
                             <td className="fw-semibold text-body-emphasis">
-                              {isConnected ? `$${plat.kpis.spend.toLocaleString()}` : <span className="text-secondary">${plat.kpis.spend.toLocaleString()}</span>}
+                              {isConnected ? `${clientCurrSymbol}${plat.kpis.spend.toLocaleString()}` : <span className="text-secondary">{clientCurrSymbol}{plat.kpis.spend.toLocaleString()}</span>}
                             </td>
                             <td className="text-success fw-bold">
-                              {isConnected ? `$${plat.kpis.revenue.toLocaleString()}` : <span className="text-secondary">${plat.kpis.revenue.toLocaleString()}</span>}
+                              {isConnected ? `${clientCurrSymbol}${plat.kpis.revenue.toLocaleString()}` : <span className="text-secondary">{clientCurrSymbol}{plat.kpis.revenue.toLocaleString()}</span>}
                             </td>
                             <td>
                               <span className={`badge ${isConnected ? 'bg-primary-subtle text-primary border border-primary-subtle' : 'bg-body-secondary text-secondary border'} fw-bold px-2.5 py-1 fs-6`}>
@@ -2371,7 +2699,7 @@ export default function ClientDetailsPage() {
                               </span>
                             </td>
                             <td className="fw-bold text-body-emphasis">{plat.kpis.conversions.toLocaleString()}</td>
-                            <td className="pe-4 fw-semibold text-body-emphasis">${plat.kpis.cpa.toFixed(2)}</td>
+                            <td className="pe-4 fw-semibold text-body-emphasis">{clientCurrSymbol}{plat.kpis.cpa.toFixed(2)}</td>
                           </tr>
                         );
                       })}
@@ -2379,8 +2707,8 @@ export default function ClientDetailsPage() {
                     <tfoot className="table-light bg-body-tertiary border-top border-2 border-secondary-subtle">
                       <tr className="fw-bold">
                         <td className="ps-4 text-body-emphasis fs-6">Total / Aggregate</td>
-                        <td className="text-body-emphasis fs-6 fw-bold">${totalSpend.toLocaleString()}</td>
-                        <td className="text-success fs-6 fw-bold">${totalRevenue.toLocaleString()}</td>
+                        <td className="text-body-emphasis fs-6 fw-bold">{clientCurrSymbol}{totalSpend.toLocaleString()}</td>
+                        <td className="text-success fs-6 fw-bold">{clientCurrSymbol}{totalRevenue.toLocaleString()}</td>
                         <td>
                           <span className="badge bg-success text-white fw-bold px-2.5 py-1 fs-6 shadow-sm">
                             {totalRoas.toFixed(2)}x
@@ -2394,7 +2722,7 @@ export default function ClientDetailsPage() {
                           </span>
                         </td>
                         <td className="text-body-emphasis fs-6 fw-bold">{totalConversions.toLocaleString()}</td>
-                        <td className="pe-4 text-body-emphasis fs-6 fw-bold">${totalCpa.toFixed(2)}</td>
+                        <td className="pe-4 text-body-emphasis fs-6 fw-bold">{clientCurrSymbol}{totalCpa.toFixed(2)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -2854,12 +3182,12 @@ export default function ClientDetailsPage() {
 
                               {/* 5. Spend (danger) */}
                               <td className="fw-bold text-danger text-nowrap" style={{ fontSize: '0.92rem' }}>
-                                ${camp.spend.toLocaleString()}
+                                {clientCurrSymbol}{camp.spend.toLocaleString()}
                               </td>
 
                               {/* 6. Revenue (success) */}
                               <td className="fw-bold text-success text-nowrap" style={{ fontSize: '0.92rem' }}>
-                                ${camp.revenue.toLocaleString()}
+                                {clientCurrSymbol}{camp.revenue.toLocaleString()}
                               </td>
 
                               {/* 7. ROAS */}
@@ -2894,8 +3222,10 @@ export default function ClientDetailsPage() {
         {/* === PLATFORM TABS (Meta, Google, Snapchat, TikTok) === */}
         {['meta', 'google', 'snapchat', 'tiktok'].includes(activeTab) && (
           <PlatformTabContent
-            platform={clientPlatformPerformance[activeTab]}
+            platform={platformTabState[activeTab]?.data}
             platformKey={activeTab}
+            isLoading={!!platformTabState[activeTab]?.loading}
+            errorMessage={platformTabState[activeTab]?.error}
             connectionState={platformsState[activeTab] || { connected: true, accountId: 'act_948291048', lastSync: '10m ago', lastSyncDate: 'Aug 18, 2026, 04:30 PM' }}
             onReconnect={() => handleReconnectPlatform(activeTab)}
             onRefresh={() => handleRefreshPlatform(activeTab)}
@@ -2912,29 +3242,10 @@ export default function ClientDetailsPage() {
           <div>
             <div className="d-flex justify-content-between align-items-center mb-4">
               <h5 className="fw-bold mb-0">AI-Powered Insights & Recommendations</h5>
-              <span className="badge bg-primary-subtle text-primary-emphasis">{mockClientInsights.length} insights</span>
+              <span className="badge bg-secondary-subtle text-secondary-emphasis">0 insights</span>
             </div>
-            <div className="row g-4">
-              {mockClientInsights.map((insight) => (
-                <div key={insight.id} className="col-lg-6">
-                  <div className={`card border-0 shadow-sm rounded-3 insight-card priority-${insight.priority.toLowerCase()} h-100`}>
-                    <div className="card-body p-4">
-                      <div className="d-flex justify-content-between align-items-start mb-4 pb-2">
-                        <div className="d-flex align-items-center gap-2">
-                          <span className={`badge ${insight.priority === 'High' ? 'bg-danger' : insight.priority === 'Medium' ? 'bg-warning text-dark' : 'bg-info'}`}>{insight.priority}</span>
-                          <span className="badge bg-light text-dark border">{insight.category}</span>
-                        </div>
-                        <span className="badge bg-light text-secondary border small">{{ meta: 'Meta Ads', google: 'Google Ads', tiktok: 'TikTok Ads', snapchat: 'Snapchat Ads' }[insight.platform] || insight.platform}</span>
-                      </div>
-                      <h6 className="fw-bold mb-2">{insight.title}</h6>
-                      <p className="text-secondary small mb-3" style={{ lineHeight: 1.6 }}>{insight.description}</p>
-                      <div className="d-flex align-items-center gap-2 bg-success-subtle text-success-emphasis px-3 py-2 rounded-2 small fw-semibold">
-                        <IconUp /> {insight.impact}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="card border-0 shadow-sm rounded-3 p-5 text-center">
+              <div className="text-secondary fw-medium">No insights available for this client.</div>
             </div>
           </div>
         )}
@@ -3563,15 +3874,76 @@ export default function ClientDetailsPage() {
 // PLATFORM TAB SUB-COMPONENT
 // ════════════════════════════════════════════════════════════════════
 
-function PlatformTabContent({ platform, platformKey, connectionState, onReconnect, onRefresh, isRefreshing, dateRange, clientName, clientId, clientMultiplier = 1 }) {
+function PlatformTabContent({ platform, platformKey, isLoading, errorMessage, connectionState, onReconnect, onRefresh, isRefreshing, dateRange, clientName, clientId, clientMultiplier = 1 }) {
   const navigate = useNavigate();
   const [platCampSortField, setPlatCampSortField] = useState('spend');
   const [platCampSortDir, setPlatCampSortDir] = useState('desc');
 
+  // Fixed default pinned KPIs for any platform
+  const defaultPinnedMap = {
+    meta: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
+    google: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
+    tiktok: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
+    snapchat: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
+  };
+
+  const [showKPISelector, setShowKPISelector] = useState(false);
+  const [pinnedKPIs, setPinnedKPIs] = useState(() => defaultPinnedMap[platformKey] || ['spend', 'revenue', 'roas', 'ctr', 'conversions']);
+
+  // Click outside handler for platform KPI selector dropdown
+  useEffect(() => {
+    if (!showKPISelector) return;
+    const handleOutsideClick = (e) => {
+      const selector = e.target.closest('.platform-kpi-selector-container');
+      if (!selector) setShowKPISelector(false);
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, [showKPISelector]);
+
+  if (isLoading) {
+    return (
+      <div className="card border-0 shadow-sm rounded-3 p-5 text-center my-4">
+        <div className="d-flex flex-column align-items-center justify-content-center py-4">
+          <div className="spinner-border text-primary mb-3" role="status" style={{ width: '2.5rem', height: '2.5rem' }}>
+            <span className="visually-hidden">Loading platform data...</span>
+          </div>
+          <span className="text-secondary fw-semibold">Loading {platformKey ? (platformKey.charAt(0).toUpperCase() + platformKey.slice(1)) : ''} Ads data...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <div className="card border-0 shadow-sm rounded-3 p-5 text-center my-4">
+        <div className="d-flex flex-column align-items-center justify-content-center py-3">
+          <div className="text-danger mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <h6 className="fw-bold text-body-emphasis mb-1">Failed to load platform data</h6>
+          <p className="text-secondary small mb-3">{errorMessage}</p>
+          <button
+            type="button"
+            className="btn btn-sm btn-primary d-inline-flex align-items-center gap-1.5 px-3 py-1.5"
+            onClick={onRefresh}
+          >
+            <IconRefresh spinning={isRefreshing} />
+            <span>Retry</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!platform) return <div className="text-center py-5 text-secondary">No data available for this platform.</div>;
 
   const isConnected = connectionState?.connected !== false;
-  const rawKpis = platform.kpis;
+  const rawKpis = platform.kpis || {};
   const isSnapchat = platformKey === 'snapchat';
   const isTikTok = platformKey === 'tiktok';
   const isGoogle = platformKey === 'google';
@@ -3653,28 +4025,6 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
     cpa: cpaVal,
     conversionRate: conversionRateVal,
   };
-
-  // Fixed default pinned KPIs for any platform
-  const defaultPinnedMap = {
-    meta: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
-    google: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
-    tiktok: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
-    snapchat: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
-  };
-
-  const [showKPISelector, setShowKPISelector] = useState(false);
-  const [pinnedKPIs, setPinnedKPIs] = useState(defaultPinnedMap[platformKey] || ['spend', 'revenue', 'roas', 'ctr', 'conversions']);
-
-  // Click outside handler for platform KPI selector dropdown
-  useEffect(() => {
-    if (!showKPISelector) return;
-    const handleOutsideClick = (e) => {
-      const selector = e.target.closest('.platform-kpi-selector-container');
-      if (!selector) setShowKPISelector(false);
-    };
-    document.addEventListener('click', handleOutsideClick);
-    return () => document.removeEventListener('click', handleOutsideClick);
-  }, [showKPISelector]);
 
   // Fixed KPI metrics across any platform tab: Spend, Revenue, ROAS, CTR, CPC, CPM, Impressions, Clicks, Conversions, CPA, Conversion Rate
   const platformKpiChanges = {
@@ -3930,8 +4280,8 @@ function PlatformTabContent({ platform, platformKey, connectionState, onReconnec
 
                     const startDateDisplay = camp.startDate
                       ? (new Date(camp.startDate).toLocaleDateString('en-GB') !== 'Invalid Date'
-                          ? new Date(camp.startDate).toLocaleDateString('en-GB')
-                          : camp.startDate)
+                        ? new Date(camp.startDate).toLocaleDateString('en-GB')
+                        : camp.startDate)
                       : defaultDates[idx % defaultDates.length];
 
                     const roasVal = Number(camp.roas || 0);

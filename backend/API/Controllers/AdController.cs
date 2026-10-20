@@ -18,7 +18,6 @@ public class AdController : ControllerBase
     /// <summary>
     /// Get all ads belonging to a specific client.
     /// </summary>
-    /// <param name="clientId">The client ID.</param>
     [HttpGet("Clients/{clientId:int}")]
     public async Task<IActionResult> GetByClient(int clientId)
     {
@@ -36,9 +35,7 @@ public class AdController : ControllerBase
         return Ok(ads);
     }
 
-    /// <summary>
-    /// Get ad details by Ad ID.
-    /// </summary>
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -51,22 +48,23 @@ public class AdController : ControllerBase
     }
 
 
-    // under process
-    /// <summary>
-    /// Get all ads belonging to a specific ad set.
-    /// </summary>
-    /// <param name="adSetId">The ad set ID.</param>
     [HttpGet("AdSets/{adSetId:int}")]
-    public async Task<IActionResult> GetByAdSet(int adSetId, DateOnly start, DateOnly end)
+    [HttpGet("adset/{adSetId:int}")]
+    public async Task<IActionResult> GetByAdSet(int adSetId, [FromQuery] DateOnly start, [FromQuery] DateOnly end)
     {
-        if (end < start)
-            throw new ArgumentException(
-                "End date must be on or after start date.",
-                nameof(end));
-
         if (adSetId <= 0)
         {
             return BadRequest(new { message = "AdSet ID must be a positive integer." });
+        }
+
+        if (start == default && end == default)
+        {
+            end = DateOnly.FromDateTime(DateTime.UtcNow);
+            start = end.AddDays(-30);
+        }
+        else if (end < start)
+        {
+            return BadRequest(new { message = "End date must be on or after start date." });
         }
 
         var ads = await _adService.GetByAdSetIdAsync(adSetId, start, end);

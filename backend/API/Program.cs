@@ -52,6 +52,7 @@ builder.Services.AddScoped<IAssignmentService, AssignmentService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 builder.Services.AddHostedService<ExchangeRateSyncWorker>();
+builder.Services.AddScoped<ILogoService, LogoService>();
 builder.Services.AddHttpClient<IExchangeRateApiService, ExchangeRateApiService>(client =>
 {
     var baseUrl = builder.Configuration["ExchangeRateApi:BaseUrl"] ?? "https://v6.exchangerate-api.com/v6/";
@@ -268,130 +269,41 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-
 app.Run();
 
+#region URLs hierarchy
+/*
+ Page                        frontend URL
+
+Dashboard home	            /dashboard
+
+Clients table	            /clients
+Client overview	            /client/:clientId/overview
+platform tab	            /client/:clientId/:platformId
+Client insights	            /client/:clientId/insights
+Client notes	            /client/:clientId/notes
+
+Campaign	                /campaigns/:campaignId
+
+ad set          	        /adsets/:adSetId
+
+Ad modal	                /adsets/:adSetId
+*/
 
 
 /*
- I need to build a private web dashboard for my performance marketing clients.
+ Data needed	         API route
+Clients             	GET /api/client
+Client information	    GET /api/client/:clientId
+Client’s platforms	    GET /api/client/:clientId/platforms
 
-The product idea is a **client reporting and optimization dashboard** where I can add multiple clients, connect their ad platforms later, visualize performance, and generate actionable recommendations.
+Platform’s campaigns	GET /api/platforms/:platformId/campaigns
+Campaign information	GET /api/campaigns/:campaignId
+Campaign’s ad sets	    GET /api/campaigns/:campaignId/ad-sets
+Ad set information	    GET /api/ad-sets/:adSetId
+Ad set’s ads	        GET /api/ad-sets/:adSetId/ads
+Ad information	        GET /api/ads/:adId
+ */
+#endregion
 
-Initial clients:
-1. Client 1 
-2. Client 2
-3. client 3
-4. Client 4
-The system should allow me to add any new client in the future.
-
-Each client should have these tabs:
-1. Overview
-2. Meta Ads Performance
-3. Google Ads Performance
-4. Snapchat Ads Performance
-5. TikTok Ads Performance
-6. Insights & Recommendations
-
-Main features needed:
-* Add / edit / delete clients
-* Add ad account details per client
-* Date range selector
-* Refresh all data button
-* Refresh data per platform button
-* KPI cards
-* Charts and visualizations
-* Campaign performance tables
-* Search terms analysis for Google Ads ( the process of reviewing the exact words and phrases real users typed into Google that actually triggered your ads to show)
-* Insights & recommendations based on actual performance
-* Share report button for clients
-* Client-safe report link
-* Internal notes that only I can see
-* Export report to PDF if possible
-
-Important:
-I do not want to start with all API integrations at once.
-
-I want the project built in phases.
-Phase 1: UI MVP with mock data only
-Build the full dashboard experience using fake/sample data first, so I can review the structure, design, charts, and reporting flow before connecting real ad accounts.
-
-Phase 1 should include:
-* Login page if simple
-* Clients list page
-* Add client button
-* Client details page
-* The 6 tabs mentioned above
-* Overview dashboard with KPI cards
-* Spend vs revenue chart
-* ROAS by platform chart
-* Platform comparison
-* Campaign performance table
-* Google Search Terms table
-* Insights & Recommendations page
-* Share report button as UI only
-* Refresh button as UI only
-
-
-Phase 2: Database
-Add real database structure for clients, platform accounts, dashboard settings, stored performance data, recommendations, and shared reports.
-
-Phase 3: Google Ads API integration
-Start with Google Ads first, including campaign performance and search terms.
-
-Phase 4: Meta Ads API integration
-
-Phase 5: Snapchat and TikTok integrations
-
-Phase 6: Shareable client reports and PDF export
-
-Recommendation logic:
-At first, recommendations can be rule-based, not AI-based.
-
-Examples:
-
-* Scale campaigns with ROAS above target and stable conversions
-* Reduce campaigns with high spend and weak ROAS
-* Flag search terms with high spend and zero conversions
-* Suggest exact match keywords from winning search terms
-* Suggest negative keywords from wasted search terms
-* Flag tracking issues when spend exists but conversion value is missing
-* Flag creative fatigue when frequency is high and CTR is dropping
-
-Each client should have target settings, such as:
-
-* Target ROAS
-* Target CPA
-* Monthly budget
-* Currency
-* Business model: ecommerce / lead generation
-* Main conversion event
-
-I need the dashboard to be very visual and decision-friendly, not just tables.
-
-Design direction:
-* Clean SaaS dashboard style
-* Executive-friendly
-* Easy to scan
-* KPI cards at the top
-* Clear charts
-* Conditional colors:
-
-  * Green = strong performance
-  * Yellow = needs attention
-  * Red = weak / wasted spend
-
-For the client share report:
-The client should only see the clean report view, not my internal notes or sensitive optimization comments.
-
-Please send me:
-
-1. Estimated timeline for Phase 1 only
-2. Cost estimate
-3. Recommended tech stack
-4. What you need from me to start
-5. Whether you can later handle Google Ads, Meta Ads, Snapchat, and TikTok API integrations
-
-Important note:
-I want to start with a working MVP first. Please do not over-engineer the first version.*/
 

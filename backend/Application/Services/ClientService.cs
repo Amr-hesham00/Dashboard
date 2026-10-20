@@ -9,11 +9,13 @@ public class ClientService : IClientService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly IExchangeRateService? _exchangeRateService;
+    private readonly ILogoService? _logoService;
 
-    public ClientService(IUnitOfWork unitOfWork, IExchangeRateService? exchangeRateService = null)
+    public ClientService(IUnitOfWork unitOfWork, IExchangeRateService? exchangeRateService = null, ILogoService? logoService = null)
     {
         _unitOfWork = unitOfWork;
         _exchangeRateService = exchangeRateService;
+        _logoService = logoService;
     }
 
     public async Task<List<ClientDTO>> GetAllClientsAsync()
@@ -215,6 +217,10 @@ public class ClientService : IClientService
             return (false, "Client not found.");
         }
 
+        if (client.Logo is not null && _logoService is not null)
+            await _logoService.DeleteAsync(client.Logo); // delete logo img
+
+
         _unitOfWork.Client.Delete(client);
         await _unitOfWork.Complete();
 
@@ -280,7 +286,7 @@ public class ClientService : IClientService
             };
         }
 
-        var rows = await MapClientsToTableAsync(clients);
+        var rows = await MapClientsToTableAsync(clients); // no date filter (get all data)
 
         return new AdminClientsDTO
         {
@@ -289,6 +295,8 @@ public class ClientService : IClientService
             Row = rows
         };
     }
+
+
 
     private async Task<List<ManagerClientsTable>> MapClientsToTableAsync(List<Client> clients)
     {
@@ -396,7 +404,6 @@ public class ClientService : IClientService
 
         return rows;
     }
-
     private async Task<double> GetCrossRateAsync(
         Currency from,
         Currency to,
@@ -422,5 +429,8 @@ public class ClientService : IClientService
         cache[(from, to)] = rate;
         return rate;
     }
+
+
+
 }
 

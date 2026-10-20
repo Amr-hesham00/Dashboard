@@ -23,15 +23,78 @@ export const PRESET_DATE_RANGES = [
   'This Year',
 ];
 
-export function getDaysForPreset(range) {
-  switch (range) {
-    case 'Last 7 Days': return 7;
-    case 'Last 30 Days': return 30;
-    case 'This Month': return 31;
-    case 'This Year': return 243;
-    case 'Year to Date': return 243;
-    default: return 30;
+export function getPresetDates(preset, customNow) {
+  const now = customNow || new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const formatYMD = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const endDate = formatYMD(today);
+
+  if (preset === 'Last 7 Days') {
+    const start = new Date(today);
+    start.setDate(today.getDate() - 6);
+    return {
+      label: 'Last 7 Days',
+      startDate: formatYMD(start),
+      endDate,
+      days: 7,
+      isCustom: false,
+    };
   }
+
+  if (preset === 'Last 30 Days') {
+    const start = new Date(today);
+    start.setDate(today.getDate() - 29);
+    return {
+      label: 'Last 30 Days',
+      startDate: formatYMD(start),
+      endDate,
+      days: 30,
+      isCustom: false,
+    };
+  }
+
+  if (preset === 'This Month') {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    return {
+      label: 'This Month',
+      startDate: formatYMD(start),
+      endDate,
+      days: Math.max(1, today.getDate()),
+      isCustom: false,
+    };
+  }
+
+  if (preset === 'This Year') {
+    const start = new Date(today.getFullYear(), 0, 1);
+    const diffMs = today.getTime() - start.getTime();
+    const days = Math.max(1, Math.round(diffMs / 86400000) + 1);
+    return {
+      label: 'This Year',
+      startDate: formatYMD(start),
+      endDate,
+      days,
+      isCustom: false,
+    };
+  }
+
+  return {
+    label: preset,
+    startDate: formatYMD(new Date(today.getFullYear(), today.getMonth(), 1)),
+    endDate,
+    days: Math.max(1, today.getDate()),
+    isCustom: false,
+  };
+}
+
+export function getDaysForPreset(range) {
+  return getPresetDates(range).days;
 }
 
 export function formatDDMMYY(dateInput) {
@@ -48,13 +111,14 @@ export default function PeriodSelector({
   value = 'Last 30 Days',
   onChange,
   className = '',
-  defaultStartDate = '2026-08-01',
-  defaultEndDate = '2026-08-31',
+  defaultStartDate,
+  defaultEndDate,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showCustom, setShowCustom] = useState(false);
-  const [startDate, setStartDate] = useState(defaultStartDate);
-  const [endDate, setEndDate] = useState(defaultEndDate);
+  const defaultDates = getPresetDates(value || 'Last 30 Days');
+  const [startDate, setStartDate] = useState(defaultStartDate || defaultDates.startDate);
+  const [endDate, setEndDate] = useState(defaultEndDate || defaultDates.endDate);
   const [isCustomActive, setIsCustomActive] = useState(false);
   const containerRef = useRef(null);
 
@@ -74,25 +138,8 @@ export default function PeriodSelector({
     setShowCustom(false);
     setIsOpen(false);
     if (onChange) {
-      const days = getDaysForPreset(preset);
-      let presetStartDate = null;
-      let presetEndDate = '2026-08-31';
-      if (preset === 'Last 7 Days') {
-        presetStartDate = '2026-08-25';
-      } else if (preset === 'Last 30 Days') {
-        presetStartDate = '2026-08-02';
-      } else if (preset === 'This Month') {
-        presetStartDate = '2026-08-01';
-      } else if (preset === 'This Year') {
-        presetStartDate = '2026-01-01';
-      }
-      onChange({
-        label: preset,
-        days,
-        isCustom: false,
-        startDate: presetStartDate,
-        endDate: presetEndDate,
-      });
+      const cfg = getPresetDates(preset);
+      onChange(cfg);
     }
   };
 
@@ -122,8 +169,9 @@ export default function PeriodSelector({
   const handleReset = () => {
     setIsCustomActive(false);
     setShowCustom(false);
-    setStartDate(defaultStartDate);
-    setEndDate(defaultEndDate);
+    const def = getPresetDates('Last 30 Days');
+    setStartDate(def.startDate);
+    setEndDate(def.endDate);
     handleSelectPreset('Last 30 Days');
   };
 

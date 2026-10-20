@@ -26,7 +26,12 @@ public class SearchTermController : ControllerBase
             return BadRequest(new { message = "AdSet ID must be a positive integer." });
         }
 
-        if (startDate > endDate)
+        if (startDate == default && endDate == default)
+        {
+            endDate = DateOnly.FromDateTime(DateTime.UtcNow);
+            startDate = endDate.AddDays(-30);
+        }
+        else if (startDate > endDate)
         {
             return BadRequest(new { message = "startDate must not be greater than endDate." });
         }

@@ -17,9 +17,6 @@ public class PlatformController : ControllerBase
         _platformService = platformService;
     }
 
-    /// <summary>
-    /// Get list of all platforms.
-    /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -27,9 +24,6 @@ public class PlatformController : ControllerBase
         return Ok(platforms);
     }
 
-    /// <summary>
-    /// Get platform details by Platform ID.
-    /// </summary>
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -42,9 +36,6 @@ public class PlatformController : ControllerBase
         return Ok(platform);
     }
 
-    /// <summary>
-    /// Create a new platform.
-    /// </summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreatePlatformDTO dto)
     {
@@ -62,9 +53,6 @@ public class PlatformController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = platform!.Id }, platform);
     }
 
-    /// <summary>
-    /// Update an existing platform's information.
-    /// </summary>
     [HttpPut("{id}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdatePlatformDTO dto)
     {
@@ -82,9 +70,6 @@ public class PlatformController : ControllerBase
         return Ok(new { message });
     }
 
-    /// <summary>
-    /// Delete a platform by Platform ID.
-    /// </summary>
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
@@ -97,9 +82,7 @@ public class PlatformController : ControllerBase
         return Ok(new { message });
     }
 
-    /// <summary>
-    /// Get supported platform types.
-    /// </summary>
+
     [HttpGet("types")]
     public IActionResult GetTypes()
     {
@@ -107,9 +90,6 @@ public class PlatformController : ControllerBase
         return Ok(types);
     }
 
-    /// <summary>
-    /// Get platform statuses.
-    /// </summary>
     [HttpGet("statuses")]
     public IActionResult GetStatuses()
     {
@@ -117,9 +97,6 @@ public class PlatformController : ControllerBase
         return Ok(statuses);
     }
 
-    /// <summary>
-    /// Get supported platform currencies.
-    /// </summary>
     [HttpGet("currencies")]
     public IActionResult GetCurrencies()
     {

@@ -137,7 +137,7 @@ export default function CampaignsPage() {
   const [editingCampaign, setEditingCampaign] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
-    clientId: 'cli-101',
+    clientId: '',
     objective: 0,
     status: 0,
     spend: 0,
@@ -181,9 +181,9 @@ export default function CampaignsPage() {
       if (found) return { id: found.id, name: found.companyName || found.name };
     }
     if (camp.clientName) {
-      return { id: camp.clientId || 'cli-101', name: camp.clientName };
+      return { id: camp.clientId || null, name: camp.clientName };
     }
-    return { id: 'cli-101', name: 'Acme Corporation' };
+    return { id: null, name: 'Client' };
   };
 
   // Helper for dynamic client avatar gradient
@@ -512,7 +512,7 @@ export default function CampaignsPage() {
     setEditingCampaign(null);
     setFormData({
       name: '',
-      clientId: clients[0]?.id || 'cli-101',
+      clientId: clients[0]?.id || '',
       objective: 0,
       status: 0,
       spend: 0,
@@ -529,7 +529,7 @@ export default function CampaignsPage() {
     setEditingCampaign(camp);
     setFormData({
       name: camp.name || '',
-      clientId: camp.clientId || clients[0]?.id || 'cli-101',
+      clientId: camp.clientId || clients[0]?.id || '',
       objective: typeof camp.objective === 'number' ? camp.objective : 0,
       status: typeof camp.status === 'number' ? camp.status : 0,
       spend: camp.spend || 0,

@@ -18,6 +18,8 @@ public class AdSetDTO
 }
 public class CampPageDTO
 {
+    public int ClientId { get; set; }
+    public string? ClientName { get; set; }
     public string CampName { get; set; } = null!;
     public string Status { get; set; } = null!;
     public string CampPlatform { get; set; } = null!;

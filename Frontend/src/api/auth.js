@@ -248,10 +248,34 @@ export async function registerManagerApi(managerData) {
   return await response.json();
 }
 
+// Shared cache of in-flight GET request promises to deduplicate concurrent requests (e.g. from React StrictMode)
+const inFlightRequests = new Map();
+
 /**
- * Universal fetch wrapper with automatic 401 refresh interceptor
+ * Universal fetch wrapper with automatic 401 refresh interceptor and in-flight request deduplication
  */
 export async function apiFetch(url, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+
+  // Deduplicate identical in-flight GET requests (safe idempotent reads)
+  if (method === 'GET' && !options.body && !options._isRetry) {
+    const cacheKey = `${url}|${inMemoryAccessToken || ''}`;
+    if (inFlightRequests.has(cacheKey)) {
+      return inFlightRequests.get(cacheKey).then((res) => res.clone());
+    }
+
+    const fetchPromise = rawApiFetch(url, options).finally(() => {
+      inFlightRequests.delete(cacheKey);
+    });
+
+    inFlightRequests.set(cacheKey, fetchPromise);
+    return fetchPromise.then((res) => res.clone());
+  }
+
+  return rawApiFetch(url, options);
+}
+
+async function rawApiFetch(url, options = {}) {
   const customHeaders = options.headers || {};
   const isRetry = Boolean(options._isRetry);
 
@@ -282,7 +306,7 @@ export async function apiFetch(url, options = {}) {
 
       // Retry the original request with new token
       const retryHeaders = {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(inMemoryAccessToken ? { Authorization: `Bearer ${inMemoryAccessToken}` } : {}),
         ...customHeaders,
       };

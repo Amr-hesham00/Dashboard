@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import DashboardLayout from './DashboardLayout';
+import ClientAvatar from './ClientAvatar';
 import {
   getClientsApi,
   createClientApi,
@@ -14,7 +15,6 @@ import {
   updateClientTargetsApi,
   uploadClientLogoApi,
 } from '../api/clients';
-import { getCampaignsApi } from '../api/campaigns';
 const DEFAULT_CLIENT_TARGETS = {
   targetRoas: 4.0,
   targetCpa: 50.0,
@@ -365,12 +365,11 @@ export default function ClientsPage() {
     try {
       setLoading(true);
       setError('');
-      const [clientList, userList, statusList, currList, campaignList] = await Promise.all([
+      const [clientList, userList, statusList, currList] = await Promise.all([
         getClientsApi(),
         getUsersApi().catch(() => []),
         getClientStatusesApi().catch(() => ['Active', 'Inactive', 'Archived']),
         getClientCurrenciesApi().catch(() => ['USD', 'EUR', 'EGP', 'AED', 'SAR', 'KWD', 'QAR']),
-        getCampaignsApi().catch(() => []),
       ]);
 
       const normalizedClients = (clientList || []).map((c) => ({
@@ -381,7 +380,6 @@ export default function ClientsPage() {
 
       setClients(normalizedClients);
       setUsers(userList || []);
-      setCampaigns(campaignList || []);
       if (Array.isArray(statusList) && statusList.length) setStatuses(statusList);
       if (Array.isArray(currList) && currList.length) setCurrencies(currList);
     } catch (err) {
@@ -392,52 +390,32 @@ export default function ClientsPage() {
   };
 
   const getClientMetrics = (client) => {
-    const clientId = client.id ?? client.clientId;
-    const clientCampaigns = (campaigns || []).filter(
-      (c) =>
-        String(c.clientId) === String(clientId) ||
-        (client.companyName && String(c.clientName || '').toLowerCase() === String(client.companyName).toLowerCase())
-    );
-
-    // Spend
-    const campSpend = clientCampaigns.reduce((acc, c) => acc + (Number(c.spend) || 0), 0);
     const spend = client.spend !== undefined && client.spend !== null
       ? Number(client.spend)
-      : (campSpend > 0 ? campSpend : (Number(client.budget) || 0));
+      : (Number(client.budget) || 0);
 
-    // Revenue
-    const campRevenue = clientCampaigns.reduce((acc, c) => acc + (Number(c.revenue) || 0), 0);
     const revenue = client.revenue !== undefined && client.revenue !== null
       ? Number(client.revenue)
-      : (campRevenue > 0 ? campRevenue : (spend > 0 ? Math.round(spend * 4.0) : 0));
+      : (spend > 0 ? Math.round(spend * 4.0) : 0);
 
-    // Conversions
-    const campConversions = clientCampaigns.reduce((acc, c) => acc + (Number(c.conversions) || 0), 0);
     const conversions = client.conversions !== undefined && client.conversions !== null
       ? Number(client.conversions)
-      : (campConversions > 0 ? campConversions : (spend > 0 ? Math.round(spend / 65) : 0));
+      : (spend > 0 ? Math.round(spend / 65) : 0);
 
-    // Active Campaigns
     const activeCampaigns = client.activeCampaigns !== undefined && client.activeCampaigns !== null
       ? Number(client.activeCampaigns)
-      : clientCampaigns.filter(
-          (c) => c.status === 0 || String(c.status).toLowerCase() === 'active'
-        ).length;
+      : 0;
 
-    // Target ROAS
     const targetRoas = Number(client.targetROAS) || Number(client.targetRoas) || Number(client.target?.targetROAS) || 4.0;
 
-    // Actual ROAS
     const actualRoas = client.roas !== undefined && client.roas !== null
       ? Number(client.roas)
       : (spend > 0 ? (revenue / spend) : (Number(client.actualRoas) || 0));
 
-    // Achieved ROAS (%) = current ROAS * 100 / target ROAS
     const targetRoasAchieved = client.achievedROAS !== undefined && client.achievedROAS !== null
       ? Number(client.achievedROAS)
       : (targetRoas > 0 ? Math.round((actualRoas * 100) / targetRoas) : 0);
 
-    // Target/Total Conversions
     const targetConversions =
       Number(client.targetConversions) ||
       Number(client.target?.targetConversions) ||
@@ -449,7 +427,7 @@ export default function ClientsPage() {
       conversions,
       targetConversions,
       activeCampaigns,
-      totalCampaigns: clientCampaigns.length,
+      totalCampaigns: Number(client.activeCampaigns || client.totalCampaigns || 0),
       targetRoas,
       actualRoas,
       targetRoasAchieved,
@@ -725,7 +703,7 @@ export default function ClientsPage() {
       const bVal = getVal(b, clientSortField);
       return clientSortDir === 'asc' ? aVal - bVal : bVal - aVal;
     });
-  }, [filteredClients, clientSortField, clientSortDir, campaigns]);
+  }, [filteredClients, clientSortField, clientSortDir]);
 
   const renderClientSortTH = (field, label) => {
     const isActive = clientSortField === field;
@@ -1006,42 +984,13 @@ export default function ClientsPage() {
                         {/* 1. Company */}
                         <td className="ps-4">
                           <div className="d-flex align-items-center gap-3">
-                            {client.logo ? (
-                              <img
-                                src={client.logo}
-                                alt={client.companyName}
-                                className="shadow-sm flex-shrink-0"
-                                style={{
-                                  width: 42,
-                                  height: 42,
-                                  borderRadius: 12,
-                                  objectFit: 'contain',
-                                  backgroundColor: '#fff',
-                                  border: '1px solid rgba(0,0,0,0.08)',
-                                  padding: '2px',
-                                }}
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  if (e.currentTarget.nextSibling) {
-                                    e.currentTarget.nextSibling.style.display = 'flex';
-                                  }
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className="d-flex align-items-center justify-content-center text-white fw-bold shadow-sm flex-shrink-0"
-                              style={{
-                                width: 42,
-                                height: 42,
-                                borderRadius: 12,
-                                background: getClientGradient(client.companyName),
-                                fontSize: '0.9rem',
-                                letterSpacing: '0.5px',
-                                display: client.logo ? 'none' : 'flex',
-                              }}
-                            >
-                              {getClientInitials(client.companyName)}
-                            </div>
+                            <ClientAvatar
+                              logo={client.logo}
+                              name={client.companyName}
+                              size={42}
+                              borderRadius={12}
+                              fontSize="0.9rem"
+                            />
                             <div>
                               <h6 className="mb-0 fs-6 fw-semibold text-body-emphasis">{client.companyName}</h6>
                               <div className="d-flex align-items-center gap-1.5 text-secondary small">
@@ -1632,18 +1581,13 @@ export default function ClientsPage() {
               <div className="modal-content border-0 shadow-lg rounded-3">
                 <div className="modal-header border-bottom p-4">
                   <div className="d-flex align-items-center gap-3">
-                    <div
-                      className="d-flex align-items-center justify-content-center text-white fw-bold shadow-sm flex-shrink-0"
-                      style={{
-                        width: 44,
-                        height: 44,
-                        borderRadius: 12,
-                        background: getClientGradient(connectClient.companyName),
-                        fontSize: '0.95rem',
-                      }}
-                    >
-                      {getClientInitials(connectClient.companyName)}
-                    </div>
+                    <ClientAvatar
+                      logo={connectClient.logo}
+                      name={connectClient.companyName}
+                      size={44}
+                      borderRadius={12}
+                      fontSize="0.95rem"
+                    />
                     <div>
                       <h5 className="modal-title fw-bold mb-0">Connect Ad Platforms &middot; {connectClient.companyName}</h5>
                       <small className="text-secondary">Integrate live advertising channels to sync campaign analytics and ROAS data</small>

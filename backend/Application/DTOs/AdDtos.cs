@@ -34,6 +34,23 @@ public class AdDTO
 }
 public class AdSetPageDTO
 {
+    // AdSet & Parent Hierarchy
+    public int AdSetId { get; set; }
+    public string AdSetName { get; set; } = string.Empty;
+    public string? AdSetStatus { get; set; }
+    public string? AudienceType { get; set; }
+    public string? AgeRange { get; set; }
+    public string? Gender { get; set; }
+    public string? Location { get; set; }
+    public int CampaignId { get; set; }
+    public string CampaignName { get; set; } = string.Empty;
+    public int ClientId { get; set; }
+    public string ClientName { get; set; } = string.Empty;
+    public string? PlatformType { get; set; }
+    public string? Currency { get; set; }
+    public DateOnly? StartDate { get; set; }
+    public DateOnly? EndDate { get; set; }
+
     // KPI
     public int Conversions { get; set; }
     public double Spend { get; set; }
@@ -69,6 +86,7 @@ public class ChartPoint
 
 public class TableRow
 {
+    public int Id { get; set; }
     public string Name { get; set; } = null!;
     public object Status { get; set; } = null!;
     public double Spend { get; set; }

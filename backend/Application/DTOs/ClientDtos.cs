@@ -1,4 +1,5 @@
 using Dashboard.Domain.Enums;
+using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
 
 namespace Dashboard.Application.DTOs;
@@ -79,7 +80,6 @@ public class AssociateClientsDTO
 public class ManagerClientsTable
 {
     public int ClientId { get; set; }
-    public int Id => ClientId;
     public string CompanyName { get; set; } = null!;
     public string? Logo { get; set; }
     public string? Website { get; set; }
@@ -110,6 +110,8 @@ public class CreateClientDTO
     [Required]
     public string CompanyName { get; set; } = null!;
 
+    public IFormFile? LogoFile { get; set; }
+
     public string? Logo { get; set; }
 
     [Required]
@@ -138,8 +140,12 @@ public class CreateClientDTO
 
 public class UpdateClientDTO
 {
+    public int? ClientId { get; set; }
+
     [Required]
     public string CompanyName { get; set; } = null!;
+
+    public IFormFile? LogoFile { get; set; }
 
     public string? Logo { get; set; }
 
@@ -159,7 +165,10 @@ public class UpdateClientDTO
     [Required]
     public Currency Currency { get; set; }
 
+    [Required]
     public ClientStatus Status { get; set; }
+
+    [Required]
     public BusinessModel BusinessModel { get; set; }
 
     public string? Notes { get; set; }

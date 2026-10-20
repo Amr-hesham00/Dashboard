@@ -133,6 +133,7 @@ public class AdSetService : IAdSetService
 
             rows.Add(new TableRow
             {
+                Id = adSet.Id,
                 Name = adSet.Name,
                 Status = adSet.Status,
                 Spend = adSetTotal.Spend,
@@ -147,9 +148,11 @@ public class AdSetService : IAdSetService
 
         return new CampPageDTO
         {
+            ClientId = campaign.Platform?.ClientId ?? 0,
+            ClientName = campaign.Platform?.Client?.CompanyName ?? "",
             CampName = campaign.Name,
             Status = campaign.Status.ToString(),
-            CampPlatform = campaign.Platform.PlatformType.ToString(),
+            CampPlatform = campaign.Platform?.PlatformType.ToString() ?? "",
 
             Spend = total.Spend,
             Revenue = total.Revenue,
