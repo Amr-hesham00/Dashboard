@@ -50,7 +50,7 @@ public class CampaignController : ControllerBase
     /// </summary>
     /// <param name="clientId">The client ID.</param>
     [HttpGet("Clients/{clientId:int}")]
-    public async Task<IActionResult> GetByClientOverview(int clientId, [FromQuery] DateOnly startDate, [FromQuery] DateOnly endDate)
+    public async Task<IActionResult> GetByClientOverview([FromRoute] int clientId, [FromQuery] DateOnly startDate, [FromQuery] DateOnly endDate)
     {
         if (clientId <= 0)
             return BadRequest(new { message = "Client ID must be a positive integer." });

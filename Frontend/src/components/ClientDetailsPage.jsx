@@ -1278,8 +1278,8 @@ export default function ClientDetailsPage() {
       },
       labels: {
         style: { colors: '#64748b', fontSize: '11px' },
-        rotate: isMoreThanMonth ? 0 : -45,
-        rotateAlways: !isMoreThanMonth && chartCategories.length > 15,
+        rotate: 0,
+        rotateAlways: false,
       },
     },
     yaxis: {

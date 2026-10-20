@@ -20,6 +20,24 @@ public class ClientController : ControllerBase
         _logoService = logoService;
     }
 
+
+
+    /// <summary>
+    /// get client names and ids
+    /// </summary>
+    [HttpGet("lookup")]
+    public async Task<IActionResult> ClientLookup()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized(new { message = "User identity not found in token." });
+
+        var clients = await _clientService.GetClientLookupAsync(userId);
+
+        return Ok(clients);
+    }
+
     /// <summary>
     ///  Get clients accessible to the current authenticated user.
     /// Admins receive all clients; Managers &amp; Associates receive their assigned clients.

@@ -175,3 +175,11 @@ public class UpdateClientDTO
 
     public string? ManagerId { get; set; }
 }
+
+public class ClientLookupDTO
+{
+    public int ClientId { get; set; }
+    public string CompanyName { get; set; } = null!;
+}
+
+
