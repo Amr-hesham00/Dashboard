@@ -745,6 +745,9 @@ export default function ClientDetailsPage() {
   const clientRef = useRef(client);
   clientRef.current = client;
 
+  const overviewPlatformRowsRef = useRef(overviewPlatformRows);
+  overviewPlatformRowsRef.current = overviewPlatformRows;
+
   // ─── Fetch Platform Tab Data (Meta, Google, Snapchat, TikTok) ────
   const loadPlatformData = useCallback(async (platformKey, forceRefresh = false) => {
     if (!id || id === 'cli-101' || !['meta', 'google', 'snapchat', 'tiktok'].includes(platformKey)) return;
@@ -778,18 +781,42 @@ export default function ClientDetailsPage() {
 
     const fetchPromise = (async () => {
       try {
-        // Resolve platformId from client.platforms or fetch client details if missing
+        // Resolve platformId from client.platforms or overviewPlatformRows or fetch client details if missing
         let currentClient = clientRef.current;
-        if (!currentClient || !Array.isArray(currentClient.platforms) || currentClient.platforms.length === 0) {
-          currentClient = await loadSharedClientInfo(id);
-        }
-
-        const platformRecord = currentClient?.platforms?.find((p) => {
+        let platformRecord = currentClient?.platforms?.find((p) => {
           const k = mapPlatformTypeToKey(p.platformType || p.key, p.platformName);
           return k === platformKey;
         });
 
-        const platformId = platformRecord?.id ?? platformRecord?.platformId;
+        let platformId = platformRecord?.id ?? platformRecord?.platformId;
+
+        // Check overviewPlatformRows if not found in currentClient.platforms
+        if (!platformId && Array.isArray(overviewPlatformRowsRef.current)) {
+          const row = overviewPlatformRowsRef.current.find((r) => {
+            const k = mapPlatformTypeToKey(r.platformName ?? r.platformType);
+            return k === platformKey;
+          });
+          if (row) {
+            platformId = row.platformId;
+            platformRecord = platformRecord || {
+              id: row.platformId,
+              platformId: row.platformId,
+              platformName: row.platformName,
+              platformType: row.platformName,
+              connected: true,
+            };
+          }
+        }
+
+        // If still not resolved, attempt to load full client details from backend
+        if (!platformId) {
+          currentClient = await loadSharedClientInfo(id);
+          platformRecord = currentClient?.platforms?.find((p) => {
+            const k = mapPlatformTypeToKey(p.platformType || p.key, p.platformName);
+            return k === platformKey;
+          });
+          platformId = platformRecord?.id ?? platformRecord?.platformId;
+        }
 
         if (!platformId) {
           // If no platform ID exists, fallback to empty / not configured
