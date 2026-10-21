@@ -377,7 +377,7 @@ export default function ClientDetailsPage() {
   const logoInputRef = useRef(null);
   const [users, setUsers] = useState([]);
   const [statuses, setStatuses] = useState(['Active', 'Inactive', 'Lead', 'Archived']);
-  const [currencies, setCurrencies] = useState(['USD', 'EUR', 'GBP']);
+  const [currencies, setCurrencies] = useState(['USD', 'EUR', 'EGP', 'AED', 'SAR', 'KWD', 'QAR']);
   const [formData, setFormData] = useState({
     companyName: '',
     website: '',
@@ -519,8 +519,6 @@ export default function ClientDetailsPage() {
   // ─── Target Settings State ─────────────────────────────────────
   const [showTargetModal, setShowTargetModal] = useState(false);
   const [targetSettings, setTargetSettings] = useState({
-    businessModel: 'ecommerce',
-    mainConversionEvent: 'Purchases',
     monthlyBudget: 50000,
     targetRoas: 4.0,
     targetCpa: 5.5,
@@ -577,7 +575,7 @@ export default function ClientDetailsPage() {
     try {
       const [statusList, currList, usersList] = await Promise.all([
         getClientStatusesApi().catch(() => ['Active', 'Inactive', 'Lead', 'Archived']),
-        getClientCurrenciesApi().catch(() => ['USD', 'EUR', 'GBP']),
+        getClientCurrenciesApi().catch(() => ['USD', 'EUR', 'EGP', 'AED', 'SAR', 'KWD', 'QAR']),
         getUsersApi().catch(() => []),
       ]);
 
@@ -1680,20 +1678,29 @@ export default function ClientDetailsPage() {
   const cpaPct = targetCpa > 0 ? Math.round((currentCpa * 100) / targetCpa) : (Number(client?.cpaProgress) || 0);
 
   // ─── Action Handlers ────────────────────────────────────────────
-  const handleOpenTargetModal = () => {
+  const handleOpenTargetModal = async () => {
+    let currList = currencies;
+    if (!Array.isArray(currList) || currList.length === 0) {
+      currList = await getClientCurrenciesApi();
+      if (Array.isArray(currList) && currList.length > 0) {
+        setCurrencies(currList);
+      }
+    }
+
     const budget = Number(targetSettings?.monthlyBudget) || 0;
     const roas = Number(targetSettings?.targetRoas) || 0;
     const cpa = Number(targetSettings?.targetCpa) || 0;
     const revenue = Number(targetSettings?.targetRevenue) || 0;
     const conversions = Number(targetSettings?.targetConversions) || 0;
 
+    const rawCurr = targetSettings?.currency || (typeof client?.currency === 'string' ? client.currency : (Array.isArray(currList) ? currList[client?.currency] : 'USD'));
+    const validCurr = Array.isArray(currList) && currList.includes(rawCurr) ? rawCurr : (currList?.[0] || 'USD');
+
     setTargetFormData({
-      businessModel: targetSettings?.businessModel || 'ecommerce',
-      mainConversionEvent: targetSettings?.mainConversionEvent || 'Purchases',
       monthlyBudget: budget,
       targetRoas: roas,
       targetCpa: cpa,
-      currency: targetSettings?.currency || (typeof client?.currency === 'string' ? client.currency : 'USD'),
+      currency: validCurr,
       targetRevenue: revenue,
       targetConversions: conversions,
     });
@@ -1707,10 +1714,8 @@ export default function ClientDetailsPage() {
       setTargetSaving(true);
       setTargetError('');
       const sanitizedTargets = {
-        businessModel: targetFormData.businessModel || 'ecommerce',
-        mainConversionEvent: targetFormData.mainConversionEvent || 'Purchases',
         monthlyBudget: Number(targetFormData.monthlyBudget) || 0,
-        currency: targetFormData.currency || 'USD',
+        currency: targetFormData.currency || currencies[0] || 'USD',
         targetRoas: Number(targetFormData.targetRoas) || 0,
         targetCpa: Number(targetFormData.targetCpa) || 0,
         targetRevenue: Number(targetFormData.targetRevenue) || 0,
@@ -2352,22 +2357,22 @@ export default function ClientDetailsPage() {
                 <span
                   className="badge rounded-pill px-2.5 py-1 fw-semibold d-inline-flex align-items-center gap-1.5"
                   style={{
-                    backgroundColor: targetSettings?.businessModel === 'lead_generation' ? 'rgba(2, 132, 199, 0.14)' : 'rgba(0, 167, 111, 0.14)',
-                    color: targetSettings?.businessModel === 'lead_generation' ? '#0284c7' : '#00a76f',
-                    border: targetSettings?.businessModel === 'lead_generation' ? '1px solid rgba(2, 132, 199, 0.3)' : '1px solid rgba(0, 167, 111, 0.3)',
+                    backgroundColor: (client?.model === 'Lead' || client?.businessModel === 1 || client?.businessModel === 'Lead') ? 'rgba(2, 132, 199, 0.14)' : 'rgba(0, 167, 111, 0.14)',
+                    color: (client?.model === 'Lead' || client?.businessModel === 1 || client?.businessModel === 'Lead') ? '#0284c7' : '#00a76f',
+                    border: (client?.model === 'Lead' || client?.businessModel === 1 || client?.businessModel === 'Lead') ? '1px solid rgba(2, 132, 199, 0.3)' : '1px solid rgba(0, 167, 111, 0.3)',
                     fontSize: '0.74rem',
                   }}
                 >
-                  {targetSettings.businessModel === 'ecommerce' ? '🛍️ E-Commerce' : '🎯 Lead Gen'}
+                  {(client?.model === 'Lead' || client?.businessModel === 1 || client?.businessModel === 'Lead') ? '🎯 Lead Gen' : '🛍️ E-Commerce'}
                 </span>
 
                 <span
                   className="badge bg-body text-body-emphasis border rounded-pill px-2.5 py-1 fw-medium d-inline-flex align-items-center gap-1 shadow-2xs"
                   style={{ fontSize: '0.75rem' }}
                 >
-                  <span className="text-secondary fw-normal">Event:</span>
+                  <span className="text-secondary fw-normal">Currency:</span>
                   <span className="fw-bold ms-1" style={{ color: '#0284c7' }}>
-                    {targetSettings.mainConversionEvent || 'Purchases'}
+                    {targetSettings?.currency || client?.currency || 'USD'}
                   </span>
                 </span>
               </div>
@@ -3630,78 +3635,6 @@ export default function ClientDetailsPage() {
                 <div className="modal-body px-4 py-3.5 d-flex flex-column" style={{ gap: '16px' }}>
                   {targetError && <div className="alert alert-danger mb-0 py-2 px-3 small rounded-3">{targetError}</div>}
 
-                  {/* ─── Business Model Selector (Modern Segmented Pill) ─── */}
-                  <div>
-                    <label className="form-label small fw-semibold text-secondary mb-1.5" style={{ fontSize: '0.78rem' }}>Business Model</label>
-                    <div className="d-flex p-1 bg-body-tertiary rounded-3 border">
-                      <button
-                        type="button"
-                        className={`btn btn-sm flex-fill rounded-2 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 border-0 ${targetFormData.businessModel === 'ecommerce'
-                          ? 'btn-primary shadow-xs'
-                          : 'btn-ghost text-body-secondary'
-                          }`}
-                        style={{ fontSize: '0.84rem' }}
-                        onClick={() => {
-                          setTargetFormData((prev) => ({
-                            ...prev,
-                            businessModel: 'ecommerce',
-                            mainConversionEvent: prev.mainConversionEvent === 'Form Submissions' || prev.mainConversionEvent === 'Qualified Leads' ? 'Purchases' : prev.mainConversionEvent,
-                          }));
-                        }}
-                      >
-                        <span>🛍️</span>
-                        <span>E-Commerce</span>
-                      </button>
-                      <button
-                        type="button"
-                        className={`btn btn-sm flex-fill rounded-2 py-2 fw-semibold d-inline-flex align-items-center justify-content-center gap-2 border-0 ${targetFormData.businessModel === 'lead_generation'
-                          ? 'btn-primary shadow-xs'
-                          : 'btn-ghost text-body-secondary'
-                          }`}
-                        style={{ fontSize: '0.84rem' }}
-                        onClick={() => {
-                          setTargetFormData((prev) => ({
-                            ...prev,
-                            businessModel: 'lead_generation',
-                            mainConversionEvent: prev.mainConversionEvent === 'Purchases' || prev.mainConversionEvent === 'Add to Cart' ? 'Qualified Leads' : prev.mainConversionEvent,
-                          }));
-                        }}
-                      >
-                        <span>🎯</span>
-                        <span>Lead Generation</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* ─── Main Conversion Event ─── */}
-                  <div>
-                    <label className="form-label small fw-semibold text-secondary mb-1.5" style={{ fontSize: '0.78rem' }}>Conversion Event</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={targetFormData.mainConversionEvent}
-                      onChange={(e) => setTargetFormData({ ...targetFormData, mainConversionEvent: e.target.value })}
-                      placeholder="e.g. Purchases, Leads, Bookings"
-                      required
-                    />
-                    <div className="d-flex align-items-center flex-wrap" style={{ marginTop: '10px', gap: '8px' }}>
-                      {(targetFormData.businessModel === 'ecommerce'
-                        ? ['Purchases', 'Add to Cart', 'Initiate Checkout']
-                        : ['Qualified Leads', 'Form Submissions', 'Bookings']
-                      ).map((evt) => (
-                        <button
-                          key={evt}
-                          type="button"
-                          className={`btn btn-xs rounded-pill px-2.5 py-1 ${targetFormData.mainConversionEvent === evt ? 'btn-primary' : 'btn-outline-secondary'}`}
-                          style={{ fontSize: '0.72rem' }}
-                          onClick={() => setTargetFormData({ ...targetFormData, mainConversionEvent: evt })}
-                        >
-                          {evt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* ─── Monthly Budget & Currency ─── */}
                   <div className="row g-2.5">
                     <div className="col-sm-7">
@@ -3737,17 +3670,14 @@ export default function ClientDetailsPage() {
                       <label className="form-label small fw-semibold text-secondary mb-1" style={{ fontSize: '0.78rem' }}>Currency</label>
                       <select
                         className="form-select fw-semibold"
-                        value={targetFormData.currency || 'USD'}
+                        value={targetFormData.currency || (currencies[0] || 'USD')}
                         onChange={(e) => setTargetFormData({ ...targetFormData, currency: e.target.value })}
                       >
-                        <option value="USD">USD ($)</option>
-                        <option value="EUR">EUR (€)</option>
-                        <option value="GBP">GBP (£)</option>
-                        <option value="AED">AED (AED)</option>
-                        <option value="SAR">SAR (SAR)</option>
-                        <option value="CAD">CAD (C$)</option>
-                        <option value="AUD">AUD (A$)</option>
-                        <option value="EGP">EGP (EGP)</option>
+                        {currencies.map((curr) => (
+                          <option key={curr} value={curr}>
+                            {curr} ({getCurrencySymbol(curr).trim()})
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -3837,21 +3767,16 @@ export default function ClientDetailsPage() {
                       <label className="form-label small fw-semibold text-secondary mb-1" style={{ fontSize: '0.78rem' }}>
                         Projected Conversions
                       </label>
-                      <div className="input-group">
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          className="form-control fw-bold text-info"
-                          value={targetFormData.targetConversions}
-                          onChange={(e) => setTargetFormData({ ...targetFormData, targetConversions: e.target.value })}
-                          placeholder="9000"
-                          required
-                        />
-                        <span className="input-group-text bg-body-tertiary text-secondary small" style={{ fontSize: '0.74rem' }}>
-                          {targetFormData.mainConversionEvent || 'events'}
-                        </span>
-                      </div>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        className="form-control fw-bold text-info"
+                        value={targetFormData.targetConversions}
+                        onChange={(e) => setTargetFormData({ ...targetFormData, targetConversions: e.target.value })}
+                        placeholder="9000"
+                        required
+                      />
                     </div>
                   </div>
                 </div>

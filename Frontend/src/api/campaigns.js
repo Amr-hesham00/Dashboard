@@ -108,6 +108,7 @@ export async function getCampaignByIdApi(id, startDate, endDate) {
           clientName: data.clientName || '',
           name: data.campName || data.name,
           status: data.status,
+          currency: data.currencyName || data.currency,
           platformLabel: data.campPlatform || 'Platform',
           platformKey: String(data.campPlatform || 'meta').toLowerCase().replace('ads', ''),
           spend: data.spend,

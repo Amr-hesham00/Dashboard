@@ -23,6 +23,8 @@ public class CampPageDTO
     public string CampName { get; set; } = null!;
     public string Status { get; set; } = null!;
     public string CampPlatform { get; set; } = null!;
+    public Currency Currency { get; set; }
+    public string? CurrencyName { get; set; }
 
     // KPIs
     public double Spend { set; get; }

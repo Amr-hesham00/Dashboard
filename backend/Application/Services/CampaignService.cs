@@ -248,7 +248,7 @@ public class CampaignService : ICampaignService
                 });
             }
         }
-
+        // 12	17	3.6	85	180000	648000	2100	3.4	2.2	2
         // ── Rule 5: Target DTO converted for overview viewing, stored DB target untouched ──
         ClientTargetDTO? targetDto = null;
         if (client.Target is not null)

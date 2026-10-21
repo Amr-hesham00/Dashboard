@@ -23,6 +23,17 @@ public class ClientController : ControllerBase
 
 
     /// <summary>
+    /// Get supported currencies for clients.
+    /// </summary>
+    [HttpGet("currencies")]
+    [AllowAnonymous]
+    public IActionResult GetCurrencies()
+    {
+        var currencies = Enum.GetNames(typeof(Currency));
+        return Ok(currencies);
+    }
+
+    /// <summary>
     /// get client names and ids
     /// </summary>
     [HttpGet("lookup")]

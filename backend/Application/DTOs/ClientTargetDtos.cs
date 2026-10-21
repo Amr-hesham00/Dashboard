@@ -1,12 +1,12 @@
-using System.ComponentModel.DataAnnotations;
 using Dashboard.Domain.Enums;
+using System.ComponentModel.DataAnnotations;
 
 namespace Dashboard.Application.DTOs;
 
 public class ClientTargetDTO
 {
     public int Id { get; set; }
-    public Currency Currency { get; set; }
+    public Currency Currency { get; set; } = Currency.USD;
     public double? TargetROAS { get; set; }
     public double? TargetCPA { get; set; }
     public double? MonthlyBudget { get; set; }
@@ -35,7 +35,7 @@ public class CreateClientTargetDTO
 
 public class UpdateClientTargetDTO
 {
-    public Currency Currency { get; set; } = Currency.USD;
+    public Currency Currency { get; set; }
 
     public double? TargetROAS { get; set; }
     public double? TargetCPA { get; set; }

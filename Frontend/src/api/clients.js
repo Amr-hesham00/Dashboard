@@ -161,12 +161,31 @@ export function getClientStatusesApi() {
   return Promise.resolve(['Active', 'Inactive', 'Archived']);
 }
 
+let clientCurrenciesCache = null;
+
 /**
- * Client currencies — static list matching backend Currency enum.
- * No backend endpoint exists for this.
+ * Client currencies — dynamically fetched from backend supported Currency enum.
  */
-export function getClientCurrenciesApi() {
-  return Promise.resolve(CURRENCY_ENUM);
+export async function getClientCurrenciesApi(forceRefresh = false) {
+  if (!forceRefresh && clientCurrenciesCache && clientCurrenciesCache.length > 0) {
+    return clientCurrenciesCache;
+  }
+  try {
+    let response = await apiFetch(`${API_BASE_URL}/ClientTarget/currencies`);
+    if (!response.ok) {
+      response = await apiFetch(`${API_BASE_URL}/Platform/currencies`);
+    }
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        clientCurrenciesCache = data;
+        return data;
+      }
+    }
+  } catch (err) {
+    console.warn('getClientCurrenciesApi error, fallback to supported currencies:', err);
+  }
+  return CURRENCY_ENUM;
 }
 
 /**
@@ -231,7 +250,17 @@ export async function updateClientTargetsApi(clientId, targets) {
     throw new Error('Invalid client ID for target update.');
   }
 
+  // Resolve currency to backend integer enum value
+  let currencyInt = 0;
+  if (typeof targets.currency === 'number') {
+    currencyInt = targets.currency;
+  } else if (typeof targets.currency === 'string') {
+    const idx = CURRENCY_ENUM.indexOf(targets.currency.toUpperCase());
+    currencyInt = idx >= 0 ? idx : 0;
+  }
+
   const payload = {
+    currency: currencyInt,
     targetROAS: targets.targetRoas != null ? Number(targets.targetRoas) : undefined,
     targetCPA: targets.targetCpa != null ? Number(targets.targetCpa) : undefined,
     monthlyBudget: targets.monthlyBudget != null ? Number(targets.monthlyBudget) : undefined,

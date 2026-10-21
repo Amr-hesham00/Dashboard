@@ -60,14 +60,12 @@ public class AdSetService : IAdSetService
                 "End date must be on or after start date.",
                 nameof(endDate));
 
-        var campaign = await _unitOfWork.Campaign
-            .GetById(campaignId);
+        var campaign = await _unitOfWork.Campaign.GetById(campaignId);
 
         if (campaign is null)
             return null;
 
-        var adSets = await _unitOfWork.AdSet
-            .GetByCampaignIdAsync(campaignId, startDate, endDate);
+        var adSets = await _unitOfWork.AdSet.GetByCampaignIdAsync(campaignId, startDate, endDate);
 
         return MapToDTO(campaign, adSets, startDate, endDate);
     }
@@ -153,6 +151,8 @@ public class AdSetService : IAdSetService
             CampName = campaign.Name,
             Status = campaign.Status.ToString(),
             CampPlatform = campaign.Platform?.PlatformType.ToString() ?? "",
+            Currency = campaign.Platform?.Currency ?? campaign.Currency,
+            CurrencyName = (campaign.Platform?.Currency ?? campaign.Currency).ToString(),
 
             Spend = total.Spend,
             Revenue = total.Revenue,

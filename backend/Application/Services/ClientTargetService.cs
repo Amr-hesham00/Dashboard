@@ -94,10 +94,9 @@ public class ClientTargetService : IClientTargetService
     public async Task<(bool Success, string Message, ClientTargetDTO? Target)> UpsertByClientIdAsync(int clientId, UpdateClientTargetDTO dto)
     {
         var client = await _unitOfWork.Client.GetById(clientId);
+
         if (client == null)
-        {
             return (false, $"Client with ID '{clientId}' not found.", null);
-        }
 
         var target = await _unitOfWork.ClientTarget.GetByClientIdAsync(clientId);
         if (target == null)

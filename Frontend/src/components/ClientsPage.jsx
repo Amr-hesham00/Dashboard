@@ -268,6 +268,8 @@ export default function ClientsPage() {
       case 'CAD': return 'C$';
       case 'AUD': return 'A$';
       case 'EGP': return 'EGP ';
+      case 'KWD': return 'KWD ';
+      case 'QAR': return 'QAR ';
       default: return '$';
     }
   };
@@ -278,11 +280,21 @@ export default function ClientsPage() {
     setShowTargetModal(true);
     setTargetLoading(true);
     try {
+      let currList = currencies;
+      if (!Array.isArray(currList) || currList.length === 0) {
+        currList = await getClientCurrenciesApi();
+        if (Array.isArray(currList) && currList.length > 0) {
+          setCurrencies(currList);
+        }
+      }
+
       const targets = await getClientTargetsApi(client.id);
-      const curr = typeof client.currency === 'string' ? client.currency : 'USD';
-      setTargetFormData(targets || { ...DEFAULT_CLIENT_TARGETS, currency: curr });
+      const rawCurr = targets?.currency || (typeof client.currency === 'string' ? client.currency : (Array.isArray(currList) ? currList[client.currency] : 'USD'));
+      const validCurr = Array.isArray(currList) && currList.includes(rawCurr) ? rawCurr : (currList?.[0] || 'USD');
+
+      setTargetFormData(targets ? { ...targets, currency: validCurr } : { ...DEFAULT_CLIENT_TARGETS, currency: validCurr });
     } catch {
-      setTargetFormData({ ...DEFAULT_CLIENT_TARGETS, currency: 'USD' });
+      setTargetFormData({ ...DEFAULT_CLIENT_TARGETS, currency: currencies[0] || 'USD' });
     } finally {
       setTargetLoading(false);
     }
@@ -311,7 +323,15 @@ export default function ClientsPage() {
     }
 
     try {
-      await updateClientTargetsApi(targetClient.id, targetFormData);
+      const sanitizedTargets = {
+        monthlyBudget: Number(targetFormData.monthlyBudget) || 0,
+        currency: targetFormData.currency || currencies[0] || 'USD',
+        targetRoas: Number(targetFormData.targetRoas) || 0,
+        targetCpa: Number(targetFormData.targetCpa) || 0,
+        targetRevenue: Number(targetFormData.targetRevenue) || 0,
+        targetConversions: Number(targetFormData.targetConversions) || 0,
+      };
+      await updateClientTargetsApi(targetClient.id, sanitizedTargets);
       setShowTargetModal(false);
       setToastMsg(`Targets for ${targetClient.companyName} updated successfully!`);
       setTimeout(() => setToastMsg(''), 3000);
@@ -993,26 +1013,16 @@ export default function ClientsPage() {
                             />
                             <div>
                               <h6 className="mb-0 fs-6 fw-semibold text-body-emphasis">{client.companyName}</h6>
-                              <div className="d-flex align-items-center gap-1.5 text-secondary small">
-                                {client.website ? (
-                                  <a
-                                    href={client.website?.startsWith('http') ? client.website : `https://${client.website}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-secondary text-decoration-none"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    {client.website.replace(/^https?:\/\//, '')}
-                                  </a>
-                                ) : (
-                                  <span>{client.country || 'No website'}</span>
-                                )}
-                                {client.country && client.website && (
-                                  <>
-                                    <span>&bull;</span>
-                                    <span>{client.country}</span>
-                                  </>
-                                )}
+                              <div className="text-secondary small mt-0.5 opacity-75" style={{ fontSize: '0.75rem', fontWeight: 500, letterSpacing: '0.03em' }}>
+                                {(() => {
+                                  const isLead =
+                                    client.model === 'Lead' ||
+                                    client.businessModel === 'Lead' ||
+                                    client.businessModel === 'lead_generation' ||
+                                    client.model === 1 ||
+                                    client.businessModel === 1;
+                                  return isLead ? 'LEAD' : 'E-COMMERCE';
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -1800,101 +1810,7 @@ export default function ClientsPage() {
                   <div className="modal-body p-4" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
                     {targetError && <div className="alert alert-danger mb-3 py-2 px-3 small">{targetError}</div>}
 
-                    {/* ─── 1. Business Model Selection ─── */}
-                    <div className="mb-4">
-                      <label className="form-label small fw-bold text-uppercase text-secondary" style={{ letterSpacing: '0.5px' }}>
-                        Business Model <span className="text-danger">*</span>
-                      </label>
-                      <div className="row g-3">
-                        {/* E-Commerce Card */}
-                        <div className="col-sm-6">
-                          <div
-                            className={`card h-100 p-3 rounded-3 cursor-pointer border-2 transition-all ${targetFormData.businessModel === 'ecommerce' ? 'border-primary bg-primary-subtle bg-opacity-30 shadow-xs' : 'border-light-subtle bg-body'}`}
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => {
-                              setTargetFormData((prev) => ({
-                                ...prev,
-                                businessModel: 'ecommerce',
-                                mainConversionEvent: prev.mainConversionEvent === 'Form Submissions' || prev.mainConversionEvent === 'Qualified Leads' ? 'Purchases' : prev.mainConversionEvent,
-                              }));
-                            }}
-                          >
-                            <div className="d-flex align-items-center gap-2 mb-1">
-                              <span className="fs-5">🛍️</span>
-                              <span className="fw-bold text-body-emphasis">E-Commerce</span>
-                              {targetFormData.businessModel === 'ecommerce' && (
-                                <span className="badge bg-primary ms-auto rounded-pill px-2 py-0.5" style={{ fontSize: '0.68rem' }}>Active</span>
-                              )}
-                            </div>
-                            <small className="text-secondary" style={{ fontSize: '0.78rem' }}>
-                              Optimizes for ROAS, Gross Revenue, Purchase Volume & Cart Conversion
-                            </small>
-                          </div>
-                        </div>
-
-                        {/* Lead Generation Card */}
-                        <div className="col-sm-6">
-                          <div
-                            className={`card h-100 p-3 rounded-3 cursor-pointer border-2 transition-all ${targetFormData.businessModel === 'lead_generation' ? 'border-primary bg-primary-subtle bg-opacity-30 shadow-xs' : 'border-light-subtle bg-body'}`}
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => {
-                              setTargetFormData((prev) => ({
-                                ...prev,
-                                businessModel: 'lead_generation',
-                                mainConversionEvent: prev.mainConversionEvent === 'Purchases' || prev.mainConversionEvent === 'Add to Cart' ? 'Qualified Leads' : prev.mainConversionEvent,
-                              }));
-                            }}
-                          >
-                            <div className="d-flex align-items-center gap-2 mb-1">
-                              <span className="fs-5">🎯</span>
-                              <span className="fw-bold text-body-emphasis">Lead Generation</span>
-                              {targetFormData.businessModel === 'lead_generation' && (
-                                <span className="badge bg-primary ms-auto rounded-pill px-2 py-0.5" style={{ fontSize: '0.68rem' }}>Active</span>
-                              )}
-                            </div>
-                            <small className="text-secondary" style={{ fontSize: '0.78rem' }}>
-                              Optimizes for Cost Per Acquisition (CPA), Form Leads & Appointment Bookings
-                            </small>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ─── 2. Main Conversion Event ─── */}
-                    <div className="mb-4">
-                      <label className="form-label small fw-bold text-uppercase text-secondary d-flex justify-content-between align-items-center" style={{ letterSpacing: '0.5px' }}>
-                        <span>Main Conversion Event <span className="text-danger">*</span></span>
-                        <span className="text-muted fw-normal" style={{ fontSize: '0.72rem' }}>Key optimization action</span>
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control mb-2"
-                        value={targetFormData.mainConversionEvent}
-                        onChange={(e) => setTargetFormData({ ...targetFormData, mainConversionEvent: e.target.value })}
-                        placeholder="e.g. Purchases, Form Submissions, Bookings"
-                        required
-                      />
-                      {/* Suggested Event Pills */}
-                      <div className="d-flex align-items-center gap-1.5 flex-wrap">
-                        <span className="small text-secondary me-1" style={{ fontSize: '0.72rem' }}>Quick suggestions:</span>
-                        {(targetFormData.businessModel === 'ecommerce'
-                          ? ['Purchases', 'Add to Cart', 'Initiate Checkout', 'Complete Registration']
-                          : ['Qualified Leads', 'Form Submissions', 'Schedule Call', 'Book Demo']
-                        ).map((evt) => (
-                          <button
-                            key={evt}
-                            type="button"
-                            className={`btn btn-xs rounded-pill px-2.5 py-0.5 small ${targetFormData.mainConversionEvent === evt ? 'btn-primary' : 'btn-outline-secondary'}`}
-                            style={{ fontSize: '0.72rem' }}
-                            onClick={() => setTargetFormData({ ...targetFormData, mainConversionEvent: evt })}
-                          >
-                            {evt}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* ─── 3. Budget & Currency Row ─── */}
+                    {/* ─── 1. Budget & Currency Row ─── */}
                     <div className="row g-3 mb-4">
                       {/* Monthly Budget */}
                       <div className="col-md-7">
@@ -1937,17 +1853,14 @@ export default function ClientsPage() {
                         </label>
                         <select
                           className="form-select fw-semibold"
-                          value={targetFormData.currency || 'USD'}
+                          value={targetFormData.currency || (currencies[0] || 'USD')}
                           onChange={(e) => setTargetFormData({ ...targetFormData, currency: e.target.value })}
                         >
-                          <option value="USD">USD ($) - US Dollar</option>
-                          <option value="EUR">EUR (€) - Euro</option>
-                          <option value="GBP">GBP (£) - British Pound</option>
-                          <option value="AED">AED (AED) - UAE Dirham</option>
-                          <option value="SAR">SAR (SAR) - Saudi Riyal</option>
-                          <option value="CAD">CAD (C$) - Canadian Dollar</option>
-                          <option value="AUD">AUD (A$) - Australian Dollar</option>
-                          <option value="EGP">EGP (EGP) - Egyptian Pound</option>
+                          {currencies.map((curr) => (
+                            <option key={curr} value={curr}>
+                              {curr} ({getCurrencySymbol(curr).trim()})
+                            </option>
+                          ))}
                         </select>
                         <small className="text-secondary" style={{ fontSize: '0.72rem' }}>Account reporting currency</small>
                       </div>
@@ -2045,7 +1958,7 @@ export default function ClientsPage() {
                       {/* Target Conversions */}
                       <div className="col-md-6">
                         <label className="form-label small fw-semibold text-body-emphasis">
-                          Target Conversions ({targetFormData.mainConversionEvent || 'Events'})
+                          Target Conversions
                         </label>
                         <input
                           type="number"

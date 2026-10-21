@@ -105,18 +105,29 @@ const IconCheck = () => (
 const PLATFORMS_MAP = { 1: 'Meta', 2: 'Google', 3: 'Snapchat', 4: 'TikTok' };
 const PLATFORM_KEYS_MAP = { 1: 'meta', 2: 'google', 3: 'snapchat', 4: 'tiktok' };
 
+function getCurrencyName(currency) {
+  if (!currency && currency !== 0) return 'USD';
+  if (typeof currency === 'string') return currency;
+  const list = ['USD', 'EUR', 'EGP', 'AED', 'SAR', 'KWD', 'QAR'];
+  return list[currency] || 'USD';
+}
+
 function getCurrencySymbol(currency) {
-  if (!currency) return '$';
-  const c = String(currency).toUpperCase();
+  if (!currency && currency !== 0) return '$';
+  const c = typeof currency === 'number' ? getCurrencyName(currency) : String(currency).toUpperCase();
   switch (c) {
+    case 'USD': return '$';
     case 'EUR': return '€';
     case 'GBP': return '£';
     case 'AED': return 'AED ';
     case 'SAR': return 'SAR ';
     case 'CAD': return 'C$';
     case 'AUD': return 'A$';
-    case 'EGP': return 'EGP ';
-    default: return '$';
+    case 'EGP':
+    case 'EGY': return 'EGP ';
+    case 'KWD': return 'KWD ';
+    case 'QAR': return 'QAR ';
+    default: return `${c} `;
   }
 }
 

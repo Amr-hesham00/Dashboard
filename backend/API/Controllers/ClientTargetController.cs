@@ -17,6 +17,16 @@ public class ClientTargetController : ControllerBase
 
 
     /// <summary>
+    /// Get supported target currencies.
+    /// </summary>
+    [HttpGet("currencies")]
+    public IActionResult GetCurrencies()
+    {
+        var currencies = Enum.GetNames(typeof(Currency));
+        return Ok(currencies);
+    }
+
+    /// <summary>
     /// Get target by Target ID.
     /// </summary>
     [HttpGet("{id}")]
