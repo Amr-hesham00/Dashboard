@@ -16,6 +16,7 @@ export default function ClientSwitcher({
   const dropdownRef = useRef(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     let isMounted = true;
     getClientLookupApi()
       .then((data) => {
@@ -27,7 +28,7 @@ export default function ClientSwitcher({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isOpen]);
 
   useEffect(() => {
     function handleClickOutside(event) {
