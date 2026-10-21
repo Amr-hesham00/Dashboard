@@ -295,6 +295,10 @@ public class ClientService : IClientService
             Row = rows
         };
     }
+    public async Task<IEnumerable<ClientLookupDTO>?> GetClientLookupAsync(string userId)
+    {
+        return await _unitOfWork.Client.GetClientLookupAsync(userId);
+    }
 
 
 
@@ -429,8 +433,6 @@ public class ClientService : IClientService
         cache[(from, to)] = rate;
         return rate;
     }
-
-
 
 }
 

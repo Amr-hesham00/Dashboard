@@ -13,10 +13,50 @@ function resolveCurrencyName(val) {
 
 let clientsCache = null;
 let clientsInFlightPromise = null;
+let clientLookupCache = null;
+let clientLookupInFlightPromise = null;
 
 export function invalidateClientsCache() {
   clientsCache = null;
   clientsInFlightPromise = null;
+  clientLookupCache = null;
+  clientLookupInFlightPromise = null;
+}
+
+/**
+ * Lightweight endpoint to fetch client id and name for dropdown / switcher.
+ */
+export async function getClientLookupApi(forceRefresh = false) {
+  if (!forceRefresh && clientLookupCache) {
+    return clientLookupCache;
+  }
+  if (!forceRefresh && clientLookupInFlightPromise) {
+    return clientLookupInFlightPromise;
+  }
+
+  clientLookupInFlightPromise = (async () => {
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/Client/lookup`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || `Failed to load client lookup (${response.status}).`);
+      }
+      const data = await response.json();
+      const result = Array.isArray(data)
+        ? data.map((c) => ({
+          id: c.clientId ?? c.id,
+          name: c.companyName ?? c.name,
+          companyName: c.companyName ?? c.name,
+        }))
+        : [];
+      clientLookupCache = result;
+      return result;
+    } finally {
+      clientLookupInFlightPromise = null;
+    }
+  })();
+
+  return clientLookupInFlightPromise;
 }
 
 /**

@@ -572,12 +572,10 @@ export default function ClientDetailsPage() {
   // ─── Fetch Shared Client Info (Header, targets, static options) ────
   const sharedClientLoadedRef = useRef(null);
 
-  const loadSharedClientInfo = useCallback(async (clientIdToLoad) => {
+  const loadSharedClientInfo = useCallback(async (clientIdToLoad, explicitClientData = null) => {
     if (!clientIdToLoad || clientIdToLoad === 'cli-101') return null;
     try {
-      const [clientData, targetsData, statusList, currList, usersList] = await Promise.all([
-        getClientByIdApi(clientIdToLoad).catch(() => null),
-        getClientTargetsApi(clientIdToLoad).catch(() => null),
+      const [statusList, currList, usersList] = await Promise.all([
         getClientStatusesApi().catch(() => ['Active', 'Inactive', 'Lead', 'Archived']),
         getClientCurrenciesApi().catch(() => ['USD', 'EUR', 'GBP']),
         getUsersApi().catch(() => []),
@@ -587,11 +585,7 @@ export default function ClientDetailsPage() {
       if (Array.isArray(currList) && currList.length) setCurrencies(currList);
       if (Array.isArray(usersList)) setUsers(usersList);
 
-      if (targetsData) {
-        setTargetSettings(targetsData);
-        setTargetFormData(targetsData);
-      }
-
+      const clientData = explicitClientData;
       if (clientData) {
         const rawClientObj = clientData?.client || clientData;
         const normalized = {
@@ -662,13 +656,13 @@ export default function ClientDetailsPage() {
 
         let finalClient = overviewData?.client || null;
         if (!finalClient) {
-          finalClient = await getClientByIdApi(id).catch(() => null);
-        }
-
-        if (!finalClient) {
           setError(`Client with ID ${id} not found.`);
           setClient(null);
           return;
+        }
+
+        if (overviewData?.client) {
+          loadSharedClientInfo(id, overviewData.client);
         }
 
         const rawClientObj = (overviewData?.client) || (finalClient?.client) || finalClient;
@@ -1305,8 +1299,8 @@ export default function ClientDetailsPage() {
       },
       labels: {
         style: { colors: '#64748b', fontSize: '11px' },
-        rotate: isMoreThanMonth ? 0 : -45,
-        rotateAlways: !isMoreThanMonth && chartCategories.length > 15,
+        rotate: 0,
+        rotateAlways: false,
       },
     },
     yaxis: {

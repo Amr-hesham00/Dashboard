@@ -1,10 +1,13 @@
+using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces.Repositories;
 using Dashboard.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.Infrastructure.Repositories;
 
+
 public class ClientRepo : GenericRepo<Client>, IClientRepo
+
 {
     public ClientRepo(AppDbContext context) : base(context)
     {
@@ -73,5 +76,19 @@ public class ClientRepo : GenericRepo<Client>, IClientRepo
             .Include(c => c.Assignments)
             .AsSplitQuery()
             .FirstOrDefaultAsync(c => c.Id == id);
+    }
+
+    public async Task<IEnumerable<ClientLookupDTO>?> GetClientLookupAsync(string userId)
+    {
+        return await dbset
+            .AsNoTracking()
+            .Where(c => c.ManagerId == userId)
+            .OrderBy(c => c.CompanyName)
+            .Select(c => new ClientLookupDTO
+            {
+                ClientId = c.Id,
+                CompanyName = c.CompanyName
+            })
+            .ToListAsync();
     }
 }

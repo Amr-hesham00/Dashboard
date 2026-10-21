@@ -11,4 +11,5 @@ public interface IClientService
     Task<(bool Success, string Message, CreateClientDTO? Client)> CreateClientAsync(CreateClientDTO dto);
     Task<(bool Success, string Message)> UpdateClientAsync(int id, UpdateClientDTO dto);
     Task<(bool Success, string Message)> DeleteClientAsync(int id);
+    Task<IEnumerable<ClientLookupDTO>?> GetClientLookupAsync(string userId);
 }

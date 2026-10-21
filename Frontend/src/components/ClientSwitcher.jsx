@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { getClientsApi } from '../api/clients';
+import { getClientLookupApi } from '../api/clients';
 
 export default function ClientSwitcher({
   currentClientId,
@@ -16,8 +16,9 @@ export default function ClientSwitcher({
   const dropdownRef = useRef(null);
 
   useEffect(() => {
+    if (!isOpen) return;
     let isMounted = true;
-    getClientsApi()
+    getClientLookupApi()
       .then((data) => {
         if (isMounted && Array.isArray(data) && data.length > 0) {
           setClients(data);
@@ -27,7 +28,7 @@ export default function ClientSwitcher({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isOpen]);
 
   useEffect(() => {
     function handleClickOutside(event) {
