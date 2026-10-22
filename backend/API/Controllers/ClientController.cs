@@ -1,5 +1,6 @@
 using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces.Services;
+using Dashboard.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
