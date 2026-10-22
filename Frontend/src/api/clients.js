@@ -106,17 +106,67 @@ export async function getClientByIdApi(id) {
   return await response.json();
 }
 
+function extractErrorMessage(data, fallback = 'Operation failed.') {
+  if (!data) return fallback;
+  if (typeof data === 'string' && data.trim()) return data;
+  if (data.message && typeof data.message === 'string') return data.message;
+  if (data.errors && typeof data.errors === 'object') {
+    const errorList = Object.values(data.errors).flat().filter(Boolean);
+    if (errorList.length > 0) return errorList.join(' ');
+  }
+  if (data.title && typeof data.title === 'string') return data.title;
+  return fallback;
+}
+
+function buildClientFormData(clientDto) {
+  if (clientDto instanceof FormData) return clientDto;
+  const formData = new FormData();
+  Object.entries(clientDto).forEach(([key, val]) => {
+    if (val === undefined || val === null) return;
+    if (key === 'countryCode') return;
+
+    if (key === 'logoFile' || key === 'LogoFile') {
+      if ((val instanceof File || val instanceof Blob) && val.size > 0) {
+        formData.append('LogoFile', val);
+      }
+      return;
+    }
+
+    if (key === 'logo' || key === 'Logo') {
+      // If val is a local blob URL preview (blob:http...), do not send as logo URL string
+      if (typeof val === 'string' && val.startsWith('blob:')) {
+        return;
+      }
+      formData.append('Logo', val || '');
+      return;
+    }
+
+    formData.append(key, val);
+  });
+  return formData;
+}
+
+function prepareClientRequest(clientDto) {
+  if (clientDto instanceof FormData) {
+    return { body: clientDto, headers: {} };
+  }
+  // Backend endpoints use [FromForm], so multipart FormData is always required
+  return { body: buildClientFormData(clientDto), headers: {} };
+}
+
 /**
  * Create a new client.
  */
 export async function createClientApi(clientDto) {
+  const { body, headers } = prepareClientRequest(clientDto);
   const response = await apiFetch(`${API_BASE_URL}/Client`, {
     method: 'POST',
-    body: JSON.stringify(clientDto),
+    headers,
+    body,
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || 'Failed to create client.');
+    throw new Error(extractErrorMessage(data, 'Failed to create client.'));
   }
   invalidateClientsCache();
   return data;
@@ -126,13 +176,15 @@ export async function createClientApi(clientDto) {
  * Update an existing client.
  */
 export async function updateClientApi(id, clientDto) {
+  const { body, headers } = prepareClientRequest(clientDto);
   const response = await apiFetch(`${API_BASE_URL}/Client/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(clientDto),
+    headers,
+    body,
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || 'Failed to update client.');
+    throw new Error(extractErrorMessage(data, 'Failed to update client.'));
   }
   invalidateClientsCache();
   return data;
@@ -294,25 +346,4 @@ export async function updateClientTargetsApi(clientId, targets) {
     targetCpc: data.targetCPC ?? data.targetCpc ?? targets.targetCpc,
     currency: resolveCurrencyName(data.currency) ?? targets.currency,
   };
-}
-
-/**
- * Upload a logo image file for a client.
- * Returns { url: '/Logos/{fileName}', fileName: '...' }
- */
-export async function uploadClientLogoApi(file) {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const response = await apiFetch(`${API_BASE_URL}/Client/upload-logo`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || 'Failed to upload logo image.');
-  }
-
-  return await response.json();
 }

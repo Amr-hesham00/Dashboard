@@ -108,7 +108,7 @@ public class ClientController : ControllerBase
     /// Create a new client.
     /// </summary>
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateClientDTO dto)
+    public async Task<IActionResult> Create([FromForm] CreateClientDTO dto)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(dto.ManagerId) && !string.IsNullOrEmpty(userId))
@@ -118,7 +118,7 @@ public class ClientController : ControllerBase
             return BadRequest(ModelState);
 
         // Handle logo file upload if provided directly
-        if (dto.LogoFile != null)
+        if (dto.LogoFile != null && dto.LogoFile.Length > 0)
         {
             try
             {
@@ -128,6 +128,10 @@ public class ClientController : ControllerBase
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+        else if (string.IsNullOrWhiteSpace(dto.Logo))
+        {
+            dto.Logo = null;
         }
 
         var (success, message, client) = await _clientService.CreateClientAsync(dto);
@@ -147,7 +151,7 @@ public class ClientController : ControllerBase
     /// Update an existing client's information.
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] UpdateClientDTO dto)
+    public async Task<IActionResult> Update(int id, [FromForm] UpdateClientDTO dto)
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
@@ -155,6 +159,7 @@ public class ClientController : ControllerBase
         dto.ClientId ??= id;
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         if (string.IsNullOrEmpty(dto.ManagerId) && !string.IsNullOrEmpty(userId))
             dto.ManagerId = userId;
 
@@ -162,7 +167,7 @@ public class ClientController : ControllerBase
         var existingClient = await _clientService.GetClientByIdAsync(id);
         var oldLogoUrl = existingClient?.Logo;
 
-        if (dto.LogoFile != null)
+        if (dto.LogoFile != null && dto.LogoFile.Length > 0) // if user uploaded a new logo file
         {
             try
             {
@@ -176,10 +181,11 @@ public class ClientController : ControllerBase
                 return BadRequest(new { message = ex.Message });
             }
         }
-        else if (oldLogoUrl != null && dto.Logo != oldLogoUrl)
+        else if (oldLogoUrl != null) // 
         {
-            // Logo was changed or removed
+            // if update DTO is null or empty, remove the current client logo
             await _logoService.DeleteAsync(oldLogoUrl);
+            dto.Logo = null;
         }
 
         var (success, message) = await _clientService.UpdateClientAsync(id, dto);

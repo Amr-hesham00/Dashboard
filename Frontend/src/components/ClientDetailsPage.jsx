@@ -11,7 +11,6 @@ import {
   getClientCurrenciesApi,
   getClientTargetsApi,
   updateClientTargetsApi,
-  uploadClientLogoApi,
 } from '../api/clients';
 import {
   getCampaignsByClientIdApi,
@@ -84,9 +83,6 @@ function ApexChart({ options, series, type, height = 310 }) {
 // ─── SVG Icon Helpers ───────────────────────────────────────────────
 const IconCalendar = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><rect x="4" y="5" width="16" height="16" rx="2" /><line x1="16" y1="3" x2="16" y2="7" /><line x1="8" y1="3" x2="8" y2="7" /><line x1="4" y1="11" x2="20" y2="11" /></svg>
-);
-const IconShare = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="6" r="3" /><circle cx="18" cy="18" r="3" /><line x1="8.7" y1="10.7" x2="15.3" y2="7.3" /><line x1="8.7" y1="13.3" x2="15.3" y2="16.7" /></svg>
 );
 const IconPdf = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none" /><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M9 15l2 -2l2 2l2 -2" /></svg>
@@ -372,7 +368,7 @@ export default function ClientDetailsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
-  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoFile, setLogoFile] = useState(null);
   const [logoUploadError, setLogoUploadError] = useState('');
   const logoInputRef = useRef(null);
   const [users, setUsers] = useState([]);
@@ -392,33 +388,34 @@ export default function ClientDetailsPage() {
     countryCode: '+1',
   });
 
-  const handleLogoFileChange = async (e) => {
+  const handleLogoFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setLogoUploadError('Please select a valid image file (PNG, JPG, SVG, WebP, GIF).');
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    const allowed = ['.png', '.jpg', '.jpeg', '.gif'];
+    if (!allowed.includes(ext)) {
+      setLogoUploadError('Unsupported file format. Supported formats: PNG, JPG, JPEG , GIF (max 5MB)');
+      if (logoInputRef.current) logoInputRef.current.value = '';
+      return;
+    }
+
+    if (file.size === 0) {
+      setLogoUploadError('Selected image file is empty.');
+      if (logoInputRef.current) logoInputRef.current.value = '';
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
       setLogoUploadError('Image size exceeds 5MB limit.');
+      if (logoInputRef.current) logoInputRef.current.value = '';
       return;
     }
 
-    try {
-      setLogoUploading(true);
-      setLogoUploadError('');
-      const res = await uploadClientLogoApi(file);
-      if (res && res.url) {
-        setFormData((prev) => ({ ...prev, logo: res.url }));
-      }
-    } catch (err) {
-      setLogoUploadError(err.message || 'Failed to upload logo.');
-    } finally {
-      setLogoUploading(false);
-      if (logoInputRef.current) logoInputRef.current.value = '';
-    }
+    const previewUrl = URL.createObjectURL(file);
+    setLogoFile(file);
+    setFormData((prev) => ({ ...prev, logo: previewUrl }));
+    setLogoUploadError('');
   };
 
   // ─── UI State ───────────────────────────────────────────────────
@@ -1767,6 +1764,8 @@ export default function ClientDetailsPage() {
       logo: client.logo || '',
       countryCode: '+1',
     });
+    setLogoFile(null);
+    if (logoInputRef.current) logoInputRef.current.value = '';
     setEditError('');
     setLogoUploadError('');
     setShowEditModal(true);
@@ -1786,15 +1785,27 @@ export default function ClientDetailsPage() {
       formattedWebsite = `https://${formattedWebsite}`;
     }
 
+    const cleanedPhone = (formData.phone || '').trim().replace(/\s+/g, '');
+    const fullPhone = cleanedPhone.startsWith('+')
+      ? cleanedPhone
+      : `${formData.countryCode || '+1'}${cleanedPhone}`;
+
+    if (fullPhone.length < 8 || fullPhone.length > 15) {
+      setEditError('Phone number must be between 8 and 15 characters.');
+      return;
+    }
+
     try {
       setEditLoading(true);
       const payload = {
         ...formData,
         website: formattedWebsite,
+        phone: fullPhone,
         currency: Number(formData.currency),
         status: Number(formData.status),
         businessModel: Number(formData.businessModel),
         managerId: formData.managerId || client.managerId || '',
+        logoFile: logoFile || null,
       };
       const updated = await updateClientApi(client.id, payload);
       setClient((prev) => ({ ...(prev || {}), ...(updated || payload) }));
@@ -1849,16 +1860,6 @@ export default function ClientDetailsPage() {
     }
   };
 
-  const handleShareReport = () => {
-    const url = window.location.href;
-    navigator.clipboard?.writeText(url).then(() => {
-      setToastMsg('Report link copied to clipboard!');
-      setTimeout(() => setToastMsg(''), 3000);
-    }).catch(() => {
-      setToastMsg('Could not copy link.');
-      setTimeout(() => setToastMsg(''), 3000);
-    });
-  };
 
   const handleExportPDF = () => { window.print(); };
 
@@ -2103,9 +2104,6 @@ export default function ClientDetailsPage() {
               onChange={(cfg) => setPeriodConfig(cfg)}
             />
 
-            <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleShareReport}>
-              <IconShare /> <span className="d-none d-md-inline">Share</span>
-            </button>
             <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleExportPDF}>
               <IconPdf /> <span className="d-none d-md-inline">Export PDF</span>
             </button>
@@ -3341,15 +3339,19 @@ export default function ClientDetailsPage() {
           onClick={() => setShowEditModal(false)}
         >
           <div className="modal-dialog modal-dialog-centered modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-content border-0 shadow-lg rounded-3">
-              <div className="modal-header border-bottom p-4">
-                <div className="d-flex align-items-center gap-2">
-                  <div className="avatar bg-primary-subtle text-primary rounded-2 p-2 d-flex align-items-center justify-content-center">
+            <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+              <div className="modal-header border-bottom px-4 py-3 bg-light">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="avatar bg-primary-subtle text-primary rounded-3 p-2 d-flex align-items-center justify-content-center shadow-xs" style={{ width: 42, height: 42 }}>
                     <IconEdit />
                   </div>
                   <div>
-                    <h5 className="modal-title fw-bold mb-0">Edit Client Information</h5>
-                    <small className="text-secondary">Update company portfolio, contacts, and manager details</small>
+                    <h5 className="modal-title fw-bold mb-0" style={{ fontSize: '1.15rem', letterSpacing: '-0.01em' }}>
+                      Edit Client Information
+                    </h5>
+                    <small className="text-secondary" style={{ fontSize: '0.82rem' }}>
+                      Update company portfolio, contacts, and manager details
+                    </small>
                   </div>
                 </div>
                 <button type="button" className="btn-close" onClick={() => setShowEditModal(false)} aria-label="Close"></button>
@@ -3361,12 +3363,12 @@ export default function ClientDetailsPage() {
 
                   <div className="row g-3">
                     <div className="col-md-6">
-                      <label className="form-label small fw-semibold">
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>
                         Company Name <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
-                        className="form-control"
+                        className="form-control rounded-3"
                         value={formData.companyName}
                         onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                         placeholder="e.g. Acme Corp"
@@ -3375,12 +3377,12 @@ export default function ClientDetailsPage() {
                     </div>
 
                     <div className="col-md-6">
-                      <label className="form-label small fw-semibold">
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>
                         Website <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
-                        className="form-control"
+                        className="form-control rounded-3"
                         value={formData.website}
                         onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                         placeholder="https://acme.com"
@@ -3389,12 +3391,12 @@ export default function ClientDetailsPage() {
                     </div>
 
                     <div className="col-md-6">
-                      <label className="form-label small fw-semibold">
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>
                         Email <span className="text-danger">*</span>
                       </label>
                       <input
                         type="email"
-                        className="form-control"
+                        className="form-control rounded-3"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         placeholder="contact@acme.com"
@@ -3403,12 +3405,12 @@ export default function ClientDetailsPage() {
                     </div>
 
                     <div className="col-md-6">
-                      <label className="form-label small fw-semibold">
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>
                         Phone <span className="text-danger">*</span>
                       </label>
                       <div className="input-group">
                         <select
-                          className="form-select"
+                          className="form-select rounded-start-3"
                           style={{ maxWidth: '110px' }}
                           value={formData.countryCode || '+1'}
                           onChange={(e) => setFormData({ ...formData, countryCode: e.target.value })}
@@ -3428,7 +3430,7 @@ export default function ClientDetailsPage() {
                         </select>
                         <input
                           type="text"
-                          className="form-control"
+                          className="form-control rounded-end-3"
                           value={formData.phone}
                           onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                           placeholder="555-0199"
@@ -3438,7 +3440,7 @@ export default function ClientDetailsPage() {
                     </div>
 
                     <div className="col-12">
-                      <label className="form-label small fw-semibold">Company Logo</label>
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>Company Logo</label>
                       <div className="p-3 rounded-3 border bg-light d-flex flex-column flex-sm-row align-items-sm-center gap-3">
                         <div
                           className="position-relative d-flex align-items-center justify-content-center rounded-3 border bg-white flex-shrink-0 shadow-sm"
@@ -3456,11 +3458,6 @@ export default function ClientDetailsPage() {
                               {formData.companyName ? formData.companyName.charAt(0).toUpperCase() : '🏢'}
                             </div>
                           )}
-                          {logoUploading && (
-                            <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-white bg-opacity-75">
-                              <span className="spinner-border spinner-border-sm text-primary" role="status"></span>
-                            </div>
-                          )}
                         </div>
 
                         <div className="flex-grow-1">
@@ -3469,42 +3466,35 @@ export default function ClientDetailsPage() {
                               type="file"
                               ref={logoInputRef}
                               className="d-none"
-                              accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                              accept=".png,.jpg,.jpeg,.gif,image/png,image/jpeg,image/gif"
                               onChange={handleLogoFileChange}
                             />
                             <button
                               type="button"
-                              className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1.5"
+                              className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1.5 rounded-2"
                               onClick={() => logoInputRef.current?.click()}
-                              disabled={logoUploading}
                             >
-                              {logoUploading ? (
-                                <>
-                                  <span className="spinner-border spinner-border-sm" role="status"></span>
-                                  <span>Uploading...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
-                                  <span>{formData.logo ? 'Change Logo Image' : 'Upload Logo Image'}</span>
-                                </>
-                              )}
+                              <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span>{formData.logo ? 'Change Logo Image' : 'Upload Logo Image'}</span>
                             </button>
                             {formData.logo && (
                               <button
                                 type="button"
-                                className="btn btn-sm btn-outline-danger"
-                                onClick={() => setFormData((prev) => ({ ...prev, logo: '' }))}
-                                disabled={logoUploading}
+                                className="btn btn-sm btn-outline-danger rounded-2"
+                                onClick={() => {
+                                  setLogoFile(null);
+                                  setFormData((prev) => ({ ...prev, logo: '' }));
+                                  if (logoInputRef.current) logoInputRef.current.value = '';
+                                }}
                               >
                                 Remove
                               </button>
                             )}
                           </div>
-                          <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-                            Supports PNG, JPG, WebP, SVG, GIF (max 5MB)
+                          <div className="text-muted" style={{ fontSize: '0.78rem', letterSpacing: '0.01em' }}>
+                            PNG, JPG, JPEG , GIF (max 5MB)
                           </div>
                           {logoUploadError && (
                             <div className="text-danger small mt-1">{logoUploadError}</div>
@@ -3514,12 +3504,12 @@ export default function ClientDetailsPage() {
                     </div>
 
                     <div className="col-md-6">
-                      <label className="form-label small fw-semibold">
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>
                         Country <span className="text-danger">*</span>
                       </label>
                       <input
                         type="text"
-                        className="form-control"
+                        className="form-control rounded-3"
                         value={formData.country}
                         onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                         placeholder="United States"
@@ -3528,9 +3518,9 @@ export default function ClientDetailsPage() {
                     </div>
 
                     <div className="col-md-4">
-                      <label className="form-label small fw-semibold">Business Model</label>
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>Business Model</label>
                       <select
-                        className="form-select"
+                        className="form-select rounded-3"
                         value={formData.businessModel}
                         onChange={(e) => setFormData({ ...formData, businessModel: parseInt(e.target.value, 10) })}
                       >
@@ -3540,9 +3530,9 @@ export default function ClientDetailsPage() {
                     </div>
 
                     <div className="col-md-4">
-                      <label className="form-label small fw-semibold">Currency</label>
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>Currency</label>
                       <select
-                        className="form-select"
+                        className="form-select rounded-3"
                         value={formData.currency}
                         onChange={(e) => setFormData({ ...formData, currency: parseInt(e.target.value, 10) })}
                       >
@@ -3555,9 +3545,9 @@ export default function ClientDetailsPage() {
                     </div>
 
                     <div className="col-md-4">
-                      <label className="form-label small fw-semibold">Status</label>
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>Status</label>
                       <select
-                        className="form-select"
+                        className="form-select rounded-3"
                         value={formData.status}
                         onChange={(e) => setFormData({ ...formData, status: parseInt(e.target.value, 10) })}
                       >
@@ -3570,9 +3560,9 @@ export default function ClientDetailsPage() {
                     </div>
 
                     <div className="col-md-12">
-                      <label className="form-label small fw-semibold">Notes</label>
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>Notes</label>
                       <textarea
-                        className="form-control"
+                        className="form-control rounded-3"
                         rows="3"
                         value={formData.notes}
                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
@@ -3583,10 +3573,10 @@ export default function ClientDetailsPage() {
                 </div>
 
                 <div className="modal-footer border-top p-3 bg-light">
-                  <button type="button" className="btn btn-outline-secondary btn-sm px-3" onClick={() => setShowEditModal(false)}>
+                  <button type="button" className="btn btn-outline-secondary btn-sm px-3 rounded-2" onClick={() => setShowEditModal(false)}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn btn-primary btn-sm px-4 d-inline-flex align-items-center gap-2" disabled={editLoading}>
+                  <button type="submit" className="btn btn-primary btn-sm px-4 rounded-2 d-inline-flex align-items-center gap-2" disabled={editLoading}>
                     {editLoading ? (
                       <>
                         <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>

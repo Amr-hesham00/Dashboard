@@ -121,6 +121,7 @@ builder.Services.AddControllers();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Dashboard API", Version = "v1" });
+    c.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below.",
@@ -295,13 +296,13 @@ Ad modal	                /adsets/:adSetId
  Data needed	         API route
 Clients             	GET /api/client
 Client information	    GET /api/client/:clientId
-Client’s platforms	    GET /api/client/:clientId/platforms
+Clientï¿½s platforms	    GET /api/client/:clientId/platforms
 
-Platform’s campaigns	GET /api/platforms/:platformId/campaigns
+Platformï¿½s campaigns	GET /api/platforms/:platformId/campaigns
 Campaign information	GET /api/campaigns/:campaignId
-Campaign’s ad sets	    GET /api/campaigns/:campaignId/ad-sets
+Campaignï¿½s ad sets	    GET /api/campaigns/:campaignId/ad-sets
 Ad set information	    GET /api/ad-sets/:adSetId
-Ad set’s ads	        GET /api/ad-sets/:adSetId/ads
+Ad setï¿½s ads	        GET /api/ad-sets/:adSetId/ads
 Ad information	        GET /api/ads/:adId
  */
 #endregion

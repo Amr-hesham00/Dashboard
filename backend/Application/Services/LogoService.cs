@@ -1,4 +1,4 @@
-﻿using Dashboard.Application.Interfaces;
+using Dashboard.Application.Interfaces;
 using Dashboard.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -7,6 +7,7 @@ namespace Dashboard.Application.Services;
 public class LogoService : ILogoService
 {
     private readonly IWebHostEnvironment _environment;
+    public string[] allowed = { ".jpg", ".jpeg", ".png", ".gif" };
 
 
     public LogoService(IWebHostEnvironment environment, IUnitOfWork unitOfWork)
@@ -16,16 +17,12 @@ public class LogoService : ILogoService
 
     public async Task<string?> SaveAsync(IFormFile? file)
     {
-        if (file == null)
+        if (file == null || file.Length == 0)
             return null;
-
-        if (file.Length == 0)
-            throw new ArgumentException("Image is empty.");
 
         var extension = Path.GetExtension(file.FileName)
             .ToLowerInvariant();
 
-        string[] allowed = [".jpg", ".jpeg", ".png", ".gif"];
 
         if (!allowed.Contains(extension))
             throw new ArgumentException("Invalid image format.");

@@ -122,6 +122,7 @@ public class CreateClientDTO
     public string Email { get; set; } = null!;
 
     [Required]
+    [Length(8, 20, ErrorMessage = "Phone number must be between 8 and 20 characters.")]
     public string Phone { get; set; } = null!;
 
     [Required]
@@ -157,6 +158,7 @@ public class UpdateClientDTO
     public string Email { get; set; } = null!;
 
     [Required]
+    [Length(8, 20, ErrorMessage = "Phone number must be between 8 and 20 characters.")]
     public string Phone { get; set; } = null!;
 
     [Required]
