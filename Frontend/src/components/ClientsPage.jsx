@@ -1784,9 +1784,8 @@ export default function ClientsPage() {
             className="modal fade show d-block"
             style={{ backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 1070 }}
             tabIndex="-1"
-            onClick={() => setShowTargetModal(false)}
           >
-            <div className="modal-dialog modal-dialog-centered modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-dialog modal-dialog-centered modal-lg">
               <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
                 {/* Modal Header */}
                 <div className="modal-header border-bottom p-4 bg-body-tertiary">
@@ -1814,8 +1813,8 @@ export default function ClientsPage() {
                     <div className="row g-3 mb-4">
                       {/* Monthly Budget */}
                       <div className="col-md-7">
-                        <label className="form-label small fw-semibold text-body-emphasis">
-                          Monthly Ad Budget ({getCurrencySymbol(targetFormData.currency)}) <span className="text-danger">*</span>
+                        <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.88rem', letterSpacing: '0.15px' }}>
+                          Monthly Budget ({getCurrencySymbol(targetFormData.currency)}) <span className="text-danger ms-1 small">*</span>
                         </label>
                         <div className="input-group">
                           <span className="input-group-text bg-body-tertiary fw-semibold">
@@ -1825,7 +1824,7 @@ export default function ClientsPage() {
                             type="number"
                             step="any"
                             min="0"
-                            className="form-control fw-bold text-body-emphasis"
+                            className="form-control fw-bold"
                             value={targetFormData.monthlyBudget}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -1839,7 +1838,6 @@ export default function ClientsPage() {
                                 targetConversions: Math.round(num / Math.max(0.1, cpa)),
                               });
                             }}
-                            placeholder="50000"
                             required
                           />
                         </div>
@@ -1848,8 +1846,8 @@ export default function ClientsPage() {
 
                       {/* Currency */}
                       <div className="col-md-5">
-                        <label className="form-label small fw-semibold text-body-emphasis">
-                          Currency <span className="text-danger">*</span>
+                        <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.88rem', letterSpacing: '0.15px' }}>
+                          Currency <span className="text-danger ms-1 small">*</span>
                         </label>
                         <select
                           className="form-select fw-semibold"
@@ -1858,7 +1856,7 @@ export default function ClientsPage() {
                         >
                           {currencies.map((curr) => (
                             <option key={curr} value={curr}>
-                              {curr} ({getCurrencySymbol(curr).trim()})
+                              {curr}
                             </option>
                           ))}
                         </select>
@@ -1866,12 +1864,12 @@ export default function ClientsPage() {
                       </div>
                     </div>
 
-                    {/* ─── 4. Target ROAS & Target CPA ─── */}
+                    {/* ─── 2. Target ROAS & Target CPA ─── */}
                     <div className="row g-3 mb-4">
                       {/* Target ROAS */}
                       <div className="col-md-6">
-                        <label className="form-label small fw-semibold text-body-emphasis">
-                          Target ROAS (x) <span className="text-danger">*</span>
+                        <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.88rem', letterSpacing: '0.15px' }}>
+                          Target ROAS (x) <span className="text-danger ms-1 small">*</span>
                         </label>
                         <div className="input-group">
                           <input
@@ -1890,7 +1888,6 @@ export default function ClientsPage() {
                                 targetRevenue: Math.round(budget * num),
                               });
                             }}
-                            placeholder="4.00"
                             required
                           />
                           <span className="input-group-text bg-body-tertiary fw-bold">x</span>
@@ -1900,8 +1897,8 @@ export default function ClientsPage() {
 
                       {/* Target CPA */}
                       <div className="col-md-6">
-                        <label className="form-label small fw-semibold text-body-emphasis">
-                          Target CPA ({getCurrencySymbol(targetFormData.currency)}) <span className="text-danger">*</span>
+                        <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.88rem', letterSpacing: '0.15px' }}>
+                          Target CPA ({getCurrencySymbol(targetFormData.currency)}) <span className="text-danger ms-1 small">*</span>
                         </label>
                         <div className="input-group">
                           <span className="input-group-text bg-body-tertiary fw-semibold">
@@ -1911,7 +1908,7 @@ export default function ClientsPage() {
                             type="number"
                             step="any"
                             min="0.1"
-                            className="form-control fw-bold text-body-emphasis"
+                            className="form-control fw-bold"
                             value={targetFormData.targetCpa}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -1923,7 +1920,6 @@ export default function ClientsPage() {
                                 targetConversions: Math.round(budget / Math.max(0.1, num)),
                               });
                             }}
-                            placeholder="5.50"
                             required
                           />
                         </div>
@@ -1931,11 +1927,11 @@ export default function ClientsPage() {
                       </div>
                     </div>
 
-                    {/* ─── 5. Projected Revenue & Projected Conversions ─── */}
+                    {/* ─── 3. Target Revenue & Target Conversions ─── */}
                     <div className="row g-3 mb-4">
                       {/* Target Revenue */}
                       <div className="col-md-6">
-                        <label className="form-label small fw-semibold text-body-emphasis">
+                        <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.88rem', letterSpacing: '0.15px' }}>
                           Target Revenue ({getCurrencySymbol(targetFormData.currency)})
                         </label>
                         <div className="input-group">
@@ -1949,15 +1945,14 @@ export default function ClientsPage() {
                             className="form-control"
                             value={targetFormData.targetRevenue || ''}
                             onChange={(e) => setTargetFormData({ ...targetFormData, targetRevenue: e.target.value })}
-                            placeholder="e.g. 200000"
                           />
                         </div>
-                        <small className="text-secondary" style={{ fontSize: '0.72rem' }}>Projected monthly gross revenue</small>
+                        <small className="text-secondary" style={{ fontSize: '0.72rem' }}>Target monthly gross revenue</small>
                       </div>
 
                       {/* Target Conversions */}
                       <div className="col-md-6">
-                        <label className="form-label small fw-semibold text-body-emphasis">
+                        <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.88rem', letterSpacing: '0.15px' }}>
                           Target Conversions
                         </label>
                         <input
@@ -1967,13 +1962,12 @@ export default function ClientsPage() {
                           className="form-control"
                           value={targetFormData.targetConversions || ''}
                           onChange={(e) => setTargetFormData({ ...targetFormData, targetConversions: e.target.value })}
-                          placeholder="e.g. 9000"
                         />
-                        <small className="text-secondary" style={{ fontSize: '0.72rem' }}>Estimated total conversions required</small>
+                        <small className="text-secondary" style={{ fontSize: '0.72rem' }}>Target total conversions required</small>
                       </div>
                     </div>
 
-                    {/* ─── 6. Target Presets Toolbar ─── */}
+                    {/* ─── 4. Target Presets Toolbar ─── */}
                     <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 pt-1 border-top mt-3 pt-3">
                       <span className="small text-secondary fw-semibold" style={{ fontSize: '0.74rem' }}>Quick Presets:</span>
                       <div className="d-flex align-items-center gap-1.5 flex-wrap">
@@ -2018,8 +2012,13 @@ export default function ClientsPage() {
 
                   </div>
 
-                  <div className="modal-footer border-top p-3 bg-body-tertiary d-flex justify-content-between">
-                    <button type="button" className="btn btn-outline-secondary btn-sm px-3 rounded-2" onClick={() => setShowTargetModal(false)}>
+                  <div className="modal-footer border-top p-3 bg-body-tertiary d-flex justify-content-end gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary btn-sm px-3 rounded-2"
+                      onClick={() => setShowTargetModal(false)}
+                      disabled={targetLoading}
+                    >
                       Cancel
                     </button>
                     <button type="submit" className="btn btn-primary btn-sm px-4 rounded-2 d-inline-flex align-items-center gap-2 fw-semibold shadow-xs" disabled={targetLoading}>
