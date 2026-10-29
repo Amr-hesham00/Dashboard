@@ -33,6 +33,7 @@ builder.Services.AddScoped<IClientTargetRepo, ClientTargetRepo>();
 builder.Services.AddScoped<IAdDailyMetricsRepo, AdDailyMetricsRepo>();
 builder.Services.AddScoped<ISearchTermRepo, SearchTermRepo>();
 builder.Services.AddScoped<IExchangeRateRepo, ExchangeRateRepo>();
+builder.Services.AddScoped<IGoogleAdsConnectionRepo, GoogleAdsConnectionRepo>();
 #endregion
 //-----------------------------------Services------------------------------------
 #region Services
@@ -60,6 +61,11 @@ builder.Services.AddHttpClient<IExchangeRateApiService, ExchangeRateApiService>(
     client.BaseAddress = new Uri(baseUrl);
     client.Timeout = TimeSpan.FromSeconds(30);
 });
+
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<GoogleOAuthStateStore>();
+builder.Services.AddDataProtection();
+builder.Services.AddHttpClient<IGoogleOAuthService, GoogleOAuthService>();
 #endregion
 //-----------------------------------DbContext, Identity------------------------------------
 builder.Services.AddDbContext<AppDbContext>(
@@ -271,6 +277,8 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+
 
 #region URLs hierarchy
 /*

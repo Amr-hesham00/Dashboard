@@ -20,8 +20,9 @@ public class UnitOfWork : IUnitOfWork
     public IAdDailyMetricsRepo AdDailyMetrics { get; private set; }
     public ISearchTermRepo SearchTerm { get; private set; }
     public IExchangeRateRepo ExchangeRate { get; private set; }
+    public IGoogleAdsConnectionRepo GoogleAdsConnection { get; private set; }
 
-    public UnitOfWork(AppDbContext context, IAdRepo ad, IAdSetRepo adSet, IAssignmentRepo assignment, IAssociateProfileRepo associateProfile, IAssociateTeamRepo associateTeam, ICampaignRepo campaign, IClientRepo client, IPlatformRepo platform, IUserRepo user, IRefreshTokenRepo refreshToken, IClientTargetRepo clientTarget, IAdDailyMetricsRepo adDailyMetrics, ISearchTermRepo searchTerm, IExchangeRateRepo exchangeRate)
+    public UnitOfWork(AppDbContext context, IAdRepo ad, IAdSetRepo adSet, IAssignmentRepo assignment, IAssociateProfileRepo associateProfile, IAssociateTeamRepo associateTeam, ICampaignRepo campaign, IClientRepo client, IPlatformRepo platform, IUserRepo user, IRefreshTokenRepo refreshToken, IClientTargetRepo clientTarget, IAdDailyMetricsRepo adDailyMetrics, ISearchTermRepo searchTerm, IExchangeRateRepo exchangeRate, IGoogleAdsConnectionRepo googleAdsConnection)
     {
         _context = context;
         Ad = ad;
@@ -38,6 +39,7 @@ public class UnitOfWork : IUnitOfWork
         AdDailyMetrics = adDailyMetrics;
         SearchTerm = searchTerm;
         ExchangeRate = exchangeRate;
+        GoogleAdsConnection = googleAdsConnection;
     }
     public async Task Complete()
     {

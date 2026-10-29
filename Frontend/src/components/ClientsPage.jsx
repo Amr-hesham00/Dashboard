@@ -14,6 +14,7 @@ import {
   getClientTargetsApi,
   updateClientTargetsApi,
 } from '../api/clients';
+import { connectGoogleAdsApi, disconnectGoogleAdsApi } from '../api/googleAds';
 const DEFAULT_CLIENT_TARGETS = {
   targetRoas: 4.0,
   targetCpa: 50.0,
@@ -122,6 +123,9 @@ export default function ClientsPage() {
   const [connectingPlatform, setConnectingPlatform] = useState('');
   const [syncingPlatform, setSyncingPlatform] = useState('');
   const [toastMsg, setToastMsg] = useState('');
+  const [googleStatus, setGoogleStatus] = useState({ connected: false });
+  const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [googleToast, setGoogleToast] = useState(null);
   const [activeDropdownClient, setActiveDropdownClient] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
 
@@ -456,6 +460,44 @@ export default function ClientsPage() {
 
   useEffect(() => {
     loadData();
+
+    // Check for Google OAuth callback redirect parameters
+    const searchParams = new URLSearchParams(window.location.search);
+    const googleAuth = searchParams.get('googleAuth');
+    const errorCode = searchParams.get('errorCode');
+    const callbackMessage = searchParams.get('message');
+
+    if (googleAuth === 'success') {
+      setGoogleStatus({ connected: true });
+      setGoogleToast({
+        type: 'success',
+        message: callbackMessage || 'Google Ads authorized successfully! Access and refresh tokens have been securely stored.',
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (googleAuth === 'error') {
+      if (errorCode === 'already_connected') {
+        setGoogleStatus({ connected: true });
+      }
+      const errorMap = {
+        already_connected: 'Your account is already connected to Google Ads. Reconnecting is not allowed.',
+        access_denied: 'Google authorization was canceled or permission was declined.',
+        missing_refresh_token: 'Google did not return a refresh token for this account. Please re-authorize and ensure consent is granted.',
+        invalid_grant: 'The authorization code was invalid, expired, or already used. Please try connecting again.',
+        invalid_state: 'Security verification failed (state mismatch or session expired). Please try connecting again.',
+        scope_not_granted: 'The Google Ads permission was not granted. Please ensure the Google Ads scope is checked during consent.',
+        not_configured: 'Google OAuth is not configured on the server.',
+        redirect_uri_mismatch: 'Redirect URI mismatch with Google Cloud Console configuration.',
+        admin_policy_enforced: 'Google Workspace policy prevented authorization.',
+        org_internal: 'This application is restricted to internal organization accounts.',
+        disallowed_useragent: 'This browser environment is not supported by Google OAuth.',
+        deleted_client: 'The Google OAuth client is no longer available.',
+      };
+      setGoogleToast({
+        type: 'error',
+        message: callbackMessage || errorMap[errorCode] || 'Failed to complete Google Ads authorization. Please try again.',
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
 
   const openCreateModal = () => {
@@ -604,6 +646,77 @@ export default function ClientsPage() {
   };
 
   // ─── Platform Connect Handlers ──────────────────────────────────
+  const handleConnectGoogleAds = async () => {
+    if (googleStatus?.connected) {
+      setGoogleToast({
+        type: 'error',
+        message: 'Your account is already connected to Google Ads. Reconnecting is not allowed.',
+      });
+      return;
+    }
+    setGoogleConnecting(true);
+    setConnectingPlatform('google');
+    setGoogleToast(null);
+    try {
+      const authUrl = await connectGoogleAdsApi();
+      if (authUrl) {
+        window.location.href = authUrl;
+      } else {
+        throw new Error('No authorization URL returned from server.');
+      }
+    } catch (err) {
+      setGoogleToast({
+        type: 'error',
+        message: (err.alreadyConnected || err.errorCode === 'already_connected' || err.status === 409)
+          ? 'Your account is already connected to Google Ads. Reconnecting is not allowed.'
+          : (err.message || 'Failed to start Google Ads authorization. Please try again.'),
+      });
+      if (err.alreadyConnected || err.errorCode === 'already_connected' || err.status === 409) {
+        setGoogleStatus({ connected: true });
+      }
+      setGoogleConnecting(false);
+      setConnectingPlatform('');
+    }
+  };
+
+  const handleDisconnectGoogleAds = async () => {
+    setGoogleConnecting(true);
+    setConnectingPlatform('google');
+    setGoogleToast(null);
+    try {
+      await disconnectGoogleAdsApi();
+      setGoogleStatus({ connected: false });
+      setPlatformsState((prev) => {
+        const current = prev.google || { accountId: '839-201-9482', autoSync: true };
+        const updated = {
+          ...prev,
+          google: {
+            ...current,
+            connected: false,
+            lastSync: 'Never',
+          },
+        };
+        if (connectClient?.id) {
+          try {
+            localStorage.setItem(`client_platforms_${connectClient.id}`, JSON.stringify(updated));
+          } catch { }
+        }
+        return updated;
+      });
+      setGoogleToast({
+        type: 'success',
+        message: 'Google Ads disconnected successfully.',
+      });
+    } catch (err) {
+      setGoogleToast({
+        type: 'error',
+        message: err.message || 'Failed to disconnect Google Ads. Please try again.',
+      });
+    } finally {
+      setGoogleConnecting(false);
+      setConnectingPlatform('');
+    }
+  };
   const getDefaultPlatforms = () => ({
     meta: { connected: true, accountId: 'act_948291048', lastSync: '10m ago', autoSync: true },
     google: { connected: true, accountId: '839-201-9482', lastSync: '25m ago', autoSync: true },
@@ -621,7 +734,16 @@ export default function ClientsPage() {
     }
   };
 
-  const toggleConnectPlatform = (platformKey) => {
+  const toggleConnectPlatform = async (platformKey) => {
+    if (!connectClient) return;
+    if (platformKey === 'google') {
+      if (platformsState.google?.connected || googleStatus?.connected) {
+        await handleDisconnectGoogleAds();
+      } else {
+        await handleConnectGoogleAds();
+      }
+      return;
+    }
     if (!connectClient) return;
     setConnectingPlatform(platformKey);
     setTimeout(() => {
@@ -912,6 +1034,14 @@ export default function ClientsPage() {
         )}
 
 
+
+        {/* Google OAuth Status Banner */}
+        {googleToast && (
+          <div className={`alert ${googleToast.type === 'success' ? 'alert-success' : 'alert-danger'} alert-dismissible fade show mb-4`} role="alert">
+            {googleToast.message}
+            <button type="button" className="btn-close" onClick={() => setGoogleToast(null)} aria-label="Close"></button>
+          </div>
+        )}
 
         {/* Search & Filter Controls */}
         <div className="card mb-4 border-0 shadow-sm rounded-3 mt-2 mt-lg-3">
@@ -1220,7 +1350,52 @@ export default function ClientsPage() {
                   <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                 </svg>
               </div>
-              <span className="fw-semibold">Connect</span>
+              <span className="fw-semibold">Connect Platforms</span>
+            </button>
+
+            {/* 1b. Direct Google Ads OAuth Connect */}
+            <button
+              className="action-menu-row text-body-emphasis"
+              onClick={() => {
+                setActiveDropdownClient(null);
+                handleConnectGoogleAds();
+              }}
+              title={googleStatus.connected ? 'Google Ads is already connected. Reconnecting is not allowed.' : 'Connect Google Ads OAuth Account'}
+            >
+              <div className="avatar bg-light border rounded-2 p-1 d-flex align-items-center justify-content-center flex-shrink-0 shadow-xs" style={{ width: 28, height: 28 }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
+                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z" />
+                  <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.97 0 12s.45 3.82 1.25 5.42l4.03-3.15z" />
+                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
+                </svg>
+              </div>
+              <span className="fw-semibold">{googleStatus.connected ? 'Google Ads Linked' : 'Connect Google'}</span>
+              {googleStatus.connected && (
+                <span className="badge bg-success-subtle text-success ms-auto" style={{ fontSize: '0.68rem' }}>Linked</span>
+              )}
+            </button>
+
+            {/* 1c. Disconnect Google Ads OAuth */}
+            <button
+              className="action-menu-row text-danger"
+              onClick={() => {
+                setActiveDropdownClient(null);
+                handleDisconnectGoogleAds();
+              }}
+              title="Disconnect Google Ads OAuth Account"
+            >
+              <div className="avatar bg-danger-subtle text-danger rounded-2 p-1.5 d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 28, height: 28 }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                  <line x1="12" y1="2" x2="12" y2="12" />
+                </svg>
+              </div>
+              <span className="fw-semibold">Disconnect Google</span>
+            </button>
+
+            <button className="d-none">
+              <span>Connect</span>
             </button>
 
             {/* 2. View Details */}
