@@ -89,6 +89,10 @@ public class PlatformService : IPlatformService
             CurrencyName = platform.Currency.ToString(),
             CreatedAt = platform.CreatedAt,
             ClientId = platform.ClientId,
+            ExternalAccountId = platform.ExternalAccountId,
+            AccountName = platform.AccountName,
+            LoginCustomerId = platform.LoginCustomerId,
+            GoogleAdsConnectionId = platform.GoogleAdsConnectionId,
             CampaignsCount = pCampaigns.Count
         };
     }

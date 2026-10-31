@@ -14,6 +14,11 @@ public class PlatformDTO
     public DateTimeOffset CreatedAt { get; set; }
     public int ClientId { get; set; }
 
+    public string? ExternalAccountId { get; set; }
+    public string? AccountName { get; set; }
+    public string? LoginCustomerId { get; set; }
+    public int? GoogleAdsConnectionId { get; set; }
+
     // Calculated Performance Metrics (Backend)
     public decimal Spend { get; set; }
     public decimal Revenue { get; set; }

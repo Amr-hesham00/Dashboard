@@ -56,6 +56,10 @@ public class ClientPlatformDTO
     public string Key { get; set; } = null!;
     public string Status { get; set; } = null!;
     public bool Connected { get; set; }
+    public string? AccountId { get; set; }
+    public string? AccountName { get; set; }
+    public string? LoginCustomerId { get; set; }
+    public int? GoogleAdsConnectionId { get; set; }
 }
 
 public class AdminClientsDTO
@@ -183,5 +187,3 @@ public class ClientLookupDTO
     public int ClientId { get; set; }
     public string CompanyName { get; set; } = null!;
 }
-
-

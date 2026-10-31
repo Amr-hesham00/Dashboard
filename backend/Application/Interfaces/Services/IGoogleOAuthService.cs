@@ -18,6 +18,13 @@ public interface IGoogleOAuthService
     Task<GoogleOAuthCallbackResult> HandleCallbackAsync(GoogleOAuthCallbackRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Retrieves valid decrypted OAuth credentials for the specified Dashboard user.
+    /// If the stored access token is expired (or near expiry), refreshes it using the stored refresh token
+    /// and persists the newly encrypted access token.
+    /// </summary>
+    Task<GoogleOAuthValidCredentialsResult> GetValidCredentialsAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Disconnects the user's Google Ads connection by revoking stored token(s) with Google (best-effort)
     /// and removing the stored credentials from the database.
     /// Returns true if an active connection was found and removed; false if the user had no connection.

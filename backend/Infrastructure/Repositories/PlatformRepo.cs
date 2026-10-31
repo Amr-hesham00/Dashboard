@@ -1,10 +1,37 @@
 using Dashboard.Application.Interfaces.Repositories;
 using Dashboard.Domain.Entities;
+using Dashboard.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
 
 namespace Dashboard.Infrastructure.Repositories;
 public class PlatformRepo : GenericRepo<Platform>, IPlatformRepo
 {
     public PlatformRepo(AppDbContext context) : base(context)
     {
+    }
+
+    public async Task<Platform?> GetByClientAndTypeAsync(int clientId, PlatformType platformType)
+    {
+        return await dbset
+            .Include(p => p.Client)
+            .FirstOrDefaultAsync(p => p.ClientId == clientId && p.PlatformType == platformType);
+    }
+
+    public async Task<Platform?> GetByExternalAccountIdAsync(PlatformType platformType, string externalAccountId)
+    {
+        return await dbset
+            .Include(p => p.Client)
+            .FirstOrDefaultAsync(p =>
+                p.PlatformType == platformType &&
+                p.ExternalAccountId == externalAccountId &&
+                p.Status == PlatformStatus.Connected);
+    }
+
+    public async Task<List<Platform>> GetByGoogleAdsConnectionIdAsync(int googleAdsConnectionId)
+    {
+        return await dbset
+            .Include(p => p.Client)
+            .Where(p => p.GoogleAdsConnectionId == googleAdsConnectionId)
+            .ToListAsync();
     }
 }

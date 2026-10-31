@@ -21,12 +21,26 @@ public class PlatformConfig : IEntityTypeConfiguration<Platform>
                .IsRequired()
                .HasConversion<string>();
 
+        builder.Property(p => p.ExternalAccountId)
+               .HasMaxLength(64);
+
+        builder.Property(p => p.AccountName)
+               .HasMaxLength(250);
+
+        builder.Property(p => p.LoginCustomerId)
+               .HasMaxLength(64);
+
+        builder.HasIndex(p => new { p.PlatformType, p.ExternalAccountId });
+
         // Clients has many Platforms
         builder.HasOne(p => p.Client)
                .WithMany(c => c.Platforms)
                .HasForeignKey(p => p.ClientId)
                .OnDelete(DeleteBehavior.Cascade);
 
-
+        builder.HasOne(p => p.GoogleAdsConnection)
+               .WithMany(c => c.Platforms)
+               .HasForeignKey(p => p.GoogleAdsConnectionId)
+               .OnDelete(DeleteBehavior.SetNull);
     }
 }

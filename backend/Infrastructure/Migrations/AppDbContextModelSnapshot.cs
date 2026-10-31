@@ -489,6 +489,10 @@ namespace Dashboard.Infrastructure.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AccountName")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
                     b.Property<int>("ClientId")
                         .HasColumnType("int");
 
@@ -499,9 +503,20 @@ namespace Dashboard.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("ExternalAccountId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int?>("GoogleAdsConnectionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("LoginCustomerId")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("PlatformType")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -510,6 +525,10 @@ namespace Dashboard.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ClientId");
+
+                    b.HasIndex("GoogleAdsConnectionId");
+
+                    b.HasIndex("PlatformType", "ExternalAccountId");
 
                     b.ToTable("Platforms", (string)null);
                 });
@@ -957,7 +976,14 @@ namespace Dashboard.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Dashboard.Domain.Entities.GoogleAdsConnection", "GoogleAdsConnection")
+                        .WithMany("Platforms")
+                        .HasForeignKey("GoogleAdsConnectionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Client");
+
+                    b.Navigation("GoogleAdsConnection");
                 });
 
             modelBuilder.Entity("Dashboard.Domain.Entities.RefreshToken", b =>
@@ -1067,6 +1093,11 @@ namespace Dashboard.Infrastructure.Migrations
                     b.Navigation("Platforms");
 
                     b.Navigation("Target");
+                });
+
+            modelBuilder.Entity("Dashboard.Domain.Entities.GoogleAdsConnection", b =>
+                {
+                    b.Navigation("Platforms");
                 });
 
             modelBuilder.Entity("Dashboard.Domain.Entities.Platform", b =>

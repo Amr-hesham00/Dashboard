@@ -2,6 +2,7 @@ using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces.Services;
 using Dashboard.Application.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -13,10 +14,14 @@ namespace Dashboard.API.Controllers;
 public class GoogleAdsController : ControllerBase
 {
     private readonly IGoogleOAuthService _googleOAuthService;
+    private readonly IGoogleAdsService? _googleAdsService;
 
-    public GoogleAdsController(IGoogleOAuthService googleOAuthService)
+    public GoogleAdsController(
+        IGoogleOAuthService googleOAuthService,
+        IGoogleAdsService? googleAdsService = null)
     {
         _googleOAuthService = googleOAuthService;
+        _googleAdsService = googleAdsService;
     }
 
     /// <summary>
@@ -59,7 +64,7 @@ public class GoogleAdsController : ControllerBase
 
     /// <summary>
     /// Step C: OAuth callback endpoint matching the registered redirect URI:
-    /// https://localhost:3000/api/google-ads/callback
+    /// https://localhost:7057/api/google-ads/callback
     /// Handles successful authorization and Google error responses, validates state,
     /// exchanges the authorization code on the backend, and securely persists tokens.
     /// </summary>
@@ -95,6 +100,127 @@ public class GoogleAdsController : ControllerBase
         var errorMsg = Uri.EscapeDataString(GetErrorMessage(result.ErrorCode));
         var safeCode = Uri.EscapeDataString(result.ErrorCode ?? GoogleOAuthErrorCodes.AuthorizationFailed);
         return Redirect($"{clientsRedirectUrl}?googleAuth=error&errorCode={safeCode}&message={errorMsg}");
+    }
+
+    /// <summary>
+    /// Returns the authenticated user's Google Ads OAuth connection status and linked client accounts.
+    /// </summary>
+    [HttpGet("status")]
+    public async Task<IActionResult> GetStatus(CancellationToken cancellationToken = default)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized(new { message = "User identity not found in token." });
+        }
+
+        if (_googleAdsService is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Google Ads service is not available." });
+        }
+
+        var status = await _googleAdsService.GetConnectionStatusAsync(userId, cancellationToken);
+        return Ok(status);
+    }
+
+    /// <summary>
+    /// Discovers all Google Ads accounts (both Advertiser and Manager/MCC accounts) accessible to the
+    /// authenticated user's stored Google OAuth connection.
+    /// </summary>
+    [HttpGet("accounts")]
+    public async Task<IActionResult> GetAccessibleAccounts(CancellationToken cancellationToken = default)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized(new { message = "User identity not found in token." });
+        }
+
+        if (_googleAdsService is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Google Ads service is not available." });
+        }
+
+        var result = await _googleAdsService.DiscoverAccessibleAccountsAsync(userId, cancellationToken);
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                GoogleOAuthErrorCodes.NotConnected => NotFound(new
+                {
+                    message = result.Message,
+                    errorCode = result.ErrorCode,
+                    connected = false
+                }),
+                GoogleOAuthErrorCodes.InvalidGrant => BadRequest(new
+                {
+                    message = result.Message,
+                    errorCode = result.ErrorCode,
+                    connected = false
+                }),
+                _ => BadRequest(new
+                {
+                    message = result.Message ?? "Failed to discover Google Ads accounts.",
+                    errorCode = result.ErrorCode ?? GoogleOAuthErrorCodes.DiscoveryFailed
+                })
+            };
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Associates a selected Google Ads Advertiser account with an existing Dashboard Client.
+    /// Validates both Client ownership and Google Ads account accessibility on the backend,
+    /// and prevents selecting a Manager (MCC) account as an advertising client.
+    /// </summary>
+    [HttpPost("accounts/select")]
+    [HttpPost("select-account")]
+    public async Task<IActionResult> SelectAccount(
+        [FromBody] SelectGoogleAdsAccountRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userRole = User.FindFirstValue(ClaimTypes.Role);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized(new { message = "User identity not found in token." });
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        if (_googleAdsService is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Google Ads service is not available." });
+        }
+
+        var result = await _googleAdsService.AssociateAccountWithClientAsync(
+            userId,
+            userRole,
+            request,
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                GoogleOAuthErrorCodes.ClientNotFound or GoogleOAuthErrorCodes.NotConnected =>
+                    NotFound(new { message = result.Message, errorCode = result.ErrorCode }),
+
+                GoogleOAuthErrorCodes.UnauthorizedClient or GoogleOAuthErrorCodes.UnauthorizedCustomerAccount =>
+                    StatusCode(StatusCodes.Status403Forbidden, new { message = result.Message, errorCode = result.ErrorCode }),
+
+                GoogleOAuthErrorCodes.CustomerAlreadyLinked =>
+                    Conflict(new { message = result.Message, errorCode = result.ErrorCode }),
+
+                _ => BadRequest(new { message = result.Message, errorCode = result.ErrorCode })
+            };
+        }
+
+        return Ok(result);
     }
 
     private static string GetErrorMessage(string? errorCode) => errorCode switch

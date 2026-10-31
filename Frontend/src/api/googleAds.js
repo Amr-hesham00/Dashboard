@@ -24,6 +24,68 @@ export async function connectGoogleAdsApi() {
 }
 
 /**
+ * Returns the authenticated user's Google Ads OAuth connection status and linked client accounts.
+ */
+export async function getGoogleAdsStatusApi() {
+  const response = await apiFetch(`${API_BASE_URL}/google-ads/status`, {
+    method: 'GET',
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || 'Failed to retrieve Google Ads connection status.');
+    error.status = response.status;
+    error.errorCode = data.errorCode;
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Discovers accessible Google Ads customer and manager accounts for the authenticated user.
+ */
+export async function getGoogleAdsAccountsApi() {
+  const response = await apiFetch(`${API_BASE_URL}/google-ads/accounts`, {
+    method: 'GET',
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || 'Failed to retrieve accessible Google Ads accounts.');
+    error.status = response.status;
+    error.errorCode = data.errorCode;
+    error.connected = data.connected;
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Associates a selected Google Ads Advertiser account (Customer ID) with a Dashboard Client.
+ */
+export async function selectGoogleAdsAccountApi(clientId, customerId) {
+  const response = await apiFetch(`${API_BASE_URL}/google-ads/accounts/select`, {
+    method: 'POST',
+    body: JSON.stringify({
+      clientId: Number(clientId),
+      customerId: String(customerId).trim(),
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || 'Failed to associate Google Ads account with client.');
+    error.status = response.status;
+    error.errorCode = data.errorCode;
+    throw error;
+  }
+
+  return data;
+}
+
+/**
  * Disconnects the current authenticated user's Google Ads OAuth connection.
  */
 export async function disconnectGoogleAdsApi() {

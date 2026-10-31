@@ -25,4 +25,6 @@ public class GoogleAdsConnection
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+
+    public ICollection<Platform> Platforms { get; set; } = new List<Platform>();
 }

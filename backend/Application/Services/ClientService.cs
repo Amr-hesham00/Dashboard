@@ -65,7 +65,11 @@ public class ClientService : IClientService
                     PlatformType = platform.PlatformType.ToString(),
                     Key = platformKey,
                     Status = platform.Status.ToString(),
-                    Connected = platform.Status == PlatformStatus.Connected
+                    Connected = platform.Status == PlatformStatus.Connected,
+                    AccountId = platform.ExternalAccountId,
+                    AccountName = platform.AccountName,
+                    LoginCustomerId = platform.LoginCustomerId,
+                    GoogleAdsConnectionId = platform.GoogleAdsConnectionId
                 });
 
                 if (platform.Campaigns == null) continue;
@@ -156,7 +160,7 @@ public class ClientService : IClientService
             Status = dto.Status,
             BusinessModel = dto.BusinessModel,
             Notes = dto.Notes,
-            ManagerId = dto.ManagerId,
+            ManagerId = dto.ManagerId!,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -334,7 +338,11 @@ public class ClientService : IClientService
                         PlatformType = platform.PlatformType.ToString(),
                         Key = platformKey,
                         Status = platform.Status.ToString(),
-                        Connected = platform.Status == PlatformStatus.Connected
+                        Connected = platform.Status == PlatformStatus.Connected,
+                        AccountId = platform.ExternalAccountId,
+                        AccountName = platform.AccountName,
+                        LoginCustomerId = platform.LoginCustomerId,
+                        GoogleAdsConnectionId = platform.GoogleAdsConnectionId
                     });
 
                     if (platform.Campaigns == null) continue;
@@ -435,4 +443,3 @@ public class ClientService : IClientService
     }
 
 }
-

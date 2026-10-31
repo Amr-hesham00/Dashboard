@@ -14,7 +14,13 @@ import {
   getClientTargetsApi,
   updateClientTargetsApi,
 } from '../api/clients';
-import { connectGoogleAdsApi, disconnectGoogleAdsApi } from '../api/googleAds';
+import {
+  connectGoogleAdsApi,
+  disconnectGoogleAdsApi,
+  getGoogleAdsStatusApi,
+  getGoogleAdsAccountsApi,
+  selectGoogleAdsAccountApi,
+} from '../api/googleAds';
 const DEFAULT_CLIENT_TARGETS = {
   targetRoas: 4.0,
   targetCpa: 50.0,
@@ -123,9 +129,16 @@ export default function ClientsPage() {
   const [connectingPlatform, setConnectingPlatform] = useState('');
   const [syncingPlatform, setSyncingPlatform] = useState('');
   const [toastMsg, setToastMsg] = useState('');
-  const [googleStatus, setGoogleStatus] = useState({ connected: false });
+  const [googleStatus, setGoogleStatus] = useState({ connected: false, linkedAccounts: [] });
   const [googleConnecting, setGoogleConnecting] = useState(false);
   const [googleToast, setGoogleToast] = useState(null);
+  const [showGoogleAccountsModal, setShowGoogleAccountsModal] = useState(false);
+  const [googleAccountsLoading, setGoogleAccountsLoading] = useState(false);
+  const [googleAccountsError, setGoogleAccountsError] = useState('');
+  const [googleAccounts, setGoogleAccounts] = useState([]);
+  const [selectedGoogleCustomerId, setSelectedGoogleCustomerId] = useState('');
+  const [selectedGoogleClientId, setSelectedGoogleClientId] = useState('');
+  const [associatingGoogleAccount, setAssociatingGoogleAccount] = useState(false);
   const [activeDropdownClient, setActiveDropdownClient] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
 
@@ -467,13 +480,25 @@ export default function ClientsPage() {
     const errorCode = searchParams.get('errorCode');
     const callbackMessage = searchParams.get('message');
 
+    getGoogleAdsStatusApi()
+      .then((status) => {
+        if (status) {
+          setGoogleStatus({
+            connected: Boolean(status.connected),
+            linkedAccounts: status.linkedAccounts || [],
+          });
+        }
+      })
+      .catch(() => { });
+
     if (googleAuth === 'success') {
-      setGoogleStatus({ connected: true });
+      setGoogleStatus((prev) => ({ ...prev, connected: true }));
       setGoogleToast({
         type: 'success',
-        message: callbackMessage || 'Google Ads authorized successfully! Access and refresh tokens have been securely stored.',
+        message: callbackMessage || 'Google Ads authorized successfully! Select a Google Ads advertiser account to associate with a Client.',
       });
       window.history.replaceState({}, document.title, window.location.pathname);
+      openGoogleAccountsModal(null);
     } else if (googleAuth === 'error') {
       if (errorCode === 'already_connected') {
         setGoogleStatus({ connected: true });
@@ -646,12 +671,101 @@ export default function ClientsPage() {
   };
 
   // ─── Platform Connect Handlers ──────────────────────────────────
-  const handleConnectGoogleAds = async () => {
-    if (googleStatus?.connected) {
+  const openGoogleAccountsModal = async (clientForAssociation = null) => {
+    const defaultClientId =
+      clientForAssociation?.id ??
+      clientForAssociation?.clientId ??
+      connectClient?.id ??
+      connectClient?.clientId ??
+      clients[0]?.id ??
+      clients[0]?.clientId ??
+      '';
+    setSelectedGoogleClientId(defaultClientId ? String(defaultClientId) : '');
+    setSelectedGoogleCustomerId('');
+    setGoogleAccountsError('');
+    setShowGoogleAccountsModal(true);
+    setGoogleAccountsLoading(true);
+
+    try {
+      const discovery = await getGoogleAdsAccountsApi();
+      const accountsList = discovery?.accounts || [];
+      setGoogleAccounts(accountsList);
+      setGoogleStatus((prev) => ({ ...prev, connected: true }));
+
+      // Pre-select the first selectable Advertiser account (never a Manager account)
+      const existingForClient = accountsList.find(
+        (a) => !a.isManager && a.canSelect !== false && String(a.associatedClientId) === String(defaultClientId)
+      );
+      const firstAdvertiser = existingForClient || accountsList.find((a) => !a.isManager && a.canSelect !== false);
+      if (firstAdvertiser) {
+        setSelectedGoogleCustomerId(firstAdvertiser.customerId);
+      }
+    } catch (err) {
+      setGoogleAccountsError(err.message || 'Failed to discover accessible Google Ads accounts.');
+    } finally {
+      setGoogleAccountsLoading(false);
+    }
+  };
+
+  const handleAssociateGoogleAdsAccount = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedGoogleClientId) {
+      setGoogleAccountsError('Please select a Dashboard Client.');
+      return;
+    }
+    if (!selectedGoogleCustomerId) {
+      setGoogleAccountsError('Please select a Google Ads Advertiser account.');
+      return;
+    }
+
+    const chosenAccount = googleAccounts.find((a) => a.customerId === selectedGoogleCustomerId);
+    if (chosenAccount?.isManager) {
+      setGoogleAccountsError('Manager (MCC) accounts cannot be selected as an advertising client. Please select an Advertiser account.');
+      return;
+    }
+
+    setAssociatingGoogleAccount(true);
+    setGoogleAccountsError('');
+    try {
+      const result = await selectGoogleAdsAccountApi(Number(selectedGoogleClientId), selectedGoogleCustomerId);
+      const assoc = result?.association;
+      setShowGoogleAccountsModal(false);
+      await loadData();
+      const status = await getGoogleAdsStatusApi().catch(() => null);
+      if (status) {
+        setGoogleStatus({
+          connected: Boolean(status.connected),
+          linkedAccounts: status.linkedAccounts || [],
+        });
+      }
+      if (connectClient && String(connectClient.id) === String(selectedGoogleClientId)) {
+        setPlatformsState((prev) => ({
+          ...prev,
+          google: {
+            ...(prev.google || {}),
+            connected: true,
+            accountId: assoc?.formattedCustomerId || assoc?.customerId || selectedGoogleCustomerId,
+            lastSync: 'Connected',
+            autoSync: true,
+          },
+        }));
+      }
       setGoogleToast({
-        type: 'error',
-        message: 'Your account is already connected to Google Ads. Reconnecting is not allowed.',
+        type: 'success',
+        message:
+          result?.message ||
+          `Google Ads account ${assoc?.formattedCustomerId || selectedGoogleCustomerId} associated with ${assoc?.clientName || 'Client'}!`,
       });
+    } catch (err) {
+      setGoogleAccountsError(err.message || 'Failed to associate Google Ads account with the selected Client.');
+    } finally {
+      setAssociatingGoogleAccount(false);
+    }
+  };
+
+  const handleConnectGoogleAds = async (clientContext = null) => {
+    if (googleStatus?.connected) {
+      await openGoogleAccountsModal(clientContext || connectClient);
       return;
     }
     setGoogleConnecting(true);
@@ -665,15 +779,17 @@ export default function ClientsPage() {
         throw new Error('No authorization URL returned from server.');
       }
     } catch (err) {
+      if (err.alreadyConnected || err.errorCode === 'already_connected' || err.status === 409) {
+        setGoogleStatus((prev) => ({ ...prev, connected: true }));
+        setGoogleConnecting(false);
+        setConnectingPlatform('');
+        await openGoogleAccountsModal(clientContext || connectClient);
+        return;
+      }
       setGoogleToast({
         type: 'error',
-        message: (err.alreadyConnected || err.errorCode === 'already_connected' || err.status === 409)
-          ? 'Your account is already connected to Google Ads. Reconnecting is not allowed.'
-          : (err.message || 'Failed to start Google Ads authorization. Please try again.'),
+        message: err.message || 'Failed to start Google Ads authorization. Please try again.',
       });
-      if (err.alreadyConnected || err.errorCode === 'already_connected' || err.status === 409) {
-        setGoogleStatus({ connected: true });
-      }
       setGoogleConnecting(false);
       setConnectingPlatform('');
     }
@@ -717,30 +833,56 @@ export default function ClientsPage() {
       setConnectingPlatform('');
     }
   };
-  const getDefaultPlatforms = () => ({
-    meta: { connected: true, accountId: 'act_948291048', lastSync: '10m ago', autoSync: true },
-    google: { connected: true, accountId: '839-201-9482', lastSync: '25m ago', autoSync: true },
-    snapchat: { connected: true, accountId: 'org_snap_88291', lastSync: '1h ago', autoSync: true },
-    tiktok: { connected: true, accountId: 'tt_adv_7194819', lastSync: '40m ago', autoSync: true },
-  });
+  const getDefaultPlatforms = (client) => {
+    const googlePlat = client?.platforms?.find(
+      (p) => p.platformType === 0 || p.platformType === 'GoogleAds' || p.name === 'GoogleAds'
+    );
+    const linkedAssoc = googleStatus?.linkedAccounts?.find(
+      (a) => String(a.clientId) === String(client?.id)
+    );
+    const hasGoogleAccount = Boolean(googlePlat?.accountId || linkedAssoc?.customerId);
+    const formattedId =
+      linkedAssoc?.formattedCustomerId ||
+      (googlePlat?.accountId && googlePlat.accountId.length === 10
+        ? `${googlePlat.accountId.slice(0, 3)}-${googlePlat.accountId.slice(3, 6)}-${googlePlat.accountId.slice(6)}`
+        : googlePlat?.accountId || '');
+
+    return {
+      meta: { connected: true, accountId: 'act_948291048', lastSync: '10m ago', autoSync: true },
+      google: {
+        connected: Boolean(googleStatus?.connected && hasGoogleAccount),
+        accountId: formattedId,
+        accountName: googlePlat?.accountName || linkedAssoc?.accountName || '',
+        lastSync: hasGoogleAccount ? 'Linked' : 'Never',
+        autoSync: true,
+      },
+      snapchat: { connected: true, accountId: 'org_snap_88291', lastSync: '1h ago', autoSync: true },
+      tiktok: { connected: true, accountId: 'tt_adv_7194819', lastSync: '40m ago', autoSync: true },
+    };
+  };
 
   const openConnectModal = (client) => {
     setConnectClient(client);
+    const defaults = getDefaultPlatforms(client);
     try {
       const saved = localStorage.getItem(`client_platforms_${client.id}`);
-      setPlatformsState(saved ? JSON.parse(saved) : getDefaultPlatforms());
+      const parsed = saved ? JSON.parse(saved) : defaults;
+      setPlatformsState({
+        ...parsed,
+        google: defaults.google,
+      });
     } catch {
-      setPlatformsState(getDefaultPlatforms());
+      setPlatformsState(defaults);
     }
   };
 
   const toggleConnectPlatform = async (platformKey) => {
     if (!connectClient) return;
     if (platformKey === 'google') {
-      if (platformsState.google?.connected || googleStatus?.connected) {
-        await handleDisconnectGoogleAds();
+      if (googleStatus?.connected) {
+        await openGoogleAccountsModal(connectClient);
       } else {
-        await handleConnectGoogleAds();
+        await handleConnectGoogleAds(connectClient);
       }
       return;
     }
@@ -1353,14 +1495,19 @@ export default function ClientsPage() {
               <span className="fw-semibold">Connect Platforms</span>
             </button>
 
-            {/* 1b. Direct Google Ads OAuth Connect */}
+            {/* 1b. Direct Google Ads OAuth Connect / Account Selection */}
             <button
               className="action-menu-row text-body-emphasis"
               onClick={() => {
+                const c = activeDropdownClient;
                 setActiveDropdownClient(null);
-                handleConnectGoogleAds();
+                handleConnectGoogleAds(c);
               }}
-              title={googleStatus.connected ? 'Google Ads is already connected. Reconnecting is not allowed.' : 'Connect Google Ads OAuth Account'}
+              title={
+                googleStatus.connected
+                  ? 'Discover and select a Google Ads customer account for this client'
+                  : 'Connect Google Ads OAuth Account'
+              }
             >
               <div className="avatar bg-light border rounded-2 p-1 d-flex align-items-center justify-content-center flex-shrink-0 shadow-xs" style={{ width: 28, height: 28 }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24">
@@ -1370,9 +1517,11 @@ export default function ClientsPage() {
                   <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
                 </svg>
               </div>
-              <span className="fw-semibold">{googleStatus.connected ? 'Google Ads Linked' : 'Connect Google'}</span>
+              <span className="fw-semibold">
+                {googleStatus.connected ? 'Select Google Ads Account' : 'Connect Google Ads'}
+              </span>
               {googleStatus.connected && (
-                <span className="badge bg-success-subtle text-success ms-auto" style={{ fontSize: '0.68rem' }}>Linked</span>
+                <span className="badge bg-success-subtle text-success ms-auto" style={{ fontSize: '0.68rem' }}>OAuth Ready</span>
               )}
             </button>
 
@@ -1887,6 +2036,18 @@ export default function ClientsPage() {
 
                               {/* Buttons Column */}
                               <div className="d-flex align-items-center gap-2">
+                                {platform.key === 'google' && googleStatus.connected && (
+                                  <button
+                                    className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1.5 px-2.5 py-1.5 rounded-2"
+                                    onClick={() => openGoogleAccountsModal(connectClient)}
+                                    disabled={isConnecting || googleAccountsLoading}
+                                    title="Discover and select a Google Ads customer account"
+                                  >
+                                    <span className="small fw-semibold">
+                                      {state.connected ? 'Change Account' : 'Select Account'}
+                                    </span>
+                                  </button>
+                                )}
                                 {state.connected ? (
                                   <>
                                     <button
@@ -1904,7 +2065,11 @@ export default function ClientsPage() {
 
                                     <button
                                       className="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1.5 px-2.5 py-1.5 rounded-2"
-                                      onClick={() => toggleConnectPlatform(platform.key)}
+                                      onClick={() =>
+                                        platform.key === 'google'
+                                          ? handleDisconnectGoogleAds()
+                                          : toggleConnectPlatform(platform.key)
+                                      }
                                       disabled={isConnecting}
                                       title="Disconnect platform"
                                     >
@@ -1933,27 +2098,29 @@ export default function ClientsPage() {
                                       <span className="small">Sync</span>
                                     </button>
 
-                                    <button
-                                      className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-2"
-                                      onClick={() => toggleConnectPlatform(platform.key)}
-                                      disabled={isConnecting}
-                                      title="Connect this platform"
-                                    >
-                                      {isConnecting ? (
-                                        <>
-                                          <span className="spinner-border spinner-border-sm" role="status"></span>
-                                          <span className="small">Connecting...</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                                          </svg>
-                                          <span className="small fw-semibold">Connect</span>
-                                        </>
-                                      )}
-                                    </button>
+                                    {!(platform.key === 'google' && googleStatus.connected) && (
+                                      <button
+                                        className="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-2"
+                                        onClick={() => toggleConnectPlatform(platform.key)}
+                                        disabled={isConnecting}
+                                        title="Connect this platform"
+                                      >
+                                        {isConnecting ? (
+                                          <>
+                                            <span className="spinner-border spinner-border-sm" role="status"></span>
+                                            <span className="small">Connecting...</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                            </svg>
+                                            <span className="small fw-semibold">Connect</span>
+                                          </>
+                                        )}
+                                      </button>
+                                    )}
                                   </>
                                 )}
                               </div>
@@ -1974,6 +2141,217 @@ export default function ClientsPage() {
                     Done
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Google Ads Account Discovery & Selection Modal ────────── */}
+        {showGoogleAccountsModal && (
+          <div
+            className="modal fade show d-block"
+            style={{ backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 1080 }}
+            tabIndex="-1"
+            onClick={() => !associatingGoogleAccount && setShowGoogleAccountsModal(false)}
+          >
+            <div className="modal-dialog modal-dialog-centered modal-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div className="modal-header border-bottom p-4 bg-body-tertiary">
+                  <div className="d-flex align-items-center gap-3">
+                    <div className="avatar bg-white border rounded-3 p-2 d-flex align-items-center justify-content-center shadow-xs" style={{ width: 44, height: 44 }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z" />
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z" />
+                        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.97 0 12s.45 3.82 1.25 5.42l4.03-3.15z" />
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h5 className="modal-title fw-bold mb-0 text-body-emphasis">
+                        Select Google Ads Customer Account
+                      </h5>
+                      <small className="text-secondary">
+                        Choose an accessible Advertiser account and associate it with a Dashboard Client
+                      </small>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => !associatingGoogleAccount && setShowGoogleAccountsModal(false)}
+                    aria-label="Close"
+                  ></button>
+                </div>
+
+                <form onSubmit={handleAssociateGoogleAdsAccount}>
+                  <div className="modal-body p-4" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                    {googleAccountsError && (
+                      <div className="alert alert-danger d-flex align-items-center justify-content-between py-2.5 px-3 small mb-3 rounded-3">
+                        <span>{googleAccountsError}</span>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger py-0.5 px-2 ms-2"
+                          onClick={() => openGoogleAccountsModal(connectClient)}
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Step 1: Target Dashboard Client */}
+                    <div className="mb-4">
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.88rem' }}>
+                        1. Dashboard Client <span className="text-danger">*</span>
+                      </label>
+                      <select
+                        className="form-select rounded-3 fw-medium"
+                        value={selectedGoogleClientId}
+                        onChange={(e) => setSelectedGoogleClientId(e.target.value)}
+                        required
+                      >
+                        <option value="">-- Select a Dashboard Client --</option>
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.companyName} ({c.email})
+                          </option>
+                        ))}
+                      </select>
+                      <small className="text-secondary" style={{ fontSize: '0.75rem' }}>
+                        The selected Google Ads advertiser account will be linked to this client&apos;s Google Ads platform record.
+                      </small>
+                    </div>
+
+                    {/* Step 2: Accessible Google Ads Customer Accounts */}
+                    <div>
+                      <div className="d-flex align-items-center justify-content-between mb-2">
+                        <label className="form-label fw-semibold text-body mb-0" style={{ fontSize: '0.88rem' }}>
+                          2. Accessible Google Ads Advertiser Accounts
+                        </label>
+                        {!googleAccountsLoading && googleAccounts.length > 0 && (
+                          <span className="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">
+                            {googleAccounts.length} Selectable Advertiser {googleAccounts.length === 1 ? 'Account' : 'Accounts'}
+                          </span>
+                        )}
+                      </div>
+
+                      {googleAccountsLoading ? (
+                        <div className="text-center py-5 border rounded-3 bg-light">
+                          <div className="spinner-border text-primary mb-2" role="status"></div>
+                          <div className="fw-semibold text-body-emphasis small">
+                            Discovering accessible Google Ads advertiser accounts...
+                          </div>
+                          <small className="text-secondary">
+                            Querying direct and MCC-linked advertiser accounts via Google Ads API
+                          </small>
+                        </div>
+                      ) : googleAccounts.length === 0 ? (
+                        <div className="text-center py-4 border rounded-3 bg-light px-3">
+                          <div className="fw-semibold text-body-emphasis mb-1">No Google Ads advertiser accounts found</div>
+                          <small className="text-secondary d-block mb-2">
+                            No directly accessible or MCC-linked advertiser accounts were returned for this Google identity.
+                          </small>
+                        </div>
+                      ) : (
+                        <div className="d-flex flex-column gap-2">
+                          {googleAccounts.map((acc) => {
+                            const isSelected = selectedGoogleCustomerId === acc.customerId;
+                            return (
+                              <div
+                                key={acc.customerId}
+                                onClick={() => setSelectedGoogleCustomerId(acc.customerId)}
+                                className={`border rounded-3 p-3 transition-all ${
+                                  isSelected
+                                    ? 'border-primary bg-primary-subtle bg-opacity-10 shadow-xs'
+                                    : 'bg-body'
+                                }`}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                <div className="d-flex align-items-center justify-content-between gap-3">
+                                  <div className="d-flex align-items-center gap-3">
+                                    <input
+                                      type="radio"
+                                      name="googleAdsCustomerAccount"
+                                      className="form-check-input mt-0"
+                                      checked={isSelected}
+                                      onChange={() => setSelectedGoogleCustomerId(acc.customerId)}
+                                    />
+                                    <div>
+                                      <div className="d-flex align-items-center gap-2 flex-wrap">
+                                        <span className="fw-bold text-body-emphasis">
+                                          {acc.descriptiveName || `Google Ads Account ${acc.formattedCustomerId}`}
+                                        </span>
+                                        <span className="badge bg-light text-dark border font-monospace">
+                                          ID: {acc.formattedCustomerId || acc.customerId}
+                                        </span>
+                                        <span className="badge bg-success-subtle text-success-emphasis border border-success-subtle">
+                                          Advertiser Account
+                                        </span>
+                                        {acc.isTestAccount && (
+                                          <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle">
+                                            Test Account
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-secondary small mt-1 d-flex align-items-center gap-3 flex-wrap">
+                                        {acc.currencyCode && <span>Currency: <strong>{acc.currencyCode}</strong></span>}
+                                        {acc.timeZone && <span>Timezone: {acc.timeZone}</span>}
+                                        {acc.managerCustomerId ? (
+                                          <span>Linked via MCC: <code className="text-secondary">{acc.managerCustomerId}</code></span>
+                                        ) : (
+                                          <span>Access: <strong>Direct</strong></span>
+                                        )}
+                                        {acc.associatedClientName && (
+                                          <span className="text-primary fw-medium">
+                                            Currently linked to: {acc.associatedClientName}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="modal-footer border-top p-3 bg-body-tertiary d-flex justify-content-between align-items-center">
+                    <small className="text-secondary">
+                      Only selectable Google Ads advertiser accounts (direct or MCC-linked) are listed.
+                    </small>
+                    <div className="d-flex align-items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm px-3"
+                        onClick={() => setShowGoogleAccountsModal(false)}
+                        disabled={associatingGoogleAccount}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-primary btn-sm px-4 fw-semibold d-inline-flex align-items-center gap-2"
+                        disabled={
+                          associatingGoogleAccount ||
+                          googleAccountsLoading ||
+                          !selectedGoogleCustomerId ||
+                          !selectedGoogleClientId
+                        }
+                      >
+                        {associatingGoogleAccount ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm" role="status"></span>
+                            <span>Associating...</span>
+                          </>
+                        ) : (
+                          <span>Associate Account</span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </form>
               </div>
             </div>
           </div>

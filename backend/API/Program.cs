@@ -66,6 +66,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<GoogleOAuthStateStore>();
 builder.Services.AddDataProtection();
 builder.Services.AddHttpClient<IGoogleOAuthService, GoogleOAuthService>();
+builder.Services.AddScoped<IGoogleAdsService, GoogleAdsService>();
 #endregion
 //-----------------------------------DbContext, Identity------------------------------------
 builder.Services.AddDbContext<AppDbContext>(

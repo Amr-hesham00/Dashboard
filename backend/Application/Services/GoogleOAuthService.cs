@@ -2,6 +2,7 @@ using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces;
 using Dashboard.Application.Interfaces.Services;
 using Dashboard.Domain.Entities;
+using Dashboard.Domain.Enums;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
@@ -162,6 +163,77 @@ public class GoogleOAuthService : IGoogleOAuthService
         return await SaveConnectionAsync(userId, tokens);
     }
 
+    public async Task<GoogleOAuthValidCredentialsResult> GetValidCredentialsAsync(
+        string userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("A Dashboard user ID is required.", nameof(userId));
+
+        var connection = await _unitOfWork.GoogleAdsConnection.GetByUserIdAsync(userId);
+        if (connection is null || string.IsNullOrEmpty(connection.RefreshTokenEncrypted))
+        {
+            return GoogleOAuthValidCredentialsResult.Fail(GoogleOAuthErrorCodes.NotConnected);
+        }
+
+        string refreshToken;
+        string? accessToken = null;
+        try
+        {
+            refreshToken = _tokenProtector.Unprotect(connection.RefreshTokenEncrypted);
+            if (!string.IsNullOrEmpty(connection.AccessTokenEncrypted))
+            {
+                accessToken = _tokenProtector.Unprotect(connection.AccessTokenEncrypted);
+            }
+        }
+        catch (CryptographicException)
+        {
+            _logger.LogWarning("Failed to decrypt stored Google OAuth tokens for user {UserId}.", userId);
+            return GoogleOAuthValidCredentialsResult.Fail(GoogleOAuthErrorCodes.InvalidGrant);
+        }
+
+        var now = _timeProvider.GetUtcNow();
+
+        // If access token is still valid (with a 60-second safety buffer), reuse it directly
+        if (!string.IsNullOrEmpty(accessToken) && connection.AccessTokenExpiresAt > now.AddSeconds(60))
+        {
+            return GoogleOAuthValidCredentialsResult.Ok(
+                connection.Id,
+                accessToken,
+                refreshToken,
+                connection.AccessTokenExpiresAt);
+        }
+
+        // Otherwise, refresh the expired access token using the stored refresh token
+        var (refreshedTokens, refreshError) = await RefreshAccessTokenAsync(refreshToken, userId, cancellationToken);
+        if (refreshedTokens is null || string.IsNullOrEmpty(refreshedTokens.AccessToken))
+        {
+            return GoogleOAuthValidCredentialsResult.Fail(refreshError ?? GoogleOAuthErrorCodes.AuthorizationFailed);
+        }
+
+        var expiresIn = refreshedTokens.ExpiresIn > 0 ? refreshedTokens.ExpiresIn : 3600;
+        connection.AccessTokenEncrypted = _tokenProtector.Protect(refreshedTokens.AccessToken);
+        connection.AccessTokenExpiresAt = now.AddSeconds(expiresIn);
+        connection.UpdatedAt = now;
+
+        if (!string.IsNullOrEmpty(refreshedTokens.RefreshToken))
+        {
+            refreshToken = refreshedTokens.RefreshToken;
+            connection.RefreshTokenEncrypted = _tokenProtector.Protect(refreshToken);
+        }
+
+        _unitOfWork.GoogleAdsConnection.Update(connection);
+        await _unitOfWork.Complete();
+
+        _logger.LogInformation("Refreshed expired Google OAuth access token for user {UserId}.", userId);
+
+        return GoogleOAuthValidCredentialsResult.Ok(
+            connection.Id,
+            refreshedTokens.AccessToken,
+            refreshToken,
+            connection.AccessTokenExpiresAt);
+    }
+
     public async Task<bool> DisconnectAsync(string userId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(userId))
@@ -176,6 +248,18 @@ public class GoogleOAuthService : IGoogleOAuthService
 
         await RevokeTokenBestEffortAsync(connection, userId, cancellationToken);
 
+        // Unlink any platforms associated with this connection
+        var linkedPlatforms = await _unitOfWork.Platform.GetByGoogleAdsConnectionIdAsync(connection.Id);
+        if (linkedPlatforms is { Count: > 0 })
+        {
+            foreach (var platform in linkedPlatforms)
+            {
+                platform.GoogleAdsConnectionId = null;
+                platform.Status = PlatformStatus.NotConnected;
+                _unitOfWork.Platform.Update(platform);
+            }
+        }
+
         _unitOfWork.GoogleAdsConnection.Delete(connection);
         await _unitOfWork.Complete();
 
@@ -185,6 +269,62 @@ public class GoogleOAuthService : IGoogleOAuthService
 
 
     // ---------------------------helpers
+    private async Task<(GoogleTokenResponse? Tokens, string? ErrorCode)> RefreshAccessTokenAsync(
+        string refreshToken,
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        var clientId = _configuration["GoogleOAuth:ClientId"];
+        var clientSecret = _configuration["GoogleOAuth:ClientSecret"];
+
+        if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
+        {
+            _logger.LogError("Google OAuth is not fully configured (GoogleOAuth:ClientId/ClientSecret).");
+            return (null, GoogleOAuthErrorCodes.NotConfigured);
+        }
+
+        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["client_id"] = clientId,
+            ["client_secret"] = clientSecret,
+            ["refresh_token"] = refreshToken,
+            ["grant_type"] = "refresh_token",
+        });
+
+        try
+        {
+            using var response = await _httpClient.PostAsync(TokenEndpoint, content, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                string? googleError = null;
+                try
+                {
+                    googleError = (await response.Content.ReadFromJsonAsync<GoogleTokenErrorResponse>(cancellationToken))?.Error;
+                }
+                catch (Exception) { /* non-JSON body; ignore */ }
+
+                var errorCode = GoogleOAuthErrorCodes.FromGoogle(googleError);
+                _logger.LogWarning("Google access token refresh failed for user {UserId}: HTTP {StatusCode}, error {ErrorCode}.",
+                    userId, (int)response.StatusCode, errorCode);
+                return (null, errorCode);
+            }
+
+            var tokens = await response.Content.ReadFromJsonAsync<GoogleTokenResponse>(cancellationToken);
+            if (tokens is null || string.IsNullOrEmpty(tokens.AccessToken))
+            {
+                _logger.LogWarning("Google access token refresh for user {UserId} returned no access token.", userId);
+                return (null, GoogleOAuthErrorCodes.AuthorizationFailed);
+            }
+
+            return (tokens, null);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            _logger.LogWarning("Google access token refresh for user {UserId} failed: {ExceptionType}.", userId, ex.GetType().Name);
+            return (null, GoogleOAuthErrorCodes.AuthorizationFailed);
+        }
+    }
+
     private async Task RevokeTokenBestEffortAsync(GoogleAdsConnection connection, string userId, CancellationToken cancellationToken)
     {
         string? tokenToRevoke = null;
