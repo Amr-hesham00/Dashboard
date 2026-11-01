@@ -229,3 +229,18 @@ public class GoogleAdsConnectionStatusDto
     public DateTimeOffset? UpdatedAt { get; set; }
     public List<GoogleAdsAccountAssociationDto> LinkedAccounts { get; set; } = new();
 }
+
+/// <summary>Outcome of disconnecting a single Dashboard Client's Google Ads account association (without revoking user OAuth).</summary>
+public class DisconnectGoogleAdsClientResultDto
+{
+    public bool Success { get; set; }
+    public string? ErrorCode { get; set; }
+    public string Message { get; set; } = null!;
+    public int ClientId { get; set; }
+
+    public static DisconnectGoogleAdsClientResultDto Ok(int clientId, string message = "Google Ads account disconnected from client successfully.") =>
+        new() { Success = true, ClientId = clientId, Message = message };
+
+    public static DisconnectGoogleAdsClientResultDto Fail(int clientId, string errorCode, string message) =>
+        new() { Success = false, ClientId = clientId, ErrorCode = errorCode, Message = message };
+}

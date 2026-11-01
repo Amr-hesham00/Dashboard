@@ -59,17 +59,23 @@ public class ClientService : IClientService
                     _ => platform.PlatformType.ToString().ToLower()
                 };
 
+                var isPlatformConnected = platform.PlatformType == PlatformType.GoogleAds
+                    ? platform.Status == PlatformStatus.Connected &&
+                      !string.IsNullOrEmpty(platform.ExternalAccountId) &&
+                      platform.OAuthConnectionId.HasValue
+                    : platform.Status == PlatformStatus.Connected;
+
                 platformsList.Add(new ClientPlatformDTO
                 {
                     Id = platform.Id,
                     PlatformType = platform.PlatformType.ToString(),
                     Key = platformKey,
-                    Status = platform.Status.ToString(),
-                    Connected = platform.Status == PlatformStatus.Connected,
+                    Status = isPlatformConnected ? PlatformStatus.Connected.ToString() : PlatformStatus.NotConnected.ToString(),
+                    Connected = isPlatformConnected,
                     AccountId = platform.ExternalAccountId,
                     AccountName = platform.AccountName,
-                    LoginCustomerId = platform.LoginCustomerId,
-                    GoogleAdsConnectionId = platform.GoogleAdsConnectionId
+                    LoginCustomerId = platform.ManagerAccountId,
+                    GoogleAdsConnectionId = platform.OAuthConnectionId
                 });
 
                 if (platform.Campaigns == null) continue;
@@ -332,17 +338,23 @@ public class ClientService : IClientService
                         _ => platform.PlatformType.ToString().ToLower()
                     };
 
+                    var isPlatformConnected = platform.PlatformType == PlatformType.GoogleAds
+                        ? platform.Status == PlatformStatus.Connected &&
+                          !string.IsNullOrEmpty(platform.ExternalAccountId) &&
+                          platform.OAuthConnectionId.HasValue
+                        : platform.Status == PlatformStatus.Connected;
+
                     platformsList.Add(new ClientPlatformDTO
                     {
                         Id = platform.Id,
                         PlatformType = platform.PlatformType.ToString(),
                         Key = platformKey,
-                        Status = platform.Status.ToString(),
-                        Connected = platform.Status == PlatformStatus.Connected,
+                        Status = isPlatformConnected ? PlatformStatus.Connected.ToString() : PlatformStatus.NotConnected.ToString(),
+                        Connected = isPlatformConnected,
                         AccountId = platform.ExternalAccountId,
                         AccountName = platform.AccountName,
-                        LoginCustomerId = platform.LoginCustomerId,
-                        GoogleAdsConnectionId = platform.GoogleAdsConnectionId
+                        LoginCustomerId = platform.ManagerAccountId,
+                        GoogleAdsConnectionId = platform.OAuthConnectionId
                     });
 
                     if (platform.Campaigns == null) continue;

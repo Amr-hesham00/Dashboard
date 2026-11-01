@@ -11,10 +11,10 @@ public class Platform
 
     public string? ExternalAccountId { get; set; }
     public string? AccountName { get; set; }
-    public string? LoginCustomerId { get; set; }
+    public string? ManagerAccountId { get; set; }
 
-    public int? GoogleAdsConnectionId { get; set; }
-    public GoogleAdsConnection? GoogleAdsConnection { get; set; }
+    public int? OAuthConnectionId { get; set; }
+    public GoogleAdsConnection? OAuthConnection { get; set; }
 
     public int ClientId { get; set; }
     public Client Client { get; set; }

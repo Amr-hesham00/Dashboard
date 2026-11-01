@@ -507,12 +507,12 @@ namespace Dashboard.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
-                    b.Property<int?>("GoogleAdsConnectionId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("LoginCustomerId")
+                    b.Property<string>("ManagerAccountId")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
+
+                    b.Property<int?>("OAuthConnectionId")
+                        .HasColumnType("int");
 
                     b.Property<string>("PlatformType")
                         .IsRequired()
@@ -526,7 +526,7 @@ namespace Dashboard.Infrastructure.Migrations
 
                     b.HasIndex("ClientId");
 
-                    b.HasIndex("GoogleAdsConnectionId");
+                    b.HasIndex("OAuthConnectionId");
 
                     b.HasIndex("PlatformType", "ExternalAccountId");
 
@@ -976,14 +976,14 @@ namespace Dashboard.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Dashboard.Domain.Entities.GoogleAdsConnection", "GoogleAdsConnection")
+                    b.HasOne("Dashboard.Domain.Entities.GoogleAdsConnection", "OAuthConnection")
                         .WithMany("Platforms")
-                        .HasForeignKey("GoogleAdsConnectionId")
+                        .HasForeignKey("OAuthConnectionId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Client");
 
-                    b.Navigation("GoogleAdsConnection");
+                    b.Navigation("OAuthConnection");
                 });
 
             modelBuilder.Entity("Dashboard.Domain.Entities.RefreshToken", b =>

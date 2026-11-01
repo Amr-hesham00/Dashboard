@@ -39,8 +39,7 @@ public class GoogleAdsController : ControllerBase
         }
 
         var result = await _googleOAuthService.StartAuthorization(userId);
-
-        if (result.AlreadyConnected || result.HasToken)
+        if (result.AlreadyConnected)
         {
             return Conflict(new
             {
@@ -61,10 +60,8 @@ public class GoogleAdsController : ControllerBase
         return Ok(new { authorizationUrl = result.AuthorizationUrl });
     }
 
-
     /// <summary>
-    /// Step C: OAuth callback endpoint matching the registered redirect URI:
-    /// https://localhost:7057/api/google-ads/callback
+    /// Step C: OAuth callback endpoint matching the registered redirect URI.
     /// Handles successful authorization and Google error responses, validates state,
     /// exchanges the authorization code on the backend, and securely persists tokens.
     /// </summary>
@@ -124,8 +121,7 @@ public class GoogleAdsController : ControllerBase
     }
 
     /// <summary>
-    /// Discovers all Google Ads accounts (both Advertiser and Manager/MCC accounts) accessible to the
-    /// authenticated user's stored Google OAuth connection.
+    /// Discovers all Google Ads accounts accessible to the authenticated user's stored Google OAuth connection.
     /// </summary>
     [HttpGet("accounts")]
     public async Task<IActionResult> GetAccessibleAccounts(CancellationToken cancellationToken = default)
@@ -144,26 +140,16 @@ public class GoogleAdsController : ControllerBase
         var result = await _googleAdsService.DiscoverAccessibleAccountsAsync(userId, cancellationToken);
         if (!result.Success)
         {
-            return result.ErrorCode switch
+            var errorPayload = new
             {
-                GoogleOAuthErrorCodes.NotConnected => NotFound(new
-                {
-                    message = result.Message,
-                    errorCode = result.ErrorCode,
-                    connected = false
-                }),
-                GoogleOAuthErrorCodes.InvalidGrant => BadRequest(new
-                {
-                    message = result.Message,
-                    errorCode = result.ErrorCode,
-                    connected = false
-                }),
-                _ => BadRequest(new
-                {
-                    message = result.Message ?? "Failed to discover Google Ads accounts.",
-                    errorCode = result.ErrorCode ?? GoogleOAuthErrorCodes.DiscoveryFailed
-                })
+                message = result.Message ?? "Failed to discover Google Ads accounts.",
+                errorCode = result.ErrorCode ?? GoogleOAuthErrorCodes.DiscoveryFailed,
+                connected = result.Connected
             };
+
+            return result.ErrorCode == GoogleOAuthErrorCodes.NotConnected
+                ? NotFound(errorPayload)
+                : BadRequest(errorPayload);
         }
 
         return Ok(result);
@@ -215,6 +201,53 @@ public class GoogleAdsController : ControllerBase
 
                 GoogleOAuthErrorCodes.CustomerAlreadyLinked =>
                     Conflict(new { message = result.Message, errorCode = result.ErrorCode }),
+
+                _ => BadRequest(new { message = result.Message, errorCode = result.ErrorCode })
+            };
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Disconnects (deactivates) only the specified Dashboard Client's Google Ads account association.
+    /// Does NOT revoke the user's Google OAuth tokens, does NOT delete the user's GoogleAdsConnection,
+    /// and does NOT affect any other Dashboard Client's Google Ads association.
+    /// </summary>
+    [HttpDelete("clients/{clientId:int}/disconnect")]
+    [HttpPost("clients/{clientId:int}/disconnect")]
+    [HttpDelete("disconnect/{clientId:int}")]
+    public async Task<IActionResult> DisconnectClientAccount(
+        [FromRoute] int clientId,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userRole = User.FindFirstValue(ClaimTypes.Role);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized(new { message = "User identity not found in token." });
+        }
+
+        if (_googleAdsService is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Google Ads service is not available." });
+        }
+
+        var result = await _googleAdsService.DisconnectClientAccountAsync(
+            userId,
+            userRole,
+            clientId,
+            cancellationToken);
+
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                GoogleOAuthErrorCodes.ClientNotFound =>
+                    NotFound(new { message = result.Message, errorCode = result.ErrorCode }),
+
+                GoogleOAuthErrorCodes.UnauthorizedClient =>
+                    StatusCode(StatusCodes.Status403Forbidden, new { message = result.Message, errorCode = result.ErrorCode }),
 
                 _ => BadRequest(new { message = result.Message, errorCode = result.ErrorCode })
             };

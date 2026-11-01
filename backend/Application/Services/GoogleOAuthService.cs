@@ -163,6 +163,7 @@ public class GoogleOAuthService : IGoogleOAuthService
         return await SaveConnectionAsync(userId, tokens);
     }
 
+
     public async Task<GoogleOAuthValidCredentialsResult> GetValidCredentialsAsync(
         string userId,
         CancellationToken cancellationToken = default)
@@ -194,8 +195,8 @@ public class GoogleOAuthService : IGoogleOAuthService
 
         var now = _timeProvider.GetUtcNow();
 
-        // If access token is still valid (with a 60-second safety buffer), reuse it directly
-        if (!string.IsNullOrEmpty(accessToken) && connection.AccessTokenExpiresAt > now.AddSeconds(60))
+        // If access token is still valid (with a 30-second safety buffer), reuse it directly
+        if (!string.IsNullOrEmpty(accessToken) && connection.AccessTokenExpiresAt > now.AddSeconds(30))
         {
             return GoogleOAuthValidCredentialsResult.Ok(
                 connection.Id,
@@ -249,12 +250,12 @@ public class GoogleOAuthService : IGoogleOAuthService
         await RevokeTokenBestEffortAsync(connection, userId, cancellationToken);
 
         // Unlink any platforms associated with this connection
-        var linkedPlatforms = await _unitOfWork.Platform.GetByGoogleAdsConnectionIdAsync(connection.Id);
+        var linkedPlatforms = await _unitOfWork.Platform.GetByOAuthConnectionIdAsync(connection.Id);
         if (linkedPlatforms is { Count: > 0 })
         {
             foreach (var platform in linkedPlatforms)
             {
-                platform.GoogleAdsConnectionId = null;
+                platform.OAuthConnectionId = null;
                 platform.Status = PlatformStatus.NotConnected;
                 _unitOfWork.Platform.Update(platform);
             }
@@ -269,6 +270,10 @@ public class GoogleOAuthService : IGoogleOAuthService
 
 
     // ---------------------------helpers
+    /// <summary>
+    /// replace the expired access token with a new one using the stored valid refresh token.
+    /// </summary>
+    /// <returns>return a new access token</returns>
     private async Task<(GoogleTokenResponse? Tokens, string? ErrorCode)> RefreshAccessTokenAsync(
         string refreshToken,
         string userId,

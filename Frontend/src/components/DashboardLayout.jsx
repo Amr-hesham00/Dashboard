@@ -167,7 +167,7 @@ export default function DashboardLayout({ children, title = 'Dasher - Dashboard'
         </Link>
       </div>
 
-      <ul className="navbar-nav flex-column flex-grow-1">
+      <ul className="navbar-nav flex-column flex-grow-1 gap-2">
         <li className="nav-item">
           <div className="nav-heading" style={{ color: '#c4cdd5' }}>{isAdmin ? 'Administration' : 'Management'}</div>
           <hr className="mx-4 nav-line mb-2" />

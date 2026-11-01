@@ -474,9 +474,70 @@ public class GoogleAdsDiscoveryAndSelectionTests
         Assert.Equal(PlatformStatus.Connected, persistedPlatform.Status);
         Assert.Equal("1757564917", persistedPlatform.ExternalAccountId);
         Assert.Equal("Alshiaka test client acc", persistedPlatform.AccountName);
-        Assert.Equal("3674643588", persistedPlatform.LoginCustomerId);
-        Assert.Equal(conn.Id, persistedPlatform.GoogleAdsConnectionId);
+        Assert.Equal("3674643588", persistedPlatform.ManagerAccountId);
+        Assert.Equal(conn.Id, persistedPlatform.OAuthConnectionId);
         Assert.Equal(Currency.EGP, persistedPlatform.Currency);
+    }
+
+    [Fact]
+    public async Task DisconnectClientAccount_OneUserConnectedToTwoClients_DisconnectsOnlyTargetClientAndPreservesUserOAuthAndOtherClient()
+    {
+        // Arrange: Single Dashboard user (UserA) with 1 GoogleAdsConnection and 2 Dashboard Clients
+        var (_, adsService, db, _) = CreateTestHarness();
+        var conn = await SeedConnectedUserAsync(db, UserA);
+        var clientA = await SeedClientAsync(db, UserA, "Alshiaka Store");
+        var clientB = await SeedClientAsync(db, UserA, "Elzero Academy");
+
+        // Associate Client A with 1757564917 and Client B with 9750530064 using the same user OAuth connection
+        var assocA = await adsService.AssociateAccountWithClientAsync(
+            UserA,
+            Roles.Manager.ToString(),
+            new SelectGoogleAdsAccountRequestDto { ClientId = clientA.Id, CustomerId = "1757564917" });
+        var assocB = await adsService.AssociateAccountWithClientAsync(
+            UserA,
+            Roles.Manager.ToString(),
+            new SelectGoogleAdsAccountRequestDto { ClientId = clientB.Id, CustomerId = "9750530064" });
+
+        Assert.True(assocA.Success);
+        Assert.True(assocB.Success);
+
+        // Act: Disconnect Google Ads from Client A ONLY
+        var disconnectResult = await adsService.DisconnectClientAccountAsync(
+            UserA,
+            Roles.Manager.ToString(),
+            clientA.Id);
+
+        // Assert:
+        // 1. Client A's Google Ads association is deactivated/cleared
+        Assert.True(disconnectResult.Success);
+        var platformA = await db.platform.SingleAsync(p => p.ClientId == clientA.Id && p.PlatformType == PlatformType.GoogleAds);
+        Assert.Equal(PlatformStatus.NotConnected, platformA.Status);
+        Assert.Null(platformA.ExternalAccountId);
+        Assert.Null(platformA.AccountName);
+        Assert.Null(platformA.ManagerAccountId);
+        Assert.Null(platformA.OAuthConnectionId);
+
+        // 2. UserA's Google OAuth connection and stored tokens remain intact
+        var storedConn = await db.GoogleAdsConnections.SingleOrDefaultAsync(c => c.UserId == UserA);
+        Assert.NotNull(storedConn);
+        Assert.Equal(conn.Id, storedConn!.Id);
+        Assert.NotEmpty(storedConn.RefreshTokenEncrypted);
+        Assert.NotEmpty(storedConn.AccessTokenEncrypted);
+
+        // 3. Client B's Google Ads association remains completely connected and untouched
+        var platformB = await db.platform.SingleAsync(p => p.ClientId == clientB.Id && p.PlatformType == PlatformType.GoogleAds);
+        Assert.Equal(PlatformStatus.Connected, platformB.Status);
+        Assert.Equal("9750530064", platformB.ExternalAccountId);
+        Assert.Equal("Elzero Test client acc", platformB.AccountName);
+        Assert.Equal("3674643588", platformB.ManagerAccountId);
+        Assert.Equal(conn.Id, platformB.OAuthConnectionId);
+
+        // 4. Connection status still shows Connected = true and lists only Client B as linked
+        var status = await adsService.GetConnectionStatusAsync(UserA);
+        Assert.True(status.Connected);
+        var remainingLinked = Assert.Single(status.LinkedAccounts);
+        Assert.Equal(clientB.Id, remainingLinked.ClientId);
+        Assert.Equal("9750530064", remainingLinked.CustomerId);
     }
 
     [Fact]
@@ -737,11 +798,33 @@ public class GoogleAdsDiscoveryAndSelectionTests
         Assert.Equal("Elzero Test client acc", elzeroAdvertiser.DescriptiveName);
         Assert.Equal("3674643588", elzeroAdvertiser.ManagerCustomerId);
 
-        // 2. Verify live account selection & association inside a rolled-back DB transaction
-        var ownedClient = await db.client.FirstOrDefaultAsync(c => c.ManagerId == activeConnection.UserId);
-        if (ownedClient is not null)
+        // 2. Verify live account selection, multi-client association, and isolated client disconnection inside a rolled-back DB transaction
+        var ownedClients = await db.client
+            .Where(c => c.ManagerId == activeConnection.UserId)
+            .OrderBy(c => c.Id)
+            .Take(2)
+            .ToListAsync();
+
+        if (ownedClients.Count >= 2)
         {
+            var client1 = ownedClients[0];
+            var client2 = ownedClients[1];
+
             await using var tx = await db.Database.BeginTransactionAsync();
+
+            // Clear any pre-existing test links inside the transaction
+            var existingPlatforms = await db.platform
+                .Where(p => p.PlatformType == PlatformType.GoogleAds && p.OAuthConnectionId == activeConnection.Id)
+                .ToListAsync();
+            foreach (var p in existingPlatforms)
+            {
+                p.Status = PlatformStatus.NotConnected;
+                p.ExternalAccountId = null;
+                p.AccountName = null;
+                p.ManagerAccountId = null;
+                p.OAuthConnectionId = null;
+            }
+            await db.SaveChangesAsync();
 
             // MCC Manager account ID must be rejected
             var managerReject = await liveAdsService.AssociateAccountWithClientAsync(
@@ -749,26 +832,47 @@ public class GoogleAdsDiscoveryAndSelectionTests
                 Roles.Manager.ToString(),
                 new SelectGoogleAdsAccountRequestDto
                 {
-                    ClientId = ownedClient.Id,
+                    ClientId = client1.Id,
                     CustomerId = "3674643588"
                 });
             Assert.False(managerReject.Success);
             Assert.Equal(GoogleOAuthErrorCodes.UnauthorizedCustomerAccount, managerReject.ErrorCode);
 
-            // Valid Advertiser account selection must succeed and persist
-            var validSelect = await liveAdsService.AssociateAccountWithClientAsync(
+            // Associate Client 1 with 1757564917 and Client 2 with 9750530064 using the same user's OAuth connection
+            var selectClient1 = await liveAdsService.AssociateAccountWithClientAsync(
                 activeConnection.UserId,
                 Roles.Manager.ToString(),
                 new SelectGoogleAdsAccountRequestDto
                 {
-                    ClientId = ownedClient.Id,
+                    ClientId = client1.Id,
                     CustomerId = "1757564917"
                 });
-            Assert.True(validSelect.Success);
-            Assert.NotNull(validSelect.Association);
-            Assert.Equal("1757564917", validSelect.Association!.CustomerId);
-            Assert.Equal("3674643588", validSelect.Association.LoginCustomerId);
-            Assert.Equal(activeConnection.Id, validSelect.Association.GoogleAdsConnectionId);
+            Assert.True(selectClient1.Success);
+            Assert.Equal("1757564917", selectClient1.Association!.CustomerId);
+
+            var selectClient2 = await liveAdsService.AssociateAccountWithClientAsync(
+                activeConnection.UserId,
+                Roles.Manager.ToString(),
+                new SelectGoogleAdsAccountRequestDto
+                {
+                    ClientId = client2.Id,
+                    CustomerId = "9750530064"
+                });
+            Assert.True(selectClient2.Success);
+            Assert.Equal("9750530064", selectClient2.Association!.CustomerId);
+
+            // Disconnect Client 1 ONLY -> verify Client 2 and user OAuth connection remain untouched
+            var disconnectClient1 = await liveAdsService.DisconnectClientAccountAsync(
+                activeConnection.UserId,
+                Roles.Manager.ToString(),
+                client1.Id);
+            Assert.True(disconnectClient1.Success);
+
+            var statusAfterDisconnect = await liveAdsService.GetConnectionStatusAsync(activeConnection.UserId);
+            Assert.True(statusAfterDisconnect.Connected);
+            var stillLinked = Assert.Single(statusAfterDisconnect.LinkedAccounts);
+            Assert.Equal(client2.Id, stillLinked.ClientId);
+            Assert.Equal("9750530064", stillLinked.CustomerId);
 
             await tx.RollbackAsync();
         }

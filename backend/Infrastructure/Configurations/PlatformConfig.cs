@@ -27,7 +27,7 @@ public class PlatformConfig : IEntityTypeConfiguration<Platform>
         builder.Property(p => p.AccountName)
                .HasMaxLength(250);
 
-        builder.Property(p => p.LoginCustomerId)
+        builder.Property(p => p.ManagerAccountId)
                .HasMaxLength(64);
 
         builder.HasIndex(p => new { p.PlatformType, p.ExternalAccountId });
@@ -38,9 +38,9 @@ public class PlatformConfig : IEntityTypeConfiguration<Platform>
                .HasForeignKey(p => p.ClientId)
                .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(p => p.GoogleAdsConnection)
+        builder.HasOne(p => p.OAuthConnection)
                .WithMany(c => c.Platforms)
-               .HasForeignKey(p => p.GoogleAdsConnectionId)
+               .HasForeignKey(p => p.OAuthConnectionId)
                .OnDelete(DeleteBehavior.SetNull);
     }
 }

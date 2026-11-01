@@ -4,10 +4,9 @@ using Dashboard.Application.Interfaces.Services;
 using Dashboard.Domain.Entities;
 using Dashboard.Domain.Enums;
 using Google.Ads.Gax.Config;
-using Google.Ads.GoogleAds;
 using Google.Ads.GoogleAds.Config;
-using Google.Ads.GoogleAds.V26.Errors;
 using Google.Ads.GoogleAds.Lib;
+using Google.Ads.GoogleAds.V26.Errors;
 using Grpc.Core;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -15,11 +14,10 @@ using Microsoft.Extensions.Logging;
 namespace Dashboard.Application.Services;
 
 /// <summary>
-/// Implements Google Ads customer account discovery using the official <c>Google.Ads.GoogleAds</c> .NET client library
-/// for two supported access scenarios:
-/// 1. Direct Access: Standalone advertiser accounts directly accessible to the authenticated Google user (level = 0, manager = false).
-/// 2. MCC Access: Advertiser accounts linked directly under an accessible MCC Manager account (level = 1, manager = false).
-/// Also handles validated account selection and association with Dashboard Clients.
+/// Implements Google Ads customer account discovery and Client association:
+/// - Direct Access (level 0): Standalone advertiser accounts directly accessible to the user.
+/// - MCC Access (level 1): Direct advertiser accounts under an accessible Manager account.
+/// Manager accounts are filtered out so only selectable advertiser accounts are returned.
 /// </summary>
 public class GoogleAdsService : IGoogleAdsService
 {
@@ -67,29 +65,32 @@ public class GoogleAdsService : IGoogleAdsService
         var connection = await _unitOfWork.GoogleAdsConnection.GetByUserIdAsync(userId);
         if (connection is null || string.IsNullOrEmpty(connection.RefreshTokenEncrypted))
         {
-            return new GoogleAdsConnectionStatusDto
-            {
-                Connected = false
-            };
+            return new GoogleAdsConnectionStatusDto { Connected = false };
         }
 
-        var linkedPlatforms = await _unitOfWork.Platform.GetByGoogleAdsConnectionIdAsync(connection.Id);
+        var linkedPlatforms = await _unitOfWork.Platform.GetByOAuthConnectionIdAsync(connection.Id);
         var linkedDtos = linkedPlatforms
-            .Where(p => p.PlatformType == PlatformType.GoogleAds && !string.IsNullOrEmpty(p.ExternalAccountId))
-            .Select(p => new GoogleAdsAccountAssociationDto
+            .Where(p => p.PlatformType == PlatformType.GoogleAds &&
+                        p.Status == PlatformStatus.Connected &&
+                        !string.IsNullOrEmpty(p.ExternalAccountId))
+            .Select(p =>
             {
-                PlatformId = p.Id,
-                ClientId = p.ClientId,
-                ClientName = p.Client?.CompanyName ?? $"Client #{p.ClientId}",
-                CustomerId = p.ExternalAccountId!,
-                FormattedCustomerId = FormatCustomerId(p.ExternalAccountId!),
-                AccountName = !string.IsNullOrWhiteSpace(p.AccountName)
-                    ? p.AccountName!
-                    : $"Google Ads Account ({FormatCustomerId(p.ExternalAccountId!)})",
-                LoginCustomerId = p.LoginCustomerId,
-                Currency = p.Currency.ToString(),
-                Status = p.Status.ToString(),
-                GoogleAdsConnectionId = connection.Id
+                var formattedCustomerId = FormatCustomerId(p.ExternalAccountId!);
+                return new GoogleAdsAccountAssociationDto
+                {
+                    PlatformId = p.Id,
+                    ClientId = p.ClientId,
+                    ClientName = p.Client?.CompanyName ?? $"Client #{p.ClientId}",
+                    CustomerId = p.ExternalAccountId!,
+                    FormattedCustomerId = formattedCustomerId,
+                    AccountName = !string.IsNullOrWhiteSpace(p.AccountName)
+                        ? p.AccountName!
+                        : $"Google Ads Account ({formattedCustomerId})",
+                    LoginCustomerId = p.ManagerAccountId,
+                    Currency = p.Currency.ToString(),
+                    Status = p.Status.ToString(),
+                    GoogleAdsConnectionId = p.OAuthConnectionId ?? connection.Id
+                };
             })
             .ToList();
 
@@ -109,7 +110,7 @@ public class GoogleAdsService : IGoogleAdsService
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("A Dashboard user ID is required.", nameof(userId));
 
-        // 1. Resolve and validate (or refresh) OAuth credentials for this user
+        // 1. Resolve active OAuth credentials
         var credentials = await _googleOAuthService.GetValidCredentialsAsync(userId, cancellationToken);
         if (!credentials.Success || string.IsNullOrEmpty(credentials.RefreshToken))
         {
@@ -124,7 +125,7 @@ public class GoogleAdsService : IGoogleAdsService
             };
         }
 
-        // 2. Discover directly accessible customer resource names via CustomerService.ListAccessibleCustomers
+        // 2. Discover accessible customer resource names
         IReadOnlyList<string> accessibleResourceNames;
         try
         {
@@ -154,10 +155,7 @@ public class GoogleAdsService : IGoogleAdsService
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
-        // 3. For each accessible customer from ListAccessibleCustomers():
-        //    - If it is a standalone advertiser account, customer_client returns it at level 0 (manager = false).
-        //    - If it is an MCC manager account, customer_client returns its directly linked advertiser accounts at level 1 (manager = false).
-        //    No nested MCC traversal, queues, or recursion are used, and MCC manager accounts are never included.
+        // 3. Query direct advertiser accounts (level <= 1, manager = false)
         foreach (var accessibleCustomerId in accessibleCustomerIds)
         {
             IReadOnlyList<GoogleAdsCustomerAccountDto> directAccounts;
@@ -179,18 +177,17 @@ public class GoogleAdsService : IGoogleAdsService
 
             foreach (var account in directAccounts)
             {
-                // Never include MCC Manager accounts or nested accounts deeper than level 1
                 if (account.IsManager || account.Level > 1)
                     continue;
 
-                MergeDiscoveredAccount(discoveredByCustomerId, account);
+                AddOrUpdateDiscoveredAccount(discoveredByCustomerId, account);
             }
         }
 
-        // 4. Cross-reference with existing linked Platforms for this connection so the UI knows current associations
+        // 4. Cross-reference with existing linked Platforms for current client associations
         if (credentials.ConnectionId.HasValue)
         {
-            var linkedPlatforms = await _unitOfWork.Platform.GetByGoogleAdsConnectionIdAsync(credentials.ConnectionId.Value);
+            var linkedPlatforms = await _unitOfWork.Platform.GetByOAuthConnectionIdAsync(credentials.ConnectionId.Value);
             foreach (var platform in linkedPlatforms)
             {
                 if (platform.PlatformType == PlatformType.GoogleAds &&
@@ -204,9 +201,8 @@ public class GoogleAdsService : IGoogleAdsService
             }
         }
 
-        // 5. Finalize display names and sort alphabetically by account name
+        // 5. Order alphabetically by account name
         var accounts = discoveredByCustomerId.Values
-            .Select(FinalizeDisplayProperties)
             .OrderBy(a => a.DescriptiveName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(a => a.CustomerId, StringComparer.Ordinal)
             .ToList();
@@ -236,7 +232,7 @@ public class GoogleAdsService : IGoogleAdsService
         if (request is null)
             throw new ArgumentNullException(nameof(request));
 
-        // 1. Validate Customer ID format
+        // 1. Validate Customer ID
         var normalizedCustomerId = NormalizeCustomerId(request.CustomerId);
         if (string.IsNullOrEmpty(normalizedCustomerId))
         {
@@ -245,7 +241,7 @@ public class GoogleAdsService : IGoogleAdsService
                 "A valid numeric Google Ads Customer ID is required.");
         }
 
-        // 2. Verify target Dashboard Client exists and the authenticated user is authorized to manage it
+        // 2. Validate client ownership / authorization
         var client = await _unitOfWork.Client.GetById(request.ClientId);
         if (client is null)
         {
@@ -266,7 +262,7 @@ public class GoogleAdsService : IGoogleAdsService
                 "You do not have permission to associate a Google Ads account with this Dashboard Client.");
         }
 
-        // 3. Ensure user has their own active GoogleAdsConnection
+        // 3. Ensure user has an active Google Ads connection
         var connection = await _unitOfWork.GoogleAdsConnection.GetByUserIdAsync(userId);
         if (connection is null || string.IsNullOrEmpty(connection.RefreshTokenEncrypted))
         {
@@ -275,7 +271,7 @@ public class GoogleAdsService : IGoogleAdsService
                 "No active Google Ads connection found for your user account. Please connect Google Ads first.");
         }
 
-        // 4. Validate account access against Google Ads API (only selectable Advertiser accounts from Direct or MCC access are returned)
+        // 4. Validate account accessibility via discovery
         var discovery = await DiscoverAccessibleAccountsAsync(userId, cancellationToken);
         if (!discovery.Success)
         {
@@ -287,17 +283,17 @@ public class GoogleAdsService : IGoogleAdsService
         var matchedAccount = discovery.Accounts
             .FirstOrDefault(a => string.Equals(a.CustomerId, normalizedCustomerId, StringComparison.Ordinal));
 
-        if (matchedAccount is null || matchedAccount.IsManager)
+        if (matchedAccount is null)
         {
             _logger.LogWarning(
-                "User {UserId} attempted to associate non-selectable or inaccessible Google Ads Customer ID {CustomerId} with Client {ClientId}.",
+                "User {UserId} attempted to associate inaccessible Google Ads Customer ID {CustomerId} with Client {ClientId}.",
                 userId, normalizedCustomerId, client.Id);
             return SelectGoogleAdsAccountResultDto.Fail(
                 GoogleOAuthErrorCodes.UnauthorizedCustomerAccount,
                 $"Google Ads account '{FormatCustomerId(normalizedCustomerId)}' is not an accessible advertiser account for your Google Ads connection.");
         }
 
-        // 5. Prevent linking the same Google Ads advertiser account to two different Dashboard Clients
+        // 5. Prevent linking the same account to multiple clients
         var existingByAccountId = await _unitOfWork.Platform.GetByExternalAccountIdAsync(
             PlatformType.GoogleAds,
             normalizedCustomerId);
@@ -310,10 +306,12 @@ public class GoogleAdsService : IGoogleAdsService
                 $"Google Ads account '{matchedAccount.FormattedCustomerId}' is already associated with '{otherClientName}'.");
         }
 
-        // 6. Resolve currency from the Google Ads account (fallback to Client's UnitCurrency)
-        var resolvedCurrency = MapCurrencyOrDefault(matchedAccount.CurrencyCode, client.UnitCurrency);
+        // 6. Resolve currency (fallback to client's UnitCurrency)
+        var currency = Enum.TryParse<Currency>(matchedAccount.CurrencyCode, ignoreCase: true, out var parsed)
+            ? parsed
+            : client.UnitCurrency;
 
-        // 7. Persist association on the Client's single GoogleAds Platform record
+        // 7. Persist association on the Client's Platform record
         var platform = await _unitOfWork.Platform.GetByClientAndTypeAsync(client.Id, PlatformType.GoogleAds);
         if (platform is null)
         {
@@ -321,26 +319,21 @@ public class GoogleAdsService : IGoogleAdsService
             {
                 ClientId = client.Id,
                 PlatformType = PlatformType.GoogleAds,
-                Status = PlatformStatus.Connected,
-                Currency = resolvedCurrency,
-                ExternalAccountId = matchedAccount.CustomerId,
-                AccountName = matchedAccount.DescriptiveName,
-                LoginCustomerId = matchedAccount.ManagerCustomerId,
-                GoogleAdsConnectionId = connection.Id,
                 CreatedAt = _timeProvider.GetUtcNow()
             };
             await _unitOfWork.Platform.Create(platform);
         }
         else
         {
-            platform.Status = PlatformStatus.Connected;
-            platform.Currency = resolvedCurrency;
-            platform.ExternalAccountId = matchedAccount.CustomerId;
-            platform.AccountName = matchedAccount.DescriptiveName;
-            platform.LoginCustomerId = matchedAccount.ManagerCustomerId;
-            platform.GoogleAdsConnectionId = connection.Id;
             _unitOfWork.Platform.Update(platform);
         }
+
+        platform.Status = PlatformStatus.Connected;
+        platform.Currency = currency;
+        platform.ExternalAccountId = matchedAccount.CustomerId;
+        platform.AccountName = matchedAccount.DescriptiveName;
+        platform.ManagerAccountId = matchedAccount.ManagerCustomerId;
+        platform.OAuthConnectionId = connection.Id;
 
         await _unitOfWork.Complete();
 
@@ -368,7 +361,60 @@ public class GoogleAdsService : IGoogleAdsService
         return SelectGoogleAdsAccountResultDto.Ok(associationDto);
     }
 
-    // ─── Protected virtual Google Ads SDK operations (testable in unit tests) ─────────
+    public async Task<DisconnectGoogleAdsClientResultDto> DisconnectClientAccountAsync(
+        string userId,
+        string? userRole,
+        int clientId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+            throw new ArgumentException("A Dashboard user ID is required.", nameof(userId));
+
+        var client = await _unitOfWork.Client.GetById(clientId);
+        if (client is null)
+        {
+            return DisconnectGoogleAdsClientResultDto.Fail(
+                clientId,
+                GoogleOAuthErrorCodes.ClientNotFound,
+                $"Dashboard Client with ID '{clientId}' was not found.");
+        }
+
+        bool isAdmin = string.Equals(userRole, Roles.Admin.ToString(), StringComparison.OrdinalIgnoreCase);
+        bool isOwnerManager = string.Equals(client.ManagerId, userId, StringComparison.Ordinal);
+        if (!isAdmin && !isOwnerManager)
+        {
+            _logger.LogWarning(
+                "User {UserId} attempted to disconnect Google Ads account from unauthorized Client {ClientId} (owned by {ManagerId}).",
+                userId, client.Id, client.ManagerId);
+            return DisconnectGoogleAdsClientResultDto.Fail(
+                clientId,
+                GoogleOAuthErrorCodes.UnauthorizedClient,
+                "You do not have permission to modify this Dashboard Client's platform connections.");
+        }
+
+        var platform = await _unitOfWork.Platform.GetByClientAndTypeAsync(client.Id, PlatformType.GoogleAds);
+        if (platform is not null)
+        {
+            platform.Status = PlatformStatus.NotConnected;
+            platform.ExternalAccountId = null;
+            platform.AccountName = null;
+            platform.ManagerAccountId = null;
+            platform.OAuthConnectionId = null;
+            _unitOfWork.Platform.Update(platform);
+            await _unitOfWork.Complete();
+        }
+
+        _logger.LogInformation(
+            "Disconnected Google Ads account association for Client {ClientId} by user {UserId} (user OAuth connection preserved).",
+            client.Id,
+            userId);
+
+        return DisconnectGoogleAdsClientResultDto.Ok(
+            client.Id,
+            $"Google Ads account disconnected from '{client.CompanyName}'.");
+    }
+
+    // ─── Protected virtual Google Ads SDK operations (mockable in unit tests) ─────────
 
     protected virtual Task<IReadOnlyList<string>> ListAccessibleCustomerResourceNamesAsync(
         string refreshToken,
@@ -406,23 +452,22 @@ public class GoogleAdsService : IGoogleAdsService
             if (string.IsNullOrEmpty(cid))
                 continue;
 
-            // Scenario 1 (Direct Access): level == 0 (cid == accessibleCustomerId) -> ManagerCustomerId is null.
-            // Scenario 2 (MCC Access): level == 1 (advertiser linked directly under accessibleCustomerId MCC) -> ManagerCustomerId is accessibleCustomerId.
-            string? managerCustomerId = cc.Level > 0 && !string.Equals(cid, accessibleCustomerId, StringComparison.Ordinal)
-                ? accessibleCustomerId
-                : null;
+            var formattedId = FormatCustomerId(cid);
+            var displayName = !string.IsNullOrWhiteSpace(cc.DescriptiveName)
+                ? cc.DescriptiveName
+                : $"Google Ads Account ({formattedId})";
 
             results.Add(new GoogleAdsCustomerAccountDto
             {
                 CustomerId = cid,
-                FormattedCustomerId = FormatCustomerId(cid),
-                DescriptiveName = cc.DescriptiveName ?? string.Empty,
+                FormattedCustomerId = formattedId,
+                DescriptiveName = displayName,
                 IsManager = false,
                 IsTestAccount = cc.TestAccount,
                 Status = cc.Status.ToString().ToUpperInvariant(),
                 CurrencyCode = string.IsNullOrWhiteSpace(cc.CurrencyCode) ? null : cc.CurrencyCode,
                 TimeZone = string.IsNullOrWhiteSpace(cc.TimeZone) ? null : cc.TimeZone,
-                ManagerCustomerId = managerCustomerId,
+                ManagerCustomerId = cc.Level > 0 ? accessibleCustomerId : null,
                 Level = cc.Level
             });
         }
@@ -458,57 +503,21 @@ public class GoogleAdsService : IGoogleAdsService
         return new GoogleAdsClient(config);
     }
 
-    private static void MergeDiscoveredAccount(
+    private static void AddOrUpdateDiscoveredAccount(
         Dictionary<string, GoogleAdsCustomerAccountDto> map,
         GoogleAdsCustomerAccountDto incoming)
     {
-        if (!map.TryGetValue(incoming.CustomerId, out var existing))
+        if (!map.TryGetValue(incoming.CustomerId, out var _))
         {
             map[incoming.CustomerId] = incoming;
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(existing.DescriptiveName) && !string.IsNullOrWhiteSpace(incoming.DescriptiveName))
-        {
-            existing.DescriptiveName = incoming.DescriptiveName;
-        }
-
-        if (incoming.IsTestAccount)
-        {
-            existing.IsTestAccount = true;
-        }
-
-        if (string.IsNullOrWhiteSpace(existing.CurrencyCode) && !string.IsNullOrWhiteSpace(incoming.CurrencyCode))
-        {
-            existing.CurrencyCode = incoming.CurrencyCode;
-        }
-
-        if (string.IsNullOrWhiteSpace(existing.TimeZone) && !string.IsNullOrWhiteSpace(incoming.TimeZone))
-        {
-            existing.TimeZone = incoming.TimeZone;
-        }
-
-        // If the account is directly accessible (Level == 0), prefer direct access (no login manager needed);
-        // otherwise preserve the first discovered MCC ManagerCustomerId.
+        // If discovered directly (level 0), prefer direct access over MCC access
         if (incoming.Level == 0)
         {
-            existing.Level = 0;
-            existing.ManagerCustomerId = null;
+            map[incoming.CustomerId] = incoming;
         }
-        else if (string.IsNullOrWhiteSpace(existing.ManagerCustomerId) && !string.IsNullOrWhiteSpace(incoming.ManagerCustomerId))
-        {
-            existing.ManagerCustomerId = incoming.ManagerCustomerId;
-        }
-    }
-
-    private static GoogleAdsCustomerAccountDto FinalizeDisplayProperties(GoogleAdsCustomerAccountDto dto)
-    {
-        dto.FormattedCustomerId = FormatCustomerId(dto.CustomerId);
-        if (string.IsNullOrWhiteSpace(dto.DescriptiveName))
-        {
-            dto.DescriptiveName = $"Google Ads Account ({dto.FormattedCustomerId})";
-        }
-        return dto;
     }
 
     public static string? NormalizeCustomerId(string? rawCustomerId)
@@ -516,37 +525,19 @@ public class GoogleAdsService : IGoogleAdsService
         if (string.IsNullOrWhiteSpace(rawCustomerId))
             return null;
 
-        var trimmed = rawCustomerId.Trim();
-        if (trimmed.StartsWith("customers/", StringComparison.OrdinalIgnoreCase))
-        {
-            trimmed = trimmed["customers/".Length..];
-        }
+        var input = rawCustomerId.Trim();
+        if (input.StartsWith("customers/", StringComparison.OrdinalIgnoreCase))
+            input = input[10..];
 
-        var digits = new string(trimmed.Where(c => c != '-' && !char.IsWhiteSpace(c)).ToArray());
-        if (string.IsNullOrEmpty(digits) || digits.Length > 15 || !digits.All(char.IsAsciiDigit))
-            return null;
-
-        return digits;
+        var digits = new string(input.Where(c => c is not ('-' or ' ')).ToArray());
+        return digits.Length is >= 1 and <= 15 && digits.All(char.IsAsciiDigit) ? digits : null;
     }
 
     public static string FormatCustomerId(string customerId)
     {
         var normalized = NormalizeCustomerId(customerId) ?? customerId;
-        if (normalized.Length == 10 && normalized.All(char.IsAsciiDigit))
-        {
-            return $"{normalized[..3]}-{normalized[3..6]}-{normalized[6..]}";
-        }
-        return normalized;
-    }
-
-    private static Currency MapCurrencyOrDefault(string? currencyCode, Currency fallback)
-    {
-        if (!string.IsNullOrWhiteSpace(currencyCode) &&
-            Enum.TryParse<Currency>(currencyCode.Trim(), ignoreCase: true, out var parsed))
-        {
-            return parsed;
-        }
-
-        return fallback;
+        return normalized.Length == 10
+            ? $"{normalized[..3]}-{normalized[3..6]}-{normalized[6..]}"
+            : normalized;
     }
 }

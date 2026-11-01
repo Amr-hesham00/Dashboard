@@ -1,4 +1,5 @@
 import { apiFetch } from './auth';
+import { invalidateClientsCache } from './clients';
 
 const API_BASE_URL = '/api';
 
@@ -82,6 +83,28 @@ export async function selectGoogleAdsAccountApi(clientId, customerId) {
     throw error;
   }
 
+  invalidateClientsCache();
+  return data;
+}
+
+/**
+ * Disconnects (deactivates) only the specified Dashboard Client's Google Ads account association,
+ * without revoking or deleting the user's Google OAuth connection or affecting other clients.
+ */
+export async function disconnectClientGoogleAdsApi(clientId) {
+  const response = await apiFetch(`${API_BASE_URL}/google-ads/clients/${Number(clientId)}/disconnect`, {
+    method: 'DELETE',
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || 'Failed to disconnect Google Ads account from client.');
+    error.status = response.status;
+    error.errorCode = data.errorCode;
+    throw error;
+  }
+
+  invalidateClientsCache();
   return data;
 }
 
@@ -100,5 +123,6 @@ export async function disconnectGoogleAdsApi() {
     throw error;
   }
 
+  invalidateClientsCache();
   return data;
 }

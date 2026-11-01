@@ -27,11 +27,11 @@ public class PlatformRepo : GenericRepo<Platform>, IPlatformRepo
                 p.Status == PlatformStatus.Connected);
     }
 
-    public async Task<List<Platform>> GetByGoogleAdsConnectionIdAsync(int googleAdsConnectionId)
+    public async Task<List<Platform>> GetByOAuthConnectionIdAsync(int oauthConnectionId)
     {
         return await dbset
             .Include(p => p.Client)
-            .Where(p => p.GoogleAdsConnectionId == googleAdsConnectionId)
+            .Where(p => p.OAuthConnectionId == oauthConnectionId)
             .ToListAsync();
     }
 }
