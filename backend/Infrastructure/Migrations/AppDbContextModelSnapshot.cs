@@ -440,7 +440,7 @@ namespace Dashboard.Infrastructure.Migrations
                     b.ToTable("ExchangeRates", (string)null);
                 });
 
-            modelBuilder.Entity("Dashboard.Domain.Entities.GoogleAdsConnection", b =>
+            modelBuilder.Entity("Dashboard.Domain.Entities.OAuthConnection", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -457,6 +457,10 @@ namespace Dashboard.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("PlatformType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("RefreshTokenEncrypted")
                         .IsRequired()
@@ -475,10 +479,10 @@ namespace Dashboard.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId")
+                    b.HasIndex("UserId", "PlatformType")
                         .IsUnique();
 
-                    b.ToTable("GoogleAdsConnections", (string)null);
+                    b.ToTable("OAuthConnections", (string)null);
                 });
 
             modelBuilder.Entity("Dashboard.Domain.Entities.Platform", b =>
@@ -957,7 +961,7 @@ namespace Dashboard.Infrastructure.Migrations
                     b.Navigation("Client");
                 });
 
-            modelBuilder.Entity("Dashboard.Domain.Entities.GoogleAdsConnection", b =>
+            modelBuilder.Entity("Dashboard.Domain.Entities.OAuthConnection", b =>
                 {
                     b.HasOne("Dashboard.Infrastructure.AppUser", "User")
                         .WithMany()
@@ -976,7 +980,7 @@ namespace Dashboard.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Dashboard.Domain.Entities.GoogleAdsConnection", "OAuthConnection")
+                    b.HasOne("Dashboard.Domain.Entities.OAuthConnection", "OAuthConnection")
                         .WithMany("Platforms")
                         .HasForeignKey("OAuthConnectionId")
                         .OnDelete(DeleteBehavior.SetNull);
@@ -1095,7 +1099,7 @@ namespace Dashboard.Infrastructure.Migrations
                     b.Navigation("Target");
                 });
 
-            modelBuilder.Entity("Dashboard.Domain.Entities.GoogleAdsConnection", b =>
+            modelBuilder.Entity("Dashboard.Domain.Entities.OAuthConnection", b =>
                 {
                     b.Navigation("Platforms");
                 });

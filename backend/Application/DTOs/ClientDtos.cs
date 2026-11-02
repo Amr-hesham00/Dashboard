@@ -58,8 +58,8 @@ public class ClientPlatformDTO
     public bool Connected { get; set; }
     public string? AccountId { get; set; }
     public string? AccountName { get; set; }
-    public string? LoginCustomerId { get; set; }
-    public int? GoogleAdsConnectionId { get; set; }
+    public string? ManagerAccountId { get; set; }
+    public int? OAuthConnectionId { get; set; }
 }
 
 public class AdminClientsDTO

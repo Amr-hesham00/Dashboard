@@ -61,7 +61,7 @@ public class GoogleOAuthService : IGoogleOAuthService
             throw new ArgumentException("A Dashboard user ID is required.", nameof(userId));
 
         // Prevent reconnecting if the user already has an active, valid connection
-        var existing = await _unitOfWork.GoogleAdsConnection.GetByUserIdAsync(userId);
+        var existing = await _unitOfWork.OAuthConnection.GetByUserAndPlatformAsync(userId, PlatformType.GoogleAds);
         if (existing is not null && !string.IsNullOrEmpty(existing.RefreshTokenEncrypted))
         {
             _logger.LogWarning("User {UserId} already has a valid Google Ads connection. Reconnecting is prevented.", userId);
@@ -125,7 +125,7 @@ public class GoogleOAuthService : IGoogleOAuthService
         var userId = pending.UserId; // identity comes only from the server-side transaction
 
         // Prevent reconnecting if user already has an active, valid connection
-        var existing = await _unitOfWork.GoogleAdsConnection.GetByUserIdAsync(userId);
+        var existing = await _unitOfWork.OAuthConnection.GetByUserAndPlatformAsync(userId, PlatformType.GoogleAds);
         if (existing is not null && !string.IsNullOrEmpty(existing.RefreshTokenEncrypted))
         {
             _logger.LogWarning("Google OAuth callback rejected: user {UserId} already has a valid connection.", userId);
@@ -171,7 +171,7 @@ public class GoogleOAuthService : IGoogleOAuthService
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("A Dashboard user ID is required.", nameof(userId));
 
-        var connection = await _unitOfWork.GoogleAdsConnection.GetByUserIdAsync(userId);
+        var connection = await _unitOfWork.OAuthConnection.GetByUserAndPlatformAsync(userId, PlatformType.GoogleAds);
         if (connection is null || string.IsNullOrEmpty(connection.RefreshTokenEncrypted))
         {
             return GoogleOAuthValidCredentialsResult.Fail(GoogleOAuthErrorCodes.NotConnected);
@@ -223,7 +223,7 @@ public class GoogleOAuthService : IGoogleOAuthService
             connection.RefreshTokenEncrypted = _tokenProtector.Protect(refreshToken);
         }
 
-        _unitOfWork.GoogleAdsConnection.Update(connection);
+        _unitOfWork.OAuthConnection.Update(connection);
         await _unitOfWork.Complete();
 
         _logger.LogInformation("Refreshed expired Google OAuth access token for user {UserId}.", userId);
@@ -240,7 +240,7 @@ public class GoogleOAuthService : IGoogleOAuthService
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("A Dashboard user ID is required.", nameof(userId));
 
-        var connection = await _unitOfWork.GoogleAdsConnection.GetByUserIdAsync(userId);
+        var connection = await _unitOfWork.OAuthConnection.GetByUserAndPlatformAsync(userId, PlatformType.GoogleAds);
         if (connection is null)
         {
             _logger.LogInformation("Google Ads disconnect requested for user {UserId}, but no active connection exists.", userId);
@@ -261,7 +261,7 @@ public class GoogleOAuthService : IGoogleOAuthService
             }
         }
 
-        _unitOfWork.GoogleAdsConnection.Delete(connection);
+        _unitOfWork.OAuthConnection.Delete(connection);
         await _unitOfWork.Complete();
 
         _logger.LogInformation("Google Ads connection disconnected and removed for user {UserId}.", userId);
@@ -330,7 +330,7 @@ public class GoogleOAuthService : IGoogleOAuthService
         }
     }
 
-    private async Task RevokeTokenBestEffortAsync(GoogleAdsConnection connection, string userId, CancellationToken cancellationToken)
+    private async Task RevokeTokenBestEffortAsync(OAuthConnection connection, string userId, CancellationToken cancellationToken)
     {
         string? tokenToRevoke = null;
         try
@@ -435,7 +435,7 @@ public class GoogleOAuthService : IGoogleOAuthService
     private async Task<GoogleOAuthCallbackResult> SaveConnectionAsync(string userId, GoogleTokenResponse tokens)
     {
         var now = _timeProvider.GetUtcNow();
-        var existing = await _unitOfWork.GoogleAdsConnection.GetByUserIdAsync(userId);
+        var existing = await _unitOfWork.OAuthConnection.GetByUserAndPlatformAsync(userId, PlatformType.GoogleAds);
         bool hasNewRefreshToken = !string.IsNullOrEmpty(tokens.RefreshToken);
 
         if (existing is null)
@@ -447,7 +447,7 @@ public class GoogleOAuthService : IGoogleOAuthService
                 return GoogleOAuthCallbackResult.Fail(GoogleOAuthErrorCodes.MissingRefreshToken);
             }
 
-            await _unitOfWork.GoogleAdsConnection.Create(new GoogleAdsConnection
+            await _unitOfWork.OAuthConnection.Create(new OAuthConnection
             {
                 UserId = userId,
                 AccessTokenEncrypted = _tokenProtector.Protect(tokens.AccessToken!),
@@ -469,7 +469,7 @@ public class GoogleOAuthService : IGoogleOAuthService
             if (hasNewRefreshToken)
                 existing.RefreshTokenEncrypted = _tokenProtector.Protect(tokens.RefreshToken!);
 
-            _unitOfWork.GoogleAdsConnection.Update(existing);
+            _unitOfWork.OAuthConnection.Update(existing);
         }
 
         await _unitOfWork.Complete();

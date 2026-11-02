@@ -105,6 +105,7 @@ public static class GoogleOAuthErrorCodes
     public const string ClientNotFound = "client_not_found";
     public const string UnauthorizedClient = "unauthorized_client";
     public const string CustomerAlreadyLinked = "customer_already_linked";
+    public const string UnsupportedCustomerCurrency = "unsupported_customer_currency";
 
     private static readonly HashSet<string> GoogleErrors = new(StringComparer.Ordinal)
     {
@@ -134,23 +135,11 @@ public class GoogleAdsCustomerAccountDto
     /// <summary>True if this is a Google Ads Manager (MCC) account; false if it is an Advertiser account.</summary>
     public bool IsManager { get; set; }
 
-    /// <summary>Account type label ("Manager" or "Advertiser").</summary>
-    public string AccountType => IsManager ? "Manager" : "Advertiser";
-
     /// <summary>True only when the account is an Advertiser account that can be selected for a Dashboard Client.</summary>
     public bool CanSelect => !IsManager;
 
-    /// <summary>True if this is a Google Ads test account.</summary>
-    public bool IsTestAccount { get; set; }
-
-    /// <summary>Google Ads account status (e.g. "ENABLED", "CLOSED", "SUSPENDED", "CANCELED").</summary>
-    public string Status { get; set; } = "UNKNOWN";
-
     /// <summary>ISO 4217 currency code of the account (e.g. "USD", "EGP", "EUR").</summary>
     public string? CurrencyCode { get; set; }
-
-    /// <summary>Time zone of the account (e.g. "Africa/Cairo", "America/New_York").</summary>
-    public string? TimeZone { get; set; }
 
     /// <summary>
     /// If discovered underneath a Manager (MCC) account, the Manager Customer ID used as login-customer-id.
@@ -175,9 +164,6 @@ public class GoogleAdsDiscoveryResultDto
     public bool Connected { get; set; }
     public string? ErrorCode { get; set; }
     public string? Message { get; set; }
-    public int TotalAccounts => Accounts.Count;
-    public int AdvertiserAccountsCount => Accounts.Count(a => !a.IsManager);
-    public int ManagerAccountsCount => Accounts.Count(a => a.IsManager);
     public List<GoogleAdsCustomerAccountDto> Accounts { get; set; } = new();
 }
 

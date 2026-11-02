@@ -16,8 +16,8 @@ public class PlatformDTO
 
     public string? ExternalAccountId { get; set; }
     public string? AccountName { get; set; }
-    public string? LoginCustomerId { get; set; }
-    public int? GoogleAdsConnectionId { get; set; }
+    public string? ManagerAccountId { get; set; }
+    public int? OAuthConnectionId { get; set; }
 
     // Calculated Performance Metrics (Backend)
     public decimal Spend { get; set; }

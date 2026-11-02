@@ -74,8 +74,8 @@ public class ClientService : IClientService
                     Connected = isPlatformConnected,
                     AccountId = platform.ExternalAccountId,
                     AccountName = platform.AccountName,
-                    LoginCustomerId = platform.ManagerAccountId,
-                    GoogleAdsConnectionId = platform.OAuthConnectionId
+                    ManagerAccountId = platform.ManagerAccountId,
+                    OAuthConnectionId = platform.OAuthConnectionId
                 });
 
                 if (platform.Campaigns == null) continue;
@@ -353,8 +353,8 @@ public class ClientService : IClientService
                         Connected = isPlatformConnected,
                         AccountId = platform.ExternalAccountId,
                         AccountName = platform.AccountName,
-                        LoginCustomerId = platform.ManagerAccountId,
-                        GoogleAdsConnectionId = platform.OAuthConnectionId
+                        ManagerAccountId = platform.ManagerAccountId,
+                        OAuthConnectionId = platform.OAuthConnectionId
                     });
 
                     if (platform.Campaigns == null) continue;

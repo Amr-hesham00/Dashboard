@@ -35,7 +35,6 @@ public class AdController : ControllerBase
         return Ok(ads);
     }
 
-
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -47,8 +46,6 @@ public class AdController : ControllerBase
         return Ok(ad);
     }
 
-
-    [HttpGet("AdSets/{adSetId:int}")]
     [HttpGet("adset/{adSetId:int}")]
     public async Task<IActionResult> GetByAdSet(int adSetId, [FromQuery] DateOnly start, [FromQuery] DateOnly end)
     {
@@ -74,6 +71,4 @@ public class AdController : ControllerBase
         }
         return Ok(ads);
     }
-
-
 }

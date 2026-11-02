@@ -116,7 +116,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
 
         var clientRepo = new ClientRepo(dbContext);
         var platformRepo = new PlatformRepo(dbContext);
-        var connRepo = new GoogleAdsConnectionRepo(dbContext);
+        var connRepo = new OAuthConnectionRepo(dbContext);
 
         var uow = new UnitOfWork(
             dbContext,
@@ -168,10 +168,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
                         FormattedCustomerId = "367-464-3588",
                         DescriptiveName = "Google Ads Manager (367-464-3588)",
                         IsManager = true,
-                        IsTestAccount = true,
-                        Status = "CLOSED",
                         CurrencyCode = "EGP",
-                        TimeZone = "Africa/Cairo",
                         ManagerCustomerId = "3674643588",
                         Level = 0
                     },
@@ -181,10 +178,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
                         FormattedCustomerId = "175-756-4917",
                         DescriptiveName = "Alshiaka test client acc",
                         IsManager = false,
-                        IsTestAccount = true,
-                        Status = "CLOSED",
                         CurrencyCode = "EGP",
-                        TimeZone = "Africa/Cairo",
                         ManagerCustomerId = "3674643588",
                         Level = 1
                     },
@@ -194,10 +188,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
                         FormattedCustomerId = "975-053-0064",
                         DescriptiveName = "Elzero Test client acc",
                         IsManager = false,
-                        IsTestAccount = true,
-                        Status = "CLOSED",
                         CurrencyCode = "EGP",
-                        TimeZone = "Africa/Cairo",
                         ManagerCustomerId = "3674643588",
                         Level = 1
                     }
@@ -211,10 +202,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
                         FormattedCustomerId = "175-756-4917",
                         DescriptiveName = "Alshiaka test client acc",
                         IsManager = false,
-                        IsTestAccount = true,
-                        Status = "CLOSED",
                         CurrencyCode = "EGP",
-                        TimeZone = "Africa/Cairo",
                         ManagerCustomerId = "3674643588",
                         Level = 1
                     }
@@ -227,10 +215,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
                         FormattedCustomerId = "111-222-3334",
                         DescriptiveName = "Direct Advertiser Account",
                         IsManager = false,
-                        IsTestAccount = false,
-                        Status = "ENABLED",
                         CurrencyCode = "USD",
-                        TimeZone = "America/New_York",
                         ManagerCustomerId = null,
                         Level = 0
                     }
@@ -251,7 +236,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
         return (oauthService, adsService, dbContext, uow);
     }
 
-    private async Task<GoogleAdsConnection> SeedConnectedUserAsync(
+    private async Task<OAuthConnection> SeedConnectedUserAsync(
         AppDbContext db,
         string userId,
         string accessToken = "ya29.valid_access_token",
@@ -259,9 +244,10 @@ public class GoogleAdsDiscoveryAndSelectionTests
         DateTimeOffset? expiresAt = null)
     {
         var protector = _dataProtectionProvider.CreateProtector("Dashboard.GoogleOAuth.Tokens.v1");
-        var conn = new GoogleAdsConnection
+        var conn = new OAuthConnection
         {
             UserId = userId,
+            PlatformType = PlatformType.GoogleAds,
             AccessTokenEncrypted = protector.Protect(accessToken),
             RefreshTokenEncrypted = protector.Protect(refreshToken),
             AccessTokenExpiresAt = expiresAt ?? _timeProvider.GetUtcNow().AddHours(1),
@@ -269,7 +255,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
             CreatedAt = _timeProvider.GetUtcNow(),
             UpdatedAt = _timeProvider.GetUtcNow()
         };
-        db.GoogleAdsConnections.Add(conn);
+        db.OAuthConnections.Add(conn);
         await db.SaveChangesAsync();
         return conn;
     }
@@ -351,7 +337,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
         Assert.Equal("175-756-4917", alshiakaAdv.FormattedCustomerId);
         Assert.Equal("Alshiaka test client acc", alshiakaAdv.DescriptiveName);
         Assert.Equal("3674643588", alshiakaAdv.ManagerCustomerId);
-        Assert.True(alshiakaAdv.IsTestAccount);
 
         var elzeroAdv = Assert.Single(result.Accounts, a => a.CustomerId == "9750530064");
         Assert.Equal("975-053-0064", elzeroAdv.FormattedCustomerId);
@@ -430,7 +415,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
 
         // Assert
         Assert.True(discovery.Success);
-        var updatedConn = await db.GoogleAdsConnections.SingleAsync(c => c.UserId == UserA);
+        var updatedConn = await db.OAuthConnections.SingleAsync(c => c.UserId == UserA);
         var protector = _dataProtectionProvider.CreateProtector("Dashboard.GoogleOAuth.Tokens.v1");
         Assert.Equal("ya29.refreshed_fresh_token_999", protector.Unprotect(updatedConn.AccessTokenEncrypted));
         Assert.Equal(_timeProvider.GetUtcNow().AddSeconds(3600), updatedConn.AccessTokenExpiresAt);
@@ -449,7 +434,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
         // Act: Select child advertiser 175-756-4917
         var result = await adsService.AssociateAccountWithClientAsync(
             UserA,
-            Roles.Manager.ToString(),
             new SelectGoogleAdsAccountRequestDto
             {
                 ClientId = client.Id,
@@ -491,11 +475,9 @@ public class GoogleAdsDiscoveryAndSelectionTests
         // Associate Client A with 1757564917 and Client B with 9750530064 using the same user OAuth connection
         var assocA = await adsService.AssociateAccountWithClientAsync(
             UserA,
-            Roles.Manager.ToString(),
             new SelectGoogleAdsAccountRequestDto { ClientId = clientA.Id, CustomerId = "1757564917" });
         var assocB = await adsService.AssociateAccountWithClientAsync(
             UserA,
-            Roles.Manager.ToString(),
             new SelectGoogleAdsAccountRequestDto { ClientId = clientB.Id, CustomerId = "9750530064" });
 
         Assert.True(assocA.Success);
@@ -504,7 +486,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
         // Act: Disconnect Google Ads from Client A ONLY
         var disconnectResult = await adsService.DisconnectClientAccountAsync(
             UserA,
-            Roles.Manager.ToString(),
             clientA.Id);
 
         // Assert:
@@ -518,7 +499,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
         Assert.Null(platformA.OAuthConnectionId);
 
         // 2. UserA's Google OAuth connection and stored tokens remain intact
-        var storedConn = await db.GoogleAdsConnections.SingleOrDefaultAsync(c => c.UserId == UserA);
+        var storedConn = await db.OAuthConnections.SingleOrDefaultAsync(c => c.UserId == UserA);
         Assert.NotNull(storedConn);
         Assert.Equal(conn.Id, storedConn!.Id);
         Assert.NotEmpty(storedConn.RefreshTokenEncrypted);
@@ -551,7 +532,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
         // Act: Attempt to select MCC Manager account 3674643588
         var result = await adsService.AssociateAccountWithClientAsync(
             UserA,
-            Roles.Manager.ToString(),
             new SelectGoogleAdsAccountRequestDto
             {
                 ClientId = client.Id,
@@ -578,7 +558,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
         // Act
         var result = await adsService.AssociateAccountWithClientAsync(
             UserA,
-            Roles.Manager.ToString(),
             new SelectGoogleAdsAccountRequestDto
             {
                 ClientId = client.Id,
@@ -613,7 +592,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
 
         var userBAttemptOnOwnClient = await adsService.AssociateAccountWithClientAsync(
             UserB,
-            Roles.Manager.ToString(),
             new SelectGoogleAdsAccountRequestDto
             {
                 ClientId = clientOwnedByB.Id,
@@ -625,7 +603,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
         await SeedConnectedUserAsync(db, UserB);
         var userBAttemptOnUserAClient = await adsService.AssociateAccountWithClientAsync(
             UserB,
-            Roles.Manager.ToString(),
             new SelectGoogleAdsAccountRequestDto
             {
                 ClientId = clientOwnedByA.Id,
@@ -636,7 +613,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
 
         var userAAttemptOnUserBClient = await adsService.AssociateAccountWithClientAsync(
             UserA,
-            Roles.Manager.ToString(),
             new SelectGoogleAdsAccountRequestDto
             {
                 ClientId = clientOwnedByB.Id,
@@ -722,8 +698,8 @@ public class GoogleAdsDiscoveryAndSelectionTests
             .Options;
 
         await using var db = new AppDbContext(dbOptions);
-        var activeConnection = await db.GoogleAdsConnections.AsNoTracking().FirstOrDefaultAsync();
-        if (activeConnection is null)
+        var activeConnection = await db.OAuthConnections.AsNoTracking().FirstOrDefaultAsync();
+        if (activeConnection is null || string.IsNullOrWhiteSpace(config["GoogleOAuth:ClientId"]) || string.IsNullOrWhiteSpace(config["GoogleOAuth:ClientSecret"]))
             return;
 
         var appDiscriminator = apiDir.EndsWith(Path.DirectorySeparatorChar)
@@ -751,7 +727,7 @@ public class GoogleAdsDiscoveryAndSelectionTests
             new AdDailyMetricsRepo(db),
             new SearchTermRepo(db),
             new ExchangeRateRepo(db),
-            new GoogleAdsConnectionRepo(db));
+            new OAuthConnectionRepo(db));
 
         using var httpClient = new HttpClient();
         var oauthService = new GoogleOAuthService(
@@ -829,7 +805,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
             // MCC Manager account ID must be rejected
             var managerReject = await liveAdsService.AssociateAccountWithClientAsync(
                 activeConnection.UserId,
-                Roles.Manager.ToString(),
                 new SelectGoogleAdsAccountRequestDto
                 {
                     ClientId = client1.Id,
@@ -841,7 +816,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
             // Associate Client 1 with 1757564917 and Client 2 with 9750530064 using the same user's OAuth connection
             var selectClient1 = await liveAdsService.AssociateAccountWithClientAsync(
                 activeConnection.UserId,
-                Roles.Manager.ToString(),
                 new SelectGoogleAdsAccountRequestDto
                 {
                     ClientId = client1.Id,
@@ -852,7 +826,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
 
             var selectClient2 = await liveAdsService.AssociateAccountWithClientAsync(
                 activeConnection.UserId,
-                Roles.Manager.ToString(),
                 new SelectGoogleAdsAccountRequestDto
                 {
                     ClientId = client2.Id,
@@ -864,7 +837,6 @@ public class GoogleAdsDiscoveryAndSelectionTests
             // Disconnect Client 1 ONLY -> verify Client 2 and user OAuth connection remain untouched
             var disconnectClient1 = await liveAdsService.DisconnectClientAccountAsync(
                 activeConnection.UserId,
-                Roles.Manager.ToString(),
                 client1.Id);
             Assert.True(disconnectClient1.Success);
 

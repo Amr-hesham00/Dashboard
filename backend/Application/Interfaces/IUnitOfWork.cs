@@ -18,7 +18,7 @@ public interface IUnitOfWork : IDisposable
     IAdDailyMetricsRepo AdDailyMetrics { get; }
     ISearchTermRepo SearchTerm { get; }
     IExchangeRateRepo ExchangeRate { get; }
-    IGoogleAdsConnectionRepo GoogleAdsConnection { get; }
+    IOAuthConnectionRepo OAuthConnection { get; }
 
     Task Complete();
 }

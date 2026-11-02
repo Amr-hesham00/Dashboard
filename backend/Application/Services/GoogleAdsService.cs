@@ -27,10 +27,7 @@ public class GoogleAdsService : IGoogleAdsService
             customer_client.descriptive_name,
             customer_client.manager,
             customer_client.level,
-            customer_client.status,
-            customer_client.currency_code,
-            customer_client.time_zone,
-            customer_client.test_account
+            customer_client.currency_code
         FROM customer_client
         WHERE customer_client.level <= 1
           AND customer_client.manager = FALSE";
@@ -62,7 +59,7 @@ public class GoogleAdsService : IGoogleAdsService
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("A Dashboard user ID is required.", nameof(userId));
 
-        var connection = await _unitOfWork.GoogleAdsConnection.GetByUserIdAsync(userId);
+        var connection = await _unitOfWork.OAuthConnection.GetByUserIdAsync(userId, PlatformType.GoogleAds);
         if (connection is null || string.IsNullOrEmpty(connection.RefreshTokenEncrypted))
         {
             return new GoogleAdsConnectionStatusDto { Connected = false };
@@ -222,7 +219,6 @@ public class GoogleAdsService : IGoogleAdsService
 
     public async Task<SelectGoogleAdsAccountResultDto> AssociateAccountWithClientAsync(
         string userId,
-        string? userRole,
         SelectGoogleAdsAccountRequestDto request,
         CancellationToken cancellationToken = default)
     {
@@ -250,9 +246,7 @@ public class GoogleAdsService : IGoogleAdsService
                 $"Dashboard Client with ID '{request.ClientId}' was not found.");
         }
 
-        bool isAdmin = string.Equals(userRole, Roles.Admin.ToString(), StringComparison.OrdinalIgnoreCase);
-        bool isOwnerManager = string.Equals(client.ManagerId, userId, StringComparison.Ordinal);
-        if (!isAdmin && !isOwnerManager)
+        if (!string.Equals(client.ManagerId, userId, StringComparison.Ordinal))
         {
             _logger.LogWarning(
                 "User {UserId} attempted to associate a Google Ads account with unauthorized Client {ClientId} (owned by {ManagerId}).",
@@ -263,7 +257,7 @@ public class GoogleAdsService : IGoogleAdsService
         }
 
         // 3. Ensure user has an active Google Ads connection
-        var connection = await _unitOfWork.GoogleAdsConnection.GetByUserIdAsync(userId);
+        var connection = await _unitOfWork.OAuthConnection.GetByUserIdAsync(userId, PlatformType.GoogleAds);
         if (connection is null || string.IsNullOrEmpty(connection.RefreshTokenEncrypted))
         {
             return SelectGoogleAdsAccountResultDto.Fail(
@@ -306,10 +300,19 @@ public class GoogleAdsService : IGoogleAdsService
                 $"Google Ads account '{matchedAccount.FormattedCustomerId}' is already associated with '{otherClientName}'.");
         }
 
-        // 6. Resolve currency (fallback to client's UnitCurrency)
-        var currency = Enum.TryParse<Currency>(matchedAccount.CurrencyCode, ignoreCase: true, out var parsed)
-            ? parsed
-            : client.UnitCurrency;
+        // 6. Validate currency is supported by our system
+        if (!Enum.TryParse<Currency>(matchedAccount.CurrencyCode, ignoreCase: true, out var currency))
+        {
+            _logger.LogWarning(
+                "Cannot connect Google Ads account '{CustomerId}' with client '{CompanyName}' due to unsupported currency '{CurrencyCode}'.",
+                matchedAccount.CustomerId,
+                client.CompanyName,
+                matchedAccount.CurrencyCode);
+
+            return SelectGoogleAdsAccountResultDto.Fail(
+                GoogleOAuthErrorCodes.UnsupportedCustomerCurrency,
+                $"Google Ads account '{matchedAccount.FormattedCustomerId}' has an unsupported currency '{matchedAccount.CurrencyCode}'.");
+        }
 
         // 7. Persist association on the Client's Platform record
         var platform = await _unitOfWork.Platform.GetByClientAndTypeAsync(client.Id, PlatformType.GoogleAds);
@@ -363,7 +366,6 @@ public class GoogleAdsService : IGoogleAdsService
 
     public async Task<DisconnectGoogleAdsClientResultDto> DisconnectClientAccountAsync(
         string userId,
-        string? userRole,
         int clientId,
         CancellationToken cancellationToken = default)
     {
@@ -379,9 +381,7 @@ public class GoogleAdsService : IGoogleAdsService
                 $"Dashboard Client with ID '{clientId}' was not found.");
         }
 
-        bool isAdmin = string.Equals(userRole, Roles.Admin.ToString(), StringComparison.OrdinalIgnoreCase);
-        bool isOwnerManager = string.Equals(client.ManagerId, userId, StringComparison.Ordinal);
-        if (!isAdmin && !isOwnerManager)
+        if (!string.Equals(client.ManagerId, userId, StringComparison.Ordinal))
         {
             _logger.LogWarning(
                 "User {UserId} attempted to disconnect Google Ads account from unauthorized Client {ClientId} (owned by {ManagerId}).",
@@ -463,10 +463,7 @@ public class GoogleAdsService : IGoogleAdsService
                 FormattedCustomerId = formattedId,
                 DescriptiveName = displayName,
                 IsManager = false,
-                IsTestAccount = cc.TestAccount,
-                Status = cc.Status.ToString().ToUpperInvariant(),
                 CurrencyCode = string.IsNullOrWhiteSpace(cc.CurrencyCode) ? null : cc.CurrencyCode,
-                TimeZone = string.IsNullOrWhiteSpace(cc.TimeZone) ? null : cc.TimeZone,
                 ManagerCustomerId = cc.Level > 0 ? accessibleCustomerId : null,
                 Level = cc.Level
             });

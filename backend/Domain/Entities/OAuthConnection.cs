@@ -1,18 +1,21 @@
+using Dashboard.Domain.Enums;
 using Dashboard.Infrastructure;
 
 namespace Dashboard.Domain.Entities;
 
 /// <summary>
-/// Google OAuth credentials granted by a Dashboard user for future Google Ads API access.
-/// One connection per Dashboard user. Token values are stored encrypted (ASP.NET Core Data Protection).
+/// Platform-agnostic OAuth credentials granted by a Dashboard user (e.g. Google Ads, Meta Ads, TikTok Ads, Snapchat Ads).
+/// Stored per Dashboard user and PlatformType. Token values are stored encrypted (ASP.NET Core Data Protection).
 /// </summary>
-public class GoogleAdsConnection
+public class OAuthConnection
 {
     public int Id { get; set; }
 
     public string UserId { get; set; } = null!;
 
     public AppUser User { get; set; } = null!;
+
+    public PlatformType PlatformType { get; set; } = PlatformType.GoogleAds;
 
     public string AccessTokenEncrypted { get; set; } = null!;
 

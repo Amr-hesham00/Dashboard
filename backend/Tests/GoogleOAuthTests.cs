@@ -78,7 +78,7 @@ public class GoogleOAuthTests
 
         var dbContext = new AppDbContext(dbOptions);
 
-        var connRepo = new GoogleAdsConnectionRepo(dbContext);
+        var connRepo = new OAuthConnectionRepo(dbContext);
         var uow = new UnitOfWork(
             dbContext,
             Mock.Of<Dashboard.Application.Interfaces.Repositories.IAdRepo>(),
@@ -307,7 +307,7 @@ public class GoogleOAuthTests
         Assert.Null(result.ErrorCode);
 
         // Verify stored entity in DB
-        var storedConnection = await dbContext.GoogleAdsConnections
+        var storedConnection = await dbContext.OAuthConnections
             .FirstOrDefaultAsync(c => c.UserId == TestUserId);
 
         Assert.NotNull(storedConnection);
@@ -362,7 +362,7 @@ public class GoogleOAuthTests
         Assert.False(result.Success);
         Assert.Equal(GoogleOAuthErrorCodes.MissingRefreshToken, result.ErrorCode);
 
-        var stored = await dbContext.GoogleAdsConnections.FirstOrDefaultAsync(c => c.UserId == TestUserId);
+        var stored = await dbContext.OAuthConnections.FirstOrDefaultAsync(c => c.UserId == TestUserId);
         Assert.Null(stored); // Nothing persisted
     }
 
@@ -374,7 +374,7 @@ public class GoogleOAuthTests
         var (service, dbContext, _) = CreateService(handler.Object);
 
         var protector = _dataProtectionProvider.CreateProtector("Dashboard.GoogleOAuth.Tokens.v1");
-        await dbContext.GoogleAdsConnections.AddAsync(new GoogleAdsConnection
+        await dbContext.OAuthConnections.AddAsync(new OAuthConnection
         {
             UserId = TestUserId,
             AccessTokenEncrypted = protector.Protect("ya29.current_access_token"),
@@ -406,7 +406,7 @@ public class GoogleOAuthTests
         var (service, dbContext, _) = CreateService(handler.Object);
 
         var protector = _dataProtectionProvider.CreateProtector("Dashboard.GoogleOAuth.Tokens.v1");
-        await dbContext.GoogleAdsConnections.AddAsync(new GoogleAdsConnection
+        await dbContext.OAuthConnections.AddAsync(new OAuthConnection
         {
             UserId = TestUserId,
             AccessTokenEncrypted = protector.Protect("ya29.current_token"),
@@ -450,7 +450,7 @@ public class GoogleOAuthTests
         var (service, dbContext, _) = CreateService(handler.Object);
 
         var protector = _dataProtectionProvider.CreateProtector("Dashboard.GoogleOAuth.Tokens.v1");
-        await dbContext.GoogleAdsConnections.AddAsync(new GoogleAdsConnection
+        await dbContext.OAuthConnections.AddAsync(new OAuthConnection
         {
             UserId = TestUserId,
             AccessTokenEncrypted = protector.Protect("ya29.current_token"),
@@ -535,7 +535,7 @@ public class GoogleOAuthTests
         var (service, dbContext, _) = CreateService(revokeHandler.Object);
 
         var protector = _dataProtectionProvider.CreateProtector("Dashboard.GoogleOAuth.Tokens.v1");
-        await dbContext.GoogleAdsConnections.AddAsync(new GoogleAdsConnection
+        await dbContext.OAuthConnections.AddAsync(new OAuthConnection
         {
             UserId = TestUserId,
             AccessTokenEncrypted = protector.Protect("ya29.access_to_revoke"),
@@ -553,7 +553,7 @@ public class GoogleOAuthTests
         // Assert
         Assert.True(disconnected);
 
-        var remaining = await dbContext.GoogleAdsConnections.FirstOrDefaultAsync(c => c.UserId == TestUserId);
+        var remaining = await dbContext.OAuthConnections.FirstOrDefaultAsync(c => c.UserId == TestUserId);
         Assert.Null(remaining);
 
         revokeHandler.Protected().Verify(
@@ -594,7 +594,7 @@ public class GoogleOAuthTests
         var (service, dbContext, _) = CreateService(revokeHandler.Object);
 
         var protector = _dataProtectionProvider.CreateProtector("Dashboard.GoogleOAuth.Tokens.v1");
-        await dbContext.GoogleAdsConnections.AddAsync(new GoogleAdsConnection
+        await dbContext.OAuthConnections.AddAsync(new OAuthConnection
         {
             UserId = TestUserId,
             AccessTokenEncrypted = protector.Protect("ya29.access_token"),
@@ -625,7 +625,7 @@ public class GoogleOAuthTests
 
         // Assert
         Assert.IsType<OkObjectResult>(actionResult);
-        Assert.Null(await dbContext.GoogleAdsConnections.FirstOrDefaultAsync(c => c.UserId == TestUserId));
+        Assert.Null(await dbContext.OAuthConnections.FirstOrDefaultAsync(c => c.UserId == TestUserId));
     }
 
     [Fact]

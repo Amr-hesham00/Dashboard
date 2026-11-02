@@ -10,8 +10,6 @@ public class AppDbContext : IdentityDbContext
 
     }
 
-
-    //public DbSet<AppUser> appuser { get; set; }
     public DbSet<Ad> ad { get; set; }
     public DbSet<AdSet> adset { get; set; }
     public DbSet<AssociateProfile> associateprofile { get; set; }
@@ -25,23 +23,11 @@ public class AppDbContext : IdentityDbContext
     public DbSet<AdDailyMetrics> AdDailyMetrics { get; set; }
     public DbSet<SearchTerm> SearchTerms { get; set; }
     public DbSet<ExchangeRate> ExchangeRates { get; set; }
-    public DbSet<GoogleAdsConnection> GoogleAdsConnections { get; set; }
+    public DbSet<OAuthConnection> OAuthConnections { get; set; }
 
-    //protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    //{
-    //    base.OnConfiguring(optionsBuilder);
-    //    var config = new ConfigurationBuilder().AddJsonFile("appsettings.json").Build();
-
-    //    var constr = config.GetSection("connectionstring").Value;
-
-    //    optionsBuilder.UseSqlServer(constr);
-
-    //}
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
-
-
     }
 }

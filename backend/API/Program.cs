@@ -33,7 +33,7 @@ builder.Services.AddScoped<IClientTargetRepo, ClientTargetRepo>();
 builder.Services.AddScoped<IAdDailyMetricsRepo, AdDailyMetricsRepo>();
 builder.Services.AddScoped<ISearchTermRepo, SearchTermRepo>();
 builder.Services.AddScoped<IExchangeRateRepo, ExchangeRateRepo>();
-builder.Services.AddScoped<IGoogleAdsConnectionRepo, GoogleAdsConnectionRepo>();
+builder.Services.AddScoped<IOAuthConnectionRepo, OAuthConnectionRepo>();
 #endregion
 //-----------------------------------Services------------------------------------
 #region Services

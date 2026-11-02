@@ -91,8 +91,8 @@ public class PlatformService : IPlatformService
             ClientId = platform.ClientId,
             ExternalAccountId = platform.ExternalAccountId,
             AccountName = platform.AccountName,
-            LoginCustomerId = platform.ManagerAccountId,
-            GoogleAdsConnectionId = platform.OAuthConnectionId,
+            ManagerAccountId = platform.ManagerAccountId,
+            OAuthConnectionId = platform.OAuthConnectionId,
             CampaignsCount = pCampaigns.Count
         };
     }

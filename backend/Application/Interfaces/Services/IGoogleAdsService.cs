@@ -3,15 +3,14 @@ using Dashboard.Application.DTOs;
 namespace Dashboard.Application.Interfaces.Services;
 
 /// <summary>
-/// Discovers Google Ads customer accounts (including Manager/MCC hierarchies) using the
-/// authenticated user's stored OAuth credentials and associates selected Advertiser accounts
-/// with Dashboard Clients.
+/// Service interface for discovering accessible Google Ads customer accounts
+/// and linking selected advertiser accounts to Dashboard Clients.
 /// </summary>
 public interface IGoogleAdsService
 {
     /// <summary>
-    /// Returns the authenticated user's Google OAuth connection status and any currently linked
-    /// Dashboard Client Google Ads accounts.
+    /// Returns the authenticated user's Google Ads OAuth connection status
+    /// and the list of currently linked Dashboard client accounts.
     /// </summary>
     Task<GoogleAdsConnectionStatusDto> GetConnectionStatusAsync(
         string userId,
@@ -31,7 +30,6 @@ public interface IGoogleAdsService
     /// </summary>
     Task<SelectGoogleAdsAccountResultDto> AssociateAccountWithClientAsync(
         string userId,
-        string? userRole,
         SelectGoogleAdsAccountRequestDto request,
         CancellationToken cancellationToken = default);
 
@@ -41,7 +39,6 @@ public interface IGoogleAdsService
     /// </summary>
     Task<DisconnectGoogleAdsClientResultDto> DisconnectClientAccountAsync(
         string userId,
-        string? userRole,
         int clientId,
         CancellationToken cancellationToken = default);
 }

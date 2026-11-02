@@ -2,7 +2,6 @@ using Dashboard.Application.DTOs;
 using Dashboard.Application.Interfaces.Services;
 using Dashboard.Application.Services;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
@@ -99,6 +98,8 @@ public class GoogleAdsController : ControllerBase
         return Redirect($"{clientsRedirectUrl}?googleAuth=error&errorCode={safeCode}&message={errorMsg}");
     }
 
+
+    //------------------------------------------------------------------ 
     /// <summary>
     /// Returns the authenticated user's Google Ads OAuth connection status and linked client accounts.
     /// </summary>
@@ -119,6 +120,8 @@ public class GoogleAdsController : ControllerBase
         var status = await _googleAdsService.GetConnectionStatusAsync(userId, cancellationToken);
         return Ok(status);
     }
+
+    //------------------------------------------------------------------ 
 
     /// <summary>
     /// Discovers all Google Ads accounts accessible to the authenticated user's stored Google OAuth connection.
@@ -155,19 +158,19 @@ public class GoogleAdsController : ControllerBase
         return Ok(result);
     }
 
+    //------------------------------------------------------------------ 
+
     /// <summary>
     /// Associates a selected Google Ads Advertiser account with an existing Dashboard Client.
     /// Validates both Client ownership and Google Ads account accessibility on the backend,
     /// and prevents selecting a Manager (MCC) account as an advertising client.
     /// </summary>
     [HttpPost("accounts/select")]
-    [HttpPost("select-account")]
     public async Task<IActionResult> SelectAccount(
         [FromBody] SelectGoogleAdsAccountRequestDto request,
         CancellationToken cancellationToken = default)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var userRole = User.FindFirstValue(ClaimTypes.Role);
         if (string.IsNullOrEmpty(userId))
         {
             return Unauthorized(new { message = "User identity not found in token." });
@@ -185,7 +188,6 @@ public class GoogleAdsController : ControllerBase
 
         var result = await _googleAdsService.AssociateAccountWithClientAsync(
             userId,
-            userRole,
             request,
             cancellationToken);
 
@@ -209,20 +211,19 @@ public class GoogleAdsController : ControllerBase
         return Ok(result);
     }
 
+    //------------------------------------------------------------------ 
+
     /// <summary>
     /// Disconnects (deactivates) only the specified Dashboard Client's Google Ads account association.
-    /// Does NOT revoke the user's Google OAuth tokens, does NOT delete the user's GoogleAdsConnection,
+    /// Does NOT revoke the user's Google OAuth tokens, does NOT delete the user's OAuthConnection,
     /// and does NOT affect any other Dashboard Client's Google Ads association.
     /// </summary>
     [HttpDelete("clients/{clientId:int}/disconnect")]
-    [HttpPost("clients/{clientId:int}/disconnect")]
-    [HttpDelete("disconnect/{clientId:int}")]
     public async Task<IActionResult> DisconnectClientAccount(
         [FromRoute] int clientId,
         CancellationToken cancellationToken = default)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var userRole = User.FindFirstValue(ClaimTypes.Role);
         if (string.IsNullOrEmpty(userId))
         {
             return Unauthorized(new { message = "User identity not found in token." });
@@ -235,7 +236,6 @@ public class GoogleAdsController : ControllerBase
 
         var result = await _googleAdsService.DisconnectClientAccountAsync(
             userId,
-            userRole,
             clientId,
             cancellationToken);
 
@@ -256,18 +256,7 @@ public class GoogleAdsController : ControllerBase
         return Ok(result);
     }
 
-    private static string GetErrorMessage(string? errorCode) => errorCode switch
-    {
-        GoogleOAuthErrorCodes.AlreadyConnected => "Your account is already connected to Google Ads. Reconnecting is not allowed.",
-        GoogleOAuthErrorCodes.AccessDenied => "Google Ads authorization was canceled or permission was declined.",
-        GoogleOAuthErrorCodes.MissingRefreshToken => "Google did not return a refresh token. Please try again and grant offline access.",
-        GoogleOAuthErrorCodes.InvalidGrant => "The authorization code was invalid, expired, or already used.",
-        GoogleOAuthErrorCodes.InvalidState => "Security verification failed (invalid or expired OAuth state). Please try again.",
-        GoogleOAuthErrorCodes.ScopeNotGranted => "Required Google Ads permissions were not granted during consent.",
-        GoogleOAuthErrorCodes.NotConfigured => "Google OAuth is not properly configured on the server.",
-        GoogleOAuthErrorCodes.RedirectUriMismatch => "OAuth redirect URI mismatch with Google Cloud Console configuration.",
-        _ => "Failed to complete Google Ads authorization. Please try again."
-    };
+    //------------------------------------------------------------------ 
 
     /// <summary>
     /// Disconnects the authenticated Dashboard user's Google Ads OAuth connection,
@@ -298,4 +287,19 @@ public class GoogleAdsController : ControllerBase
             connected = false
         });
     }
+
+
+
+    private static string GetErrorMessage(string? errorCode) => errorCode switch
+    {
+        GoogleOAuthErrorCodes.AlreadyConnected => "Your account is already connected to Google Ads. Reconnecting is not allowed.",
+        GoogleOAuthErrorCodes.AccessDenied => "Google Ads authorization was canceled or permission was declined.",
+        GoogleOAuthErrorCodes.MissingRefreshToken => "Google did not return a refresh token. Please try again and grant offline access.",
+        GoogleOAuthErrorCodes.InvalidGrant => "The authorization code was invalid, expired, or already used.",
+        GoogleOAuthErrorCodes.InvalidState => "Security verification failed (invalid or expired OAuth state). Please try again.",
+        GoogleOAuthErrorCodes.ScopeNotGranted => "Required Google Ads permissions were not granted during consent.",
+        GoogleOAuthErrorCodes.NotConfigured => "Google OAuth is not properly configured on the server.",
+        GoogleOAuthErrorCodes.RedirectUriMismatch => "OAuth redirect URI mismatch with Google Cloud Console configuration.",
+        _ => "Failed to complete Google Ads authorization. Please try again."
+    };
 }

@@ -4,22 +4,25 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Dashboard.Infrastructure.Configurations;
 
-public class GoogleAdsConnectionConfig : IEntityTypeConfiguration<GoogleAdsConnection>
+public class OAuthConnectionConfig : IEntityTypeConfiguration<OAuthConnection>
 {
-    public void Configure(EntityTypeBuilder<GoogleAdsConnection> builder)
+    public void Configure(EntityTypeBuilder<OAuthConnection> builder)
     {
-        builder.ToTable("GoogleAdsConnections");
+        builder.ToTable("OAuthConnections");
 
         builder.HasKey(c => c.Id);
 
         builder.Property(c => c.UserId)
             .IsRequired();
 
-        // One Google connection per Dashboard user
-        builder.HasIndex(c => c.UserId)
+        builder.Property(c => c.PlatformType)
+            .IsRequired()
+            .HasConversion<string>();
+
+        // One OAuth connection per Dashboard user per PlatformType (GoogleAds, MetaAds, etc.)
+        builder.HasIndex(c => new { c.UserId, c.PlatformType })
             .IsUnique();
 
-        // Encrypted payloads; Google tokens have no fixed maximum size
         builder.Property(c => c.AccessTokenEncrypted)
             .IsRequired();
 

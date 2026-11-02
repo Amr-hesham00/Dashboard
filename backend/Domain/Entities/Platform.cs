@@ -14,7 +14,7 @@ public class Platform
     public string? ManagerAccountId { get; set; }
 
     public int? OAuthConnectionId { get; set; }
-    public GoogleAdsConnection? OAuthConnection { get; set; }
+    public OAuthConnection? OAuthConnection { get; set; }
 
     public int ClientId { get; set; }
     public Client Client { get; set; }
