@@ -180,9 +180,14 @@ public class AdService : IAdService
                 Date = date,
                 Spend = dailySpend,
                 Revenue = dailyRevenue,
+                Impressions = dailyImpressions,
+                Clicks = dailyClicks,
                 Conversions = dailyConversions,
                 ROAS = dailySpend > 0 ? dailyRevenue / dailySpend : 0,
                 CPA = dailyConversions > 0 ? dailySpend / dailyConversions : 0,
+                CPC = dailyClicks > 0 ? dailySpend / dailyClicks : 0,
+                CPM = dailyImpressions > 0 ? (dailySpend / dailyImpressions) * 1000 : 0,
+                ConversionRate = dailyClicks > 0 ? (double)dailyConversions / dailyClicks * 100 : 0,
                 CTR = dailyImpressions > 0
                     ? (double)dailyClicks / dailyImpressions * 100
                     : 0
@@ -211,7 +216,11 @@ public class AdService : IAdService
                 Clicks = adMetrics.Sum(m => m.Clicks),
                 Conversions = adConversions,
                 CPA = adConversions > 0 ? adSpend / adConversions : 0,
-                ROAS = adSpend > 0 ? adRevenue / adSpend : 0
+                ROAS = adSpend > 0 ? adRevenue / adSpend : 0,
+                CTR = adMetrics.Sum(m => m.Impressions) > 0 ? (double)adMetrics.Sum(m => m.Clicks) / adMetrics.Sum(m => m.Impressions) * 100 : 0,
+                CPC = adMetrics.Sum(m => m.Clicks) > 0 ? adSpend / adMetrics.Sum(m => m.Clicks) : 0,
+                CPM = adMetrics.Sum(m => m.Impressions) > 0 ? (adSpend / adMetrics.Sum(m => m.Impressions)) * 1000 : 0,
+                ConversionRate = adMetrics.Sum(m => m.Clicks) > 0 ? (double)adConversions / adMetrics.Sum(m => m.Clicks) * 100 : 0
             };
         }).ToList();
 
@@ -238,10 +247,21 @@ public class AdService : IAdService
             Spend = spend,
             Revenue = revenue,
             Conversions = conversions,
+            Impressions = impressions,
+            Clicks = clicks,
             ROAS = spend > 0 ? revenue / spend : 0,
             CPA = conversions > 0 ? spend / conversions : 0,
             CTR = impressions > 0
                 ? (double)clicks / impressions * 100
+                : 0,
+            CPC = clicks > 0
+                ? spend / clicks
+                : 0,
+            CPM = impressions > 0
+                ? (spend / impressions) * 1000
+                : 0,
+            ConversionRate = clicks > 0
+                ? (double)conversions / clicks * 100
                 : 0,
 
             Points = points,
@@ -291,5 +311,6 @@ public class AdService : IAdService
             .ToList();
     }
 }
+
 
 

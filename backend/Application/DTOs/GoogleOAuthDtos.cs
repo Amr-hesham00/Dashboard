@@ -1,3 +1,4 @@
+using Dashboard.Domain.Enums;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
@@ -107,6 +108,12 @@ public static class GoogleOAuthErrorCodes
     public const string CustomerAlreadyLinked = "customer_already_linked";
     public const string UnsupportedCustomerCurrency = "unsupported_customer_currency";
 
+    // Synchronization errors
+    public const string PlatformNotFound = "platform_not_found";
+    public const string PlatformNotConnected = "platform_not_connected";
+    public const string SyncAlreadyInProgress = "sync_in_progress";
+    public const string SyncFailed = "sync_failed";
+
     private static readonly HashSet<string> GoogleErrors = new(StringComparer.Ordinal)
     {
         AccessDenied, InvalidRequest, RedirectUriMismatch, InvalidClient, InvalidGrant,
@@ -188,8 +195,11 @@ public class GoogleAdsAccountAssociationDto
     public string AccountName { get; set; } = null!;
     public string? LoginCustomerId { get; set; }
     public string Currency { get; set; } = null!;
+    public string? TimeZone { get; set; }
     public string Status { get; set; } = null!;
     public int GoogleAdsConnectionId { get; set; }
+    public DateTimeOffset? LastSyncedAt { get; set; }
+    public DateTimeOffset? LastBackfillAt { get; set; }
 }
 
 /// <summary>Outcome of associating a Google Ads customer account with a Dashboard Client.</summary>
@@ -229,4 +239,103 @@ public class DisconnectGoogleAdsClientResultDto
 
     public static DisconnectGoogleAdsClientResultDto Fail(int clientId, string errorCode, string message) =>
         new() { Success = false, ClientId = clientId, ErrorCode = errorCode, Message = message };
+}
+
+// ─── Google Ads Data Retrieval & Synchronization DTOs ─────────────────────────────
+
+public class GoogleAdsAccountDetailsDto
+{
+    public string CustomerId { get; set; } = null!;
+    public string DescriptiveName { get; set; } = null!;
+    public string CurrencyCode { get; set; } = null!;
+    public string? TimeZone { get; set; }
+}
+
+public class GoogleAdsCampaignRecordDto
+{
+    public string ExternalId { get; set; } = null!;
+    public string Name { get; set; } = null!;
+    public CampaignStatus Status { get; set; } = CampaignStatus.Active;
+    public CampaignObjective Objective { get; set; } = CampaignObjective.Traffic;
+    public DateTimeOffset? StartDate { get; set; }
+    public DateTimeOffset? EndDate { get; set; }
+}
+
+public class GoogleAdsAdGroupRecordDto
+{
+    public string ExternalId { get; set; } = null!;
+    public string CampaignExternalId { get; set; } = null!;
+    public string Name { get; set; } = null!;
+    public AdSetStatus Status { get; set; } = AdSetStatus.Active;
+    public string AudienceType { get; set; } = "Search";
+}
+
+public class GoogleAdsAdRecordDto
+{
+    public string ExternalId { get; set; } = null!;
+    public string AdGroupExternalId { get; set; } = null!;
+    public string? CampaignExternalId { get; set; }
+    public string Name { get; set; } = null!;
+    public string Headline { get; set; } = null!;
+    public string? Description { get; set; }
+    public string? CTA { get; set; }
+    public string? MediaUrl { get; set; }
+    public MediaType? MediaType { get; set; } = Dashboard.Domain.Enums.MediaType.Image;
+    public AdStatus Status { get; set; } = AdStatus.Active;
+}
+
+public class GoogleAdsDailyMetricRecordDto
+{
+    public string AdExternalId { get; set; } = null!;
+    public string? AdGroupExternalId { get; set; }
+    public string? CampaignExternalId { get; set; }
+    public DateOnly Date { get; set; }
+    public long Impressions { get; set; }
+    public long Clicks { get; set; }
+    public long CostMicros { get; set; }
+    public double Conversions { get; set; }
+    public double ConversionsValue { get; set; }
+}
+
+public class PlatformSyncResultDto
+{
+    public bool Success { get; set; }
+    public int PlatformId { get; set; }
+    public int ClientId { get; set; }
+    public string PlatformType { get; set; } = Dashboard.Domain.Enums.PlatformType.GoogleAds.ToString();
+    public string? CustomerId { get; set; }
+    public string? Currency { get; set; }
+    public string? TimeZone { get; set; }
+    public bool IsInitialImport { get; set; }
+    public bool IsReconnectionSync { get; set; }
+    public bool BackfillExecuted { get; set; }
+    public bool SkippedBecauseRunning { get; set; }
+    public int CampaignsSynced { get; set; }
+    public int AdSetsSynced { get; set; }
+    public int AdsSynced { get; set; }
+    public int DailyMetricsUpserted { get; set; }
+    public DateOnly? SyncedFromDate { get; set; }
+    public DateOnly? SyncedToDate { get; set; }
+    public DateTimeOffset? LastSyncedAt { get; set; }
+    public DateTimeOffset? LastBackfillAt { get; set; }
+    public string? ErrorCode { get; set; }
+    public string Message { get; set; } = null!;
+
+    public static PlatformSyncResultDto Fail(
+        int platformId,
+        int clientId,
+        PlatformType platformType,
+        string errorCode,
+        string message,
+        bool skippedBecauseRunning = false) =>
+        new()
+        {
+            Success = false,
+            PlatformId = platformId,
+            ClientId = clientId,
+            PlatformType = platformType.ToString(),
+            ErrorCode = errorCode,
+            Message = message,
+            SkippedBecauseRunning = skippedBecauseRunning
+        };
 }

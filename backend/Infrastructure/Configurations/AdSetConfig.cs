@@ -18,6 +18,10 @@ public class AdSetConfig : IEntityTypeConfiguration<AdSet>
         builder.Property(a => a.ExternalId)
                .HasMaxLength(100);
 
+        builder.HasIndex(a => new { a.CampaignId, a.ExternalId })
+               .IsUnique()
+               .HasFilter("[ExternalId] IS NOT NULL");
+
         builder.Property(a => a.AudienceType)
                .IsRequired()
                .HasMaxLength(100);

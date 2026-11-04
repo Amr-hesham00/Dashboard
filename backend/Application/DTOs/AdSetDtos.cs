@@ -35,6 +35,7 @@ public class CampPageDTO
 
     public double CPA { set; get; }
     public double ROAS { set; get; }
+    public double CTR { get; set; }
     public double CPC { set; get; }
     public double AOV { set; get; }
     public double CPM { set; get; }

@@ -18,6 +18,10 @@ public class AdConfig : IEntityTypeConfiguration<Ad>
         builder.Property(a => a.ExternalId)
                .HasMaxLength(100);
 
+        builder.HasIndex(a => new { a.AdSetId, a.ExternalId })
+               .IsUnique()
+               .HasFilter("[ExternalId] IS NOT NULL");
+
         builder.Property(a => a.Headline)
                .IsRequired()
                .HasMaxLength(200);
@@ -36,7 +40,5 @@ public class AdConfig : IEntityTypeConfiguration<Ad>
 
         builder.Property(a => a.Status)
                .HasConversion<string>();
-
-
     }
 }

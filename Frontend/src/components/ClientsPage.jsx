@@ -13,13 +13,16 @@ import {
   getUsersApi,
   getClientTargetsApi,
   updateClientTargetsApi,
+  invalidateClientsCache,
 } from '../api/clients';
 import {
   connectGoogleAdsApi,
   disconnectClientGoogleAdsApi,
+  disconnectGoogleAdsApi,
   getGoogleAdsStatusApi,
   getGoogleAdsAccountsApi,
   selectGoogleAdsAccountApi,
+  syncGoogleAdsPlatformApi,
 } from '../api/googleAds';
 const DEFAULT_CLIENT_TARGETS = {
   targetRoas: 4.0,
@@ -136,6 +139,8 @@ export default function ClientsPage() {
   const [selectedGoogleClientId, setSelectedGoogleClientId] = useState('');
   const [associatingGoogleAccount, setAssociatingGoogleAccount] = useState(false);
   const [pendingGoogleConfirm, setPendingGoogleConfirm] = useState(null);
+  const [showDisconnectOAuthConfirm, setShowDisconnectOAuthConfirm] = useState(false);
+  const [disconnectingOAuth, setDisconnectingOAuth] = useState(false);
   const [activeDropdownClient, setActiveDropdownClient] = useState(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
 
@@ -331,10 +336,25 @@ export default function ClientsPage() {
       }
 
       const targets = await getClientTargetsApi(client.id);
-      const rawCurr = targets?.currency || (typeof client.currency === 'string' ? client.currency : (Array.isArray(currList) ? currList[client.currency] : 'USD'));
-      const validCurr = Array.isArray(currList) && currList.includes(rawCurr) ? rawCurr : (currList?.[0] || 'USD');
+      let validCurr = 'USD';
+      const rawCurr = targets?.currency ?? client.currency;
+      if (typeof rawCurr === 'number') {
+        validCurr = currList[rawCurr] || 'USD';
+      } else if (typeof rawCurr === 'string' && rawCurr.trim()) {
+        validCurr = currList.find((c) => c.toUpperCase() === rawCurr.trim().toUpperCase()) || rawCurr;
+      }
 
-      setTargetFormData(targets ? { ...targets, currency: validCurr } : { ...DEFAULT_CLIENT_TARGETS, currency: validCurr });
+      const targetData = targets ? {
+        ...targets,
+        targetRoas: targets.targetRoas ?? targets.targetROAS ?? DEFAULT_CLIENT_TARGETS.targetRoas,
+        targetCpa: targets.targetCpa ?? targets.targetCPA ?? DEFAULT_CLIENT_TARGETS.targetCpa,
+        monthlyBudget: targets.monthlyBudget ?? DEFAULT_CLIENT_TARGETS.monthlyBudget,
+        targetRevenue: targets.targetRevenue ?? DEFAULT_CLIENT_TARGETS.targetRevenue,
+        targetConversions: targets.targetConversions ?? DEFAULT_CLIENT_TARGETS.targetConversions,
+        currency: validCurr,
+      } : { ...DEFAULT_CLIENT_TARGETS, currency: validCurr };
+
+      setTargetFormData(targetData);
     } catch {
       setTargetFormData({ ...DEFAULT_CLIENT_TARGETS, currency: currencies[0] || 'USD' });
     } finally {
@@ -374,9 +394,11 @@ export default function ClientsPage() {
         targetConversions: Number(targetFormData.targetConversions) || 0,
       };
       await updateClientTargetsApi(targetClient.id, sanitizedTargets);
+      invalidateClientsCache();
       setShowTargetModal(false);
       setToastMsg(`Targets for ${targetClient.companyName} updated successfully!`);
       setTimeout(() => setToastMsg(''), 3000);
+      await loadData();
     } catch (err) {
       setTargetError(err.message || 'Failed to save client target settings.');
     } finally {
@@ -460,6 +482,7 @@ export default function ClientsPage() {
       Number(client.targetROAS) ||
       Number(client.targetRoas) ||
       Number(client.target?.targetROAS) ||
+      Number(client.target?.targetRoas) ||
       0;
     const actualRoas = Number(client.roas) || 0;
     const targetRoasAchieved = Number(client.achievedROAS) || 0;
@@ -789,6 +812,11 @@ export default function ClientsPage() {
         pendingGoogleConfirm.customerId
       );
       const assoc = result?.association;
+      if (assoc?.platformId && assoc?.clientId) {
+        syncGoogleAdsPlatformApi(assoc.clientId, assoc.platformId).catch((e) => {
+          console.warn('Initial Google Ads sync background error:', e);
+        });
+      }
       setPendingGoogleConfirm(null);
       setShowGoogleAccountsModal(false);
       await loadData();
@@ -861,6 +889,34 @@ export default function ClientsPage() {
       });
       setGoogleConnecting(false);
       setConnectingPlatform('');
+    }
+  };
+
+  const handleDisconnectGoogleOAuth = async () => {
+    setDisconnectingOAuth(true);
+    setGoogleToast(null);
+    try {
+      await disconnectGoogleAdsApi();
+      setGoogleStatus({ connected: false, linkedAccounts: [] });
+      await loadData();
+      setShowDisconnectOAuthConfirm(false);
+      if (connectClient) {
+        setPlatformsState((prev) => ({
+          ...prev,
+          google: { connected: false, accountId: '', accountName: '' },
+        }));
+      }
+      setGoogleToast({
+        type: 'success',
+        message: 'Google account disconnected successfully. OAuth connection has been disabled.',
+      });
+    } catch (err) {
+      setGoogleToast({
+        type: 'error',
+        message: err.message || 'Failed to disconnect Google account.',
+      });
+    } finally {
+      setDisconnectingOAuth(false);
     }
   };
 
@@ -1113,7 +1169,24 @@ export default function ClientsPage() {
             <h1 className="h2 mb-1">Client Portfolios</h1>
             <p className="text-secondary mb-0">Manage active clients, contact information, and assigned managers.</p>
           </div>
-          <div>
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            {googleStatus?.connected && (
+              <button
+                type="button"
+                className="btn btn-outline-danger d-inline-flex align-items-center gap-2 shadow-2xs rounded-3 px-3 py-2"
+                onClick={() => setShowDisconnectOAuthConfirm(true)}
+                disabled={disconnectingOAuth}
+                title="Disconnect Google account and disable current OAuth connection"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                  <path d="M20 12h-8" />
+                  <path d="M9 16l-4 -4l4 -4" />
+                  <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-4" />
+                </svg>
+                <span>{disconnectingOAuth ? 'Disconnecting...' : 'Disconnect Google Account'}</span>
+              </button>
+            )}
             <button className="btn btn-primary d-inline-flex align-items-center gap-2 shadow-sm rounded-3 px-3 py-2" onClick={openCreateModal}>
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path stroke="none" d="M0 0h24v24H0z" fill="none" />
@@ -1968,7 +2041,26 @@ export default function ClientsPage() {
                   </div>
                 </div>
 
-                <div className="modal-footer border-top px-4 py-3 bg-light d-flex justify-content-end">
+                <div className="modal-footer border-top px-4 py-3 bg-light d-flex justify-content-between align-items-center flex-wrap gap-2">
+                  <div>
+                    {googleStatus?.connected && (
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-2"
+                        onClick={() => setShowDisconnectOAuthConfirm(true)}
+                        disabled={disconnectingOAuth}
+                        title="Disconnect Google account and disable current OAuth connection"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                          <path d="M20 12h-8" />
+                          <path d="M9 16l-4 -4l4 -4" />
+                          <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-4" />
+                        </svg>
+                        <span>Disconnect Google Account</span>
+                      </button>
+                    )}
+                  </div>
                   <button type="button" className="btn btn-primary px-4 py-2 rounded-3 fw-semibold" onClick={() => setConnectClient(null)}>
                     Done
                   </button>
@@ -2219,6 +2311,70 @@ export default function ClientsPage() {
                     ) : (
                       <span>Confirm</span>
                     )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Disconnect Google OAuth Confirmation Modal ────────────── */}
+        {showDisconnectOAuthConfirm && (
+          <div
+            className="modal fade show d-block"
+            style={{ backgroundColor: 'rgba(15, 23, 42, 0.5)', zIndex: 1090 }}
+            tabIndex="-1"
+            onClick={() => !disconnectingOAuth && setShowDisconnectOAuthConfirm(false)}
+          >
+            <div
+              className="modal-dialog modal-dialog-centered"
+              style={{ maxWidth: 480 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+                <div className="modal-header border-bottom p-4">
+                  <h5 className="modal-title fw-bold mb-0 text-danger d-flex align-items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                    </svg>
+                    Disconnect Google Account
+                  </h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => !disconnectingOAuth && setShowDisconnectOAuthConfirm(false)}
+                    aria-label="Close"
+                  ></button>
+                </div>
+                <div className="modal-body p-4">
+                  <p className="text-secondary mb-3">
+                    Are you sure you want to disconnect your Google account? This will <strong>revoke and disable the current Google OAuth connection</strong> across all Dashboard clients.
+                  </p>
+                  <div className="alert alert-warning py-2.5 px-3 mb-0 rounded-3 small">
+                    Linked Google Ads accounts will no longer synchronize until you reconnect your Google account.
+                  </div>
+                </div>
+                <div className="modal-footer border-top px-4 py-3 bg-light d-flex justify-content-end gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-light border px-3 py-2 rounded-3"
+                    onClick={() => setShowDisconnectOAuthConfirm(false)}
+                    disabled={disconnectingOAuth}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger px-3 py-2 rounded-3 fw-semibold d-inline-flex align-items-center gap-2"
+                    onClick={handleDisconnectGoogleOAuth}
+                    disabled={disconnectingOAuth}
+                  >
+                    {disconnectingOAuth && (
+                      <span className="spinner-border spinner-border-sm" role="status"></span>
+                    )}
+                    <span>{disconnectingOAuth ? 'Disconnecting...' : 'Disconnect Account'}</span>
                   </button>
                 </div>
               </div>

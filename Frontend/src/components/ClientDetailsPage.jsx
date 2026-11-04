@@ -11,6 +11,7 @@ import {
   getClientCurrenciesApi,
   getClientTargetsApi,
   updateClientTargetsApi,
+  invalidateClientsCache,
 } from '../api/clients';
 import {
   getCampaignsByClientIdApi,
@@ -23,6 +24,7 @@ import {
   aggregateTimeSeriesByMonth,
 } from '../mock/mockData';
 import metaIcon from '../assets/meta-icon.webp';
+import { syncGoogleAdsPlatformApi } from '../api/googleAds';
 import KpiMetricBadge from './KpiMetricBadge';
 import PeriodSelector, { getPresetDates } from './PeriodSelector';
 
@@ -193,6 +195,37 @@ function getCurrencySymbol(currency) {
   }
 }
 
+
+function normalizeTargetSettings(target, currenciesList = []) {
+  if (!target) return null;
+  const rawCurr = target.currency;
+  let currName = getCurrencyName(rawCurr);
+  if (Array.isArray(currenciesList) && currenciesList.length > 0) {
+    const matched = currenciesList.find((c) => c.toUpperCase() === currName.toUpperCase());
+    if (matched) currName = matched;
+  }
+
+  const roas = target.targetRoas != null ? Number(target.targetRoas) : (target.targetROAS != null ? Number(target.targetROAS) : null);
+  const cpa = target.targetCpa != null ? Number(target.targetCpa) : (target.targetCPA != null ? Number(target.targetCPA) : null);
+  const budget = target.monthlyBudget != null ? Number(target.monthlyBudget) : null;
+  const revenue = target.targetRevenue != null ? Number(target.targetRevenue) : null;
+  const conversions = target.targetConversions != null ? Number(target.targetConversions) : null;
+  const ctr = target.targetCtr != null ? Number(target.targetCtr) : (target.targetCTR != null ? Number(target.targetCTR) : null);
+  const cpc = target.targetCpc != null ? Number(target.targetCpc) : (target.targetCPC != null ? Number(target.targetCPC) : null);
+
+  return {
+    id: target.id,
+    monthlyBudget: budget !== null && !isNaN(budget) ? budget : 50000,
+    targetRoas: roas !== null && !isNaN(roas) ? roas : 4.0,
+    targetCpa: cpa !== null && !isNaN(cpa) ? cpa : 5.5,
+    currency: currName,
+    targetRevenue: revenue !== null && !isNaN(revenue) ? revenue : (budget && roas ? Math.round(budget * roas) : 200000),
+    targetConversions: conversions !== null && !isNaN(conversions) ? conversions : (budget && cpa ? Math.round(budget / Math.max(0.1, cpa)) : 9000),
+    targetCtr: ctr !== null && !isNaN(ctr) ? ctr : 0,
+    targetCpc: cpc !== null && !isNaN(cpc) ? cpc : 0,
+  };
+}
+
 // ─── KPI Formatter ──────────────────────────────────────────────────
 function formatKPIValue(value, format, currency = 'USD') {
   if (value == null) return '—';
@@ -293,7 +326,7 @@ const TABS = [
   },
 ];
 
-const DATE_RANGES = ['Last 7 Days', 'Last 30 Days', 'This Month', 'This Year'];
+const DATE_RANGES = ['Today', 'Last 7 Days', 'Last 30 Days', 'This Month', 'This Year'];
 
 export const TAB_ROUTE_MAP = {
   meta: 'Meta',
@@ -684,6 +717,7 @@ export default function ClientDetailsPage() {
         let mappedCampaigns = [];
         let mappedPoints = [];
         let mappedPlatformRows = [];
+        let normTarget = null;
 
         if (overviewData) {
           if (Array.isArray(overviewData.campRow)) {
@@ -697,9 +731,23 @@ export default function ClientDetailsPage() {
           }
           if (Array.isArray(overviewData.points)) mappedPoints = overviewData.points;
           if (Array.isArray(overviewData.platformRow)) mappedPlatformRows = overviewData.platformRow;
+          
           if (overviewData.target) {
-            setTargetSettings(overviewData.target);
-            setTargetFormData(overviewData.target);
+            normTarget = normalizeTargetSettings(overviewData.target, currencies);
+          } else {
+            try {
+              const directTarget = await getClientTargetsApi(id);
+              if (directTarget) {
+                normTarget = normalizeTargetSettings(directTarget, currencies);
+              }
+            } catch (err) {
+              console.warn('Fallback direct target load failed:', err);
+            }
+          }
+
+          if (normTarget) {
+            setTargetSettings(normTarget);
+            setTargetFormData(normTarget);
           }
         }
 
@@ -717,7 +765,7 @@ export default function ClientDetailsPage() {
           realCampaigns: mappedCampaigns,
           overviewPoints: mappedPoints,
           overviewPlatformRows: mappedPlatformRows,
-          target: overviewData?.target || null,
+          target: normTarget,
         };
       } catch (err) {
         setError(err.message || 'Failed to load client overview.');
@@ -908,6 +956,21 @@ export default function ClientDetailsPage() {
   const handleRefreshPlatform = async (platformKey) => {
     setPlatformRefreshing((prev) => ({ ...prev, [platformKey]: true }));
     try {
+      if (platformKey === 'google') {
+        let currentClient = clientRef.current;
+        let platformRecord = currentClient?.platforms?.find((p) => {
+          const k = mapPlatformTypeToKey(p.platformType || p.key, p.platformName);
+          return k === 'google';
+        });
+        let platformId = platformRecord?.id ?? platformRecord?.platformId;
+        if (!platformId && Array.isArray(overviewPlatformRowsRef.current)) {
+          const row = overviewPlatformRowsRef.current.find((r) => mapPlatformTypeToKey(r.platformName ?? r.platformType) === 'google');
+          if (row) platformId = row.platformId;
+        }
+        if (platformId) {
+          await syncGoogleAdsPlatformApi(id, platformId);
+        }
+      }
       await loadPlatformData(platformKey, true);
       const now = 'Just now';
       const nowDate = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -928,8 +991,13 @@ export default function ClientDetailsPage() {
       const platformLabel = TABS.find((t) => t.key === platformKey)?.label || platformKey;
       setToastMsg(`${platformLabel} data refreshed successfully!`);
       setTimeout(() => setToastMsg(''), 3000);
-    } catch {
-      setToastMsg(`Failed to refresh ${platformKey} data.`);
+    } catch (err) {
+      if (err?.inProgress || err?.errorCode === 'sync_already_in_progress') {
+        setToastMsg('Synchronization is already in progress for this platform.');
+      } else {
+        setToastMsg(`Failed to refresh ${platformKey} data.`);
+      }
+      setTimeout(() => setToastMsg(''), 3500);
     } finally {
       setPlatformRefreshing((prev) => ({ ...prev, [platformKey]: false }));
     }
@@ -1141,54 +1209,68 @@ export default function ClientDetailsPage() {
 
   // ─── Get KPI values & Trend Data for this client ─────────────────
   const clientKPIs = useMemo(() => {
-    // Consume backend-calculated metrics directly from client
-    if (client) {
-      const sp = Number(client.spend) || 0;
-      const rev = Number(client.revenue) || 0;
-      const clk = Number(client.clicks) || 0;
-      const imp = Number(client.impressions) || 0;
-      const conv = Number(client.conversions) || 0;
-      const ctrVal = Number(client.ctr) || (imp > 0 ? (clk / imp) * 100 : 0);
-      const cpcVal = Number(client.cpc) || (clk > 0 ? sp / clk : 0);
-      const cpmVal = Number(client.cpm) || (imp > 0 ? (sp / imp) * 1000 : 0);
-      const cpaVal = Number(client.cpa) || (conv > 0 ? sp / conv : 0);
-      const convRateVal = Number(client.conversionRate) || (clk > 0 ? (conv / clk) * 100 : 0);
-      const roasVal = client.roas !== undefined && client.roas !== null
-        ? Number(client.roas)
-        : (sp > 0 ? rev / sp : (Number(client.actualROAS) || 0));
+    // Consume backend-calculated metrics directly from client with multi-tier fallbacks
+    const sumPlatformSpend = (overviewPlatformRows || []).reduce((s, p) => s + (Number(p.spend) || 0), 0);
+    const sumPlatformRev = (overviewPlatformRows || []).reduce((s, p) => s + (Number(p.revenue) || 0), 0);
+    const sumPlatformImp = (overviewPlatformRows || []).reduce((s, p) => s + (Number(p.impressions) || 0), 0);
+    const sumPlatformClk = (overviewPlatformRows || []).reduce((s, p) => s + (Number(p.clicks) || 0), 0);
+    const sumPlatformConv = (overviewPlatformRows || []).reduce((s, p) => s + (Number(p.conversions) || 0), 0);
 
-      return {
-        spend: { value: sp, change: 0 },
-        totalSpend: { value: sp, change: 0 },
-        revenue: { value: rev, change: 0 },
-        totalRevenue: { value: rev, change: 0 },
-        roas: { value: roasVal, change: 0 },
-        impressions: { value: imp, change: 0 },
-        clicks: { value: clk, change: 0 },
-        conversions: { value: conv, change: 0 },
-        ctr: { value: ctrVal, change: 0 },
-        cpc: { value: cpcVal, change: 0 },
-        cpm: { value: cpmVal, change: 0 },
-        cpa: { value: cpaVal, change: 0 },
-        conversionRate: { value: convRateVal, change: 0 },
-      };
-    }
+    const sumPointsSpend = (overviewPoints || []).reduce((s, p) => s + (Number(p.spend) || 0), 0);
+    const sumPointsRev = (overviewPoints || []).reduce((s, p) => s + (Number(p.revenue) || 0), 0);
+    const sumPointsImp = (overviewPoints || []).reduce((s, p) => s + (Number(p.impressions) || 0), 0);
+    const sumPointsClk = (overviewPoints || []).reduce((s, p) => s + (Number(p.clicks) || 0), 0);
+    const sumPointsConv = (overviewPoints || []).reduce((s, p) => s + (Number(p.conversions) || 0), 0);
+
+    const sumCampSpend = (realCampaigns || []).reduce((s, c) => s + (Number(c.spend) || 0), 0);
+    const sumCampRev = (realCampaigns || []).reduce((s, c) => s + (Number(c.revenue) || 0), 0);
+
+    const sp = (Number(client?.spend) || 0) || sumPlatformSpend || sumPointsSpend || sumCampSpend;
+    const rev = (Number(client?.revenue) || 0) || sumPlatformRev || sumPointsRev || sumCampRev;
+    const clk = (Number(client?.clicks) || 0) || sumPlatformClk || sumPointsClk;
+    const imp = (Number(client?.impressions) || 0) || sumPlatformImp || sumPointsImp;
+    const conv = (Number(client?.conversions) || 0) || sumPlatformConv || sumPointsConv;
+
+    const roasVal = client?.roas !== undefined && Number(client?.roas) > 0
+      ? Number(client.roas)
+      : (sp > 0 ? rev / sp : (Number(client?.actualROAS) || 0));
+
+    const ctrVal = Number(client?.ctr) > 0
+      ? Number(client.ctr)
+      : (imp > 0 ? (clk / imp) * 100 : 0);
+
+    const cpcVal = Number(client?.cpc) > 0
+      ? Number(client.cpc)
+      : (clk > 0 ? sp / clk : 0);
+
+    const cpmVal = Number(client?.cpm) > 0
+      ? Number(client.cpm)
+      : (imp > 0 ? (sp / imp) * 1000 : 0);
+
+    const cpaVal = Number(client?.cpa) > 0
+      ? Number(client.cpa)
+      : (conv > 0 ? sp / conv : 0);
+
+    const convRateVal = Number(client?.conversionRate) > 0
+      ? Number(client.conversionRate)
+      : (clk > 0 ? (conv / clk) * 100 : 0);
+
     return {
-      spend: { value: 0, change: 0 },
-      totalSpend: { value: 0, change: 0 },
-      revenue: { value: 0, change: 0 },
-      totalRevenue: { value: 0, change: 0 },
-      roas: { value: 0, change: 0 },
-      impressions: { value: 0, change: 0 },
-      clicks: { value: 0, change: 0 },
-      conversions: { value: 0, change: 0 },
-      ctr: { value: 0, change: 0 },
-      cpc: { value: 0, change: 0 },
-      cpm: { value: 0, change: 0 },
-      cpa: { value: 0, change: 0 },
-      conversionRate: { value: 0, change: 0 },
+      spend: { value: sp, change: 0 },
+      totalSpend: { value: sp, change: 0 },
+      revenue: { value: rev, change: 0 },
+      totalRevenue: { value: rev, change: 0 },
+      roas: { value: roasVal, change: 0 },
+      impressions: { value: imp, change: 0 },
+      clicks: { value: clk, change: 0 },
+      conversions: { value: conv, change: 0 },
+      ctr: { value: ctrVal, change: 0 },
+      cpc: { value: cpcVal, change: 0 },
+      cpm: { value: cpmVal, change: 0 },
+      cpa: { value: cpaVal, change: 0 },
+      conversionRate: { value: convRateVal, change: 0 },
     };
-  }, [client]);
+  }, [client, overviewPlatformRows, overviewPoints, realCampaigns]);
 
   // ─── Spend vs Revenue Chart Config ──────────────────────────────
   const isMoreThanMonth = periodConfig.days > 31;
@@ -1209,6 +1291,9 @@ export default function ClientDetailsPage() {
           ctr: Number(p.ctr) || 0,
           impressions: Number(p.impressions) || 0,
           clicks: Number(p.clicks) || 0,
+          cpc: Number(p.cpc) || 0,
+          cpm: Number(p.cpm) || 0,
+          conversionRate: Number(p.conversionRate) || 0,
         };
       });
     }
@@ -1684,23 +1769,25 @@ export default function ClientDetailsPage() {
       }
     }
 
-    const budget = Number(targetSettings?.monthlyBudget) || 0;
-    const roas = Number(targetSettings?.targetRoas) || 0;
-    const cpa = Number(targetSettings?.targetCpa) || 0;
-    const revenue = Number(targetSettings?.targetRevenue) || 0;
-    const conversions = Number(targetSettings?.targetConversions) || 0;
+    let currentTarget = null;
+    try {
+      const freshTarget = await getClientTargetsApi(id);
+      if (freshTarget) {
+        currentTarget = normalizeTargetSettings(freshTarget, currList);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch fresh targets from API for modal, using local settings:', e);
+    }
 
-    const rawCurr = targetSettings?.currency || (typeof client?.currency === 'string' ? client.currency : (Array.isArray(currList) ? currList[client?.currency] : 'USD'));
-    const validCurr = Array.isArray(currList) && currList.includes(rawCurr) ? rawCurr : (currList?.[0] || 'USD');
+    if (!currentTarget) {
+      currentTarget = normalizeTargetSettings(targetSettings, currList);
+    }
 
-    setTargetFormData({
-      monthlyBudget: budget,
-      targetRoas: roas,
-      targetCpa: cpa,
-      currency: validCurr,
-      targetRevenue: revenue,
-      targetConversions: conversions,
-    });
+    if (currentTarget) {
+      setTargetSettings(currentTarget);
+      setTargetFormData(currentTarget);
+    }
+
     setTargetError('');
     setShowTargetModal(true);
   };
@@ -1719,10 +1806,20 @@ export default function ClientDetailsPage() {
         targetConversions: Number(targetFormData.targetConversions) || 0,
       };
       const updated = await updateClientTargetsApi(id, sanitizedTargets);
-      setTargetSettings(updated || sanitizedTargets);
+      const normalizedUpdated = normalizeTargetSettings(updated || sanitizedTargets, currencies);
+      setTargetSettings(normalizedUpdated);
+      setTargetFormData(normalizedUpdated);
+
+      // Invalidate tab-level cache and global clients cache so fresh targets persist everywhere
+      tabDataCacheRef.current = {};
+      invalidateClientsCache();
+
       setShowTargetModal(false);
       setToastMsg('Client targets updated successfully!');
       setTimeout(() => setToastMsg(''), 3500);
+
+      // Re-fetch overview data so progress percentages and KPIs reflect the saved targets
+      await loadOverviewData(true);
     } catch (err) {
       setTargetError(err.message || 'Failed to save targets.');
     } finally {
@@ -1866,7 +1963,6 @@ export default function ClientDetailsPage() {
   const toggleKPI = (key) => {
     setPinnedKPIs((prev) => {
       if (prev.includes(key)) return prev.filter((k) => k !== key);
-      if (prev.length >= 6) return prev;
       return [...prev, key];
     });
   };
@@ -1980,7 +2076,7 @@ export default function ClientDetailsPage() {
         }
         .kpi-grid-5 {
           display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
           gap: 1rem;
         }
         @media (max-width: 1200px) {
@@ -2370,7 +2466,7 @@ export default function ClientDetailsPage() {
                 >
                   <span className="text-secondary fw-normal">Currency:</span>
                   <span className="fw-bold ms-1" style={{ color: '#0284c7' }}>
-                    {targetSettings?.currency || client?.currency || 'USD'}
+                    {getCurrencyName(targetSettings?.currency ?? client?.currency)}
                   </span>
                 </span>
               </div>
@@ -2494,13 +2590,13 @@ export default function ClientDetailsPage() {
                   </button>
                   {showKPISelector && (
                     <div className="position-absolute end-0 mt-1 bg-white border rounded-3 shadow-lg p-3" style={{ zIndex: 1050, minWidth: 260 }}>
-                      <h6 className="fw-bold small mb-2">Select KPIs to pin (max 5)</h6>
+                      <h6 className="fw-bold small mb-2">Select KPIs to pin</h6>
                       <div className="d-flex flex-column gap-1">
                         {availableKPIs.map((kpi) => {
                           const isPinned = pinnedKPIs.includes(kpi.key);
                           return (
                             <label key={kpi.key} className={`d-flex align-items-center gap-2 px-2 py-1 rounded-2 cursor-pointer ${isPinned ? 'bg-primary-subtle' : 'bg-transparent'}`} style={{ cursor: 'pointer' }}>
-                              <input type="checkbox" className="form-check-input m-0" checked={isPinned} onChange={() => toggleKPI(kpi.key)} disabled={!isPinned && pinnedKPIs.length >= 5} />
+                              <input type="checkbox" className="form-check-input m-0" checked={isPinned} onChange={() => toggleKPI(kpi.key)} />
                               <span className="small">{kpi.label}</span>
                             </label>
                           );
@@ -2513,7 +2609,7 @@ export default function ClientDetailsPage() {
               </div>
 
               <div className="kpi-grid-5">
-                {pinnedKPIs.slice(0, 5).map((key) => {
+                {pinnedKPIs.map((key) => {
                   const kpiDef = availableKPIs.find((k) => k.key === key || (key === 'spend' && k.key === 'totalSpend') || (key === 'revenue' && k.key === 'totalRevenue'));
                   const kpiData = clientKPIs[key] || (key === 'spend' ? clientKPIs.totalSpend : key === 'revenue' ? clientKPIs.totalRevenue : null);
                   if (!kpiDef || !kpiData) return null;
@@ -3823,11 +3919,12 @@ function PlatformTabContent({ platform, platformKey, isLoading, errorMessage, co
   const [platCampSortDir, setPlatCampSortDir] = useState('desc');
 
   // Fixed default pinned KPIs for any platform
+  const allPlatformKPIKeys = ['spend', 'revenue', 'roas', 'ctr', 'cpc', 'cpm', 'impressions', 'clicks', 'conversions', 'cpa', 'conversionRate'];
   const defaultPinnedMap = {
-    meta: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
-    google: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
-    tiktok: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
-    snapchat: ['spend', 'revenue', 'roas', 'ctr', 'conversions'],
+    meta: allPlatformKPIKeys,
+    google: allPlatformKPIKeys,
+    tiktok: allPlatformKPIKeys,
+    snapchat: allPlatformKPIKeys,
   };
 
   const [showKPISelector, setShowKPISelector] = useState(false);
@@ -3942,13 +4039,19 @@ function PlatformTabContent({ platform, platformKey, isLoading, errorMessage, co
     );
   };
 
-  // Platform metrics (direct from backend / platform object with reliable fallbacks)
-  const spendVal = Number(rawKpis.spend) || 0;
-  const conversionsVal = Number(rawKpis.conversions) || 0;
-  const clicksVal = Number(rawKpis.clicks) || 0;
-  const impressionsVal = Number(rawKpis.impressions) || 0;
-  const roasVal = Number(rawKpis.roas) || 0;
-  const revenueVal = Number(rawKpis.revenue) || (spendVal && roasVal ? spendVal * roasVal : 0);
+  // Platform metrics (direct from backend / platform object with reliable fallbacks to campaigns)
+  const sumCampSpend = (platform.campaigns || []).reduce((s, c) => s + (Number(c.spend) || 0), 0);
+  const sumCampRev = (platform.campaigns || []).reduce((s, c) => s + (Number(c.revenue) || 0), 0);
+  const sumCampImp = (platform.campaigns || []).reduce((s, c) => s + (Number(c.impressions) || 0), 0);
+  const sumCampClicks = (platform.campaigns || []).reduce((s, c) => s + (Number(c.clicks) || 0), 0);
+  const sumCampConv = (platform.campaigns || []).reduce((s, c) => s + (Number(c.conversions) || 0), 0);
+
+  const spendVal = Number(rawKpis.spend) || sumCampSpend;
+  const conversionsVal = Number(rawKpis.conversions) || sumCampConv;
+  const clicksVal = Number(rawKpis.clicks) || sumCampClicks;
+  const impressionsVal = Number(rawKpis.impressions) || sumCampImp;
+  const revenueVal = Number(rawKpis.revenue) || sumCampRev || (spendVal && Number(rawKpis.roas) ? spendVal * Number(rawKpis.roas) : 0);
+  const roasVal = Number(rawKpis.roas) || (spendVal > 0 ? (revenueVal / spendVal) : 0);
   const ctrVal = Number(rawKpis.ctr) || (impressionsVal > 0 ? (clicksVal / impressionsVal) * 100 : 0);
   const cpcVal = Number(rawKpis.cpc) || (clicksVal > 0 ? spendVal / clicksVal : 0);
   const cpmVal = Number(rawKpis.cpm) || (impressionsVal > 0 ? (spendVal / impressionsVal) * 1000 : 0);
@@ -3995,7 +4098,6 @@ function PlatformTabContent({ platform, platformKey, isLoading, errorMessage, co
   const toggleKPI = (key) => {
     setPinnedKPIs((prev) => {
       if (prev.includes(key)) return prev.filter((k) => k !== key);
-      if (prev.length >= 5) return prev;
       return [...prev, key];
     });
   };
@@ -4115,7 +4217,7 @@ function PlatformTabContent({ platform, platformKey, isLoading, errorMessage, co
                             className="form-check-input m-0"
                             checked={isPinned}
                             onChange={() => toggleKPI(kpi.key)}
-                            disabled={!isPinned && pinnedKPIs.length >= 5}
+
                           />
                           <span className="small">{kpi.label}</span>
                         </label>
@@ -4133,7 +4235,7 @@ function PlatformTabContent({ platform, platformKey, isLoading, errorMessage, co
 
         {/* Dynamic KPI Cards Grid (Strictly platform-specific to this client) */}
         <div className="kpi-grid-5">
-          {pinnedKPIs.slice(0, 5).map((key) => {
+          {pinnedKPIs.map((key) => {
             const kpiDef = availablePlatformKPIs.find((k) => k.key === key);
             if (!kpiDef) return null;
             const rawVal = kpis[key];

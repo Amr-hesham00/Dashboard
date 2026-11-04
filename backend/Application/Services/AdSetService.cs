@@ -115,7 +115,12 @@ public class AdSetService : IAdSetService
                 Conversions = daily.Conversions,
                 ROAS = Divide(daily.Revenue, daily.Spend),
                 CPA = Divide(daily.Spend, daily.Conversions),
-                CTR = Divide(daily.Clicks, daily.Impressions) * 100
+                CTR = Divide(daily.Clicks, daily.Impressions) * 100,
+                Impressions = (int)daily.Impressions,
+                Clicks = (int)daily.Clicks,
+                CPC = Divide(daily.Spend, daily.Clicks),
+                CPM = Divide(daily.Spend, daily.Impressions) * 1000,
+                ConversionRate = Divide(daily.Conversions, daily.Clicks) * 100
             });
         }
 
@@ -140,7 +145,11 @@ public class AdSetService : IAdSetService
                 Clicks = adSetTotal.Clicks,
                 Conversions = adSetTotal.Conversions,
                 CPA = Divide(adSetTotal.Spend, adSetTotal.Conversions),
-                ROAS = Divide(adSetTotal.Revenue, adSetTotal.Spend)
+                ROAS = Divide(adSetTotal.Revenue, adSetTotal.Spend),
+                CTR = Divide(adSetTotal.Clicks, adSetTotal.Impressions) * 100,
+                CPC = Divide(adSetTotal.Spend, adSetTotal.Clicks),
+                CPM = Divide(adSetTotal.Spend, adSetTotal.Impressions) * 1000,
+                ConversionRate = Divide(adSetTotal.Conversions, adSetTotal.Clicks) * 100
             });
         }
 
@@ -162,6 +171,7 @@ public class AdSetService : IAdSetService
 
             CPA = Divide(total.Spend, total.Conversions),
             ROAS = Divide(total.Revenue, total.Spend),
+            CTR = Divide(total.Clicks, total.Impressions) * 100,
             CPC = Divide(total.Spend, total.Clicks),
             CPM = Divide(total.Spend, total.Impressions) * 1000,
             ConversionRate = Divide(total.Conversions, total.Clicks) * 100,

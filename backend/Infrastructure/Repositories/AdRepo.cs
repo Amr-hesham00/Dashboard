@@ -25,4 +25,10 @@ public class AdRepo : GenericRepo<Ad>, IAdRepo
             .ToListAsync();
     }
 
+    public async Task<List<Ad>> GetTrackedByPlatformIdAsync(int platformId)
+    {
+        return await dbset
+            .Where(x => x.Adset.Campaign.PlatformId == platformId)
+            .ToListAsync();
+    }
 }

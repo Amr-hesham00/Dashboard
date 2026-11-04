@@ -148,6 +148,11 @@ const PERF_CHART_METRICS = {
   cpa: { label: 'CPA', color: '#f59e0b', type: 'currency' },
   ctr: { label: 'CTR', color: '#06b6d4', type: 'percent' },
   conversions: { label: 'Conversions', color: '#8b5cf6', type: 'number' },
+  impressions: { label: 'Impressions', color: '#3b82f6', type: 'number' },
+  clicks: { label: 'Clicks', color: '#6366f1', type: 'number' },
+  cpc: { label: 'CPC', color: '#f97316', type: 'currency' },
+  cpm: { label: 'CPM', color: '#ea580c', type: 'currency' },
+  conversionRate: { label: 'Conv. Rate', color: '#10b981', type: 'percent' },
 };
 
 // ─── Main Component ─────────────────────────────────────────────────
@@ -187,7 +192,10 @@ export default function AdSetDetailPage() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((k) => k !== 'reach' && k !== 'frequency');
+          const filtered = parsed.filter((k) => k !== 'reach' && k !== 'frequency');
+          const isOldDefault = filtered.length === 5 && ['spend', 'revenue', 'roas', 'ctr', 'conversions'].every((k) => filtered.includes(k));
+          if (isOldDefault) return defaultAdSetPinnedKPIs;
+          return filtered;
         }
       }
       return defaultAdSetPinnedKPIs;
@@ -212,8 +220,11 @@ export default function AdSetDetailPage() {
 
   const toggleKPI = (key) => {
     setPinnedKPIs((prev) => {
-      if (prev.includes(key)) return prev.filter((k) => k !== key);
-      if (prev.length >= 5) return prev;
+      if (prev.includes(key)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((k) => k !== key);
+      }
+
       return [...prev, key];
     });
   };
@@ -314,6 +325,11 @@ export default function AdSetDetailPage() {
           ctr: pageDataRes.ctr,
           cpa: pageDataRes.cpa,
           roas: pageDataRes.roas,
+          impressions: pageDataRes.impressions,
+          clicks: pageDataRes.clicks,
+          cpc: pageDataRes.cpc,
+          cpm: pageDataRes.cpm,
+          conversionRate: pageDataRes.conversionRate,
         };
 
         let finalAds = [];
@@ -406,20 +422,41 @@ export default function AdSetDetailPage() {
         ctr: Number(p.ctr) || 0,
         impressions: Number(p.impressions) || 0,
         clicks: Number(p.clicks) || 0,
+        year: isNaN(d.getFullYear()) ? 2026 : d.getFullYear(),
+        month: isNaN(d.getTime()) ? 'August' : d.toLocaleString('en-US', { month: 'long' }),
+        cpc: Number(p.cpc) || (Number(p.clicks) > 0 ? (Number(p.spend) || 0) / Number(p.clicks) : 0),
+        cpm: Number(p.cpm) || (Number(p.impressions) > 0 ? ((Number(p.spend) || 0) / Number(p.impressions)) * 1000 : 0),
+        conversionRate: Number(p.conversionRate) || (Number(p.clicks) > 0 ? ((Number(p.conversions) || 0) / Number(p.clicks)) * 100 : 0),
       };
     })
     : [];
 
+  // Ads aggregated totals as fallback
+  const sumAdsImpressions = ads.reduce((s, a) => s + (Number(a.impressions) || 0), 0);
+  const sumAdsClicks = ads.reduce((s, a) => s + (Number(a.clicks) || 0), 0);
+  const sumAdsConversions = ads.reduce((s, a) => s + (Number(a.conversions) || 0), 0);
+  const sumAdsSpend = ads.reduce((s, a) => s + (Number(a.spend) || 0), 0);
+  const sumAdsRevenue = ads.reduce((s, a) => s + (Number(a.revenue) || 0), 0);
+
   // Compute metrics scaled to selected period
-  const asSpend = timeSeries.length ? timeSeries.reduce((s, d) => s + d.spend, 0) : (Number(adSet?.spend) || 0);
-  const asRevenue = timeSeries.length ? timeSeries.reduce((s, d) => s + d.revenue, 0) : (Number(adSet?.revenue) || 0);
-  const asRoas = asSpend > 0 ? asRevenue / asSpend : 0;
-  const asImpressions = timeSeries.length ? timeSeries.reduce((s, d) => s + d.impressions, 0) : (Number(adSet?.impressions) || 0);
-  const asClicks = timeSeries.length ? timeSeries.reduce((s, d) => s + d.clicks, 0) : (Number(adSet?.clicks) || 0);
-  const asCtr = asImpressions > 0 ? (asClicks / asImpressions) * 100 : 0;
-  const asConversions = timeSeries.length ? timeSeries.reduce((s, d) => s + d.conversions, 0) : (Number(adSet?.conversions) || 0);
-  const asCpa = asConversions > 0 ? asSpend / asConversions : 0;
-  const asCpm = asImpressions > 0 ? (asSpend / asImpressions) * 1000 : 0;
+  const seriesSpend = timeSeries.reduce((s, d) => s + d.spend, 0);
+  const asSpend = seriesSpend > 0 ? seriesSpend : (Number(adSet?.spend) || sumAdsSpend || 0);
+  const seriesRevenue = timeSeries.reduce((s, d) => s + d.revenue, 0);
+  const asRevenue = seriesRevenue > 0 ? seriesRevenue : (Number(adSet?.revenue) || sumAdsRevenue || 0);
+  const asRoas = asSpend > 0 ? asRevenue / asSpend : (Number(adSet?.roas) || 0);
+  const seriesImpressions = timeSeries.reduce((s, d) => s + d.impressions, 0);
+  const asImpressions = seriesImpressions > 0 ? seriesImpressions : (Number(adSet?.impressions) || sumAdsImpressions || 0);
+  const seriesClicks = timeSeries.reduce((s, d) => s + d.clicks, 0);
+  const asClicks = seriesClicks > 0 ? seriesClicks : (Number(adSet?.clicks) || sumAdsClicks || 0);
+  const asCtr = asImpressions > 0
+    ? (asClicks / asImpressions) * 100
+    : (Number(adSet?.ctr) || (sumAdsImpressions > 0 ? (sumAdsClicks / sumAdsImpressions) * 100 : 0));
+  const seriesConversions = timeSeries.reduce((s, d) => s + d.conversions, 0);
+  const asConversions = seriesConversions > 0 ? seriesConversions : (Number(adSet?.conversions) || sumAdsConversions || 0);
+  const asCpa = asConversions > 0 ? asSpend / asConversions : (Number(adSet?.cpa) || 0);
+  const asCpc = asClicks > 0 ? asSpend / asClicks : (Number(adSet?.cpc) || 0);
+  const asCpm = asImpressions > 0 ? (asSpend / asImpressions) * 1000 : (Number(adSet?.cpm) || 0);
+  const asConversionRate = asClicks > 0 ? (asConversions / asClicks) * 100 : (Number(adSet?.conversionRate) || 0);
   const asDailyBudget = Number(adSet?.dailyBudget) || Math.round(asSpend / Math.max(1, periodConfig.days));
   const asTotalBudget = asDailyBudget * periodConfig.days;
   const budgetUtil = asTotalBudget > 0 ? Math.min(100, (asSpend / asTotalBudget) * 100) : 0;
@@ -431,6 +468,11 @@ export default function AdSetDetailPage() {
     ctr: { value: asCtr, change: 1.8 },
     conversions: { value: asConversions, change: 11.9 },
     cpa: { value: asCpa, change: -4.7 },
+    cpc: { value: asCpc, change: -3.2 },
+    cpm: { value: asCpm, change: -2.1 },
+    impressions: { value: asImpressions, change: 14.5 },
+    clicks: { value: asClicks, change: 12.8 },
+    conversionRate: { value: asConversionRate, change: 3.5 },
   };
 
   // Filter & sort ads
@@ -439,8 +481,14 @@ export default function AdSetDetailPage() {
     const matchStatus = adStatusFilter === 'ALL' || normalizeStatus(ad.status) === adStatusFilter;
     return matchSearch && matchStatus;
   }).sort((a, b) => {
-    const aVal = Number(a[sortField]) || 0;
-    const bVal = Number(b[sortField]) || 0;
+    const getVal = (item) => {
+      if (sortField === 'ctr') return Number(item.ctr) || (Number(item.impressions) > 0 ? (Number(item.clicks) / Number(item.impressions)) * 100 : 0);
+      if (sortField === 'cpa') return Number(item.cpa) || (Number(item.conversions) > 0 ? Number(item.spend) / Number(item.conversions) : 0);
+      if (sortField === 'roas') return Number(item.roas) || (Number(item.spend) > 0 ? Number(item.revenue) / Number(item.spend) : 0);
+      return Number(item[sortField]) || 0;
+    };
+    const aVal = getVal(a);
+    const bVal = getVal(b);
     return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
   });
 
@@ -628,7 +676,7 @@ export default function AdSetDetailPage() {
         <style>{`
           .kpi-card { transition: transform 0.18s ease, box-shadow 0.18s ease; }
           .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1) !important; }
-          .kpi-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+          .kpi-grid-5 { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 1rem; }
           @media (max-width: 1200px) { .kpi-grid-5 { grid-template-columns: repeat(3, 1fr); } }
           @media (max-width: 768px) { .kpi-grid-5 { grid-template-columns: repeat(2, 1fr); } }
           @media (max-width: 480px) { .kpi-grid-5 { grid-template-columns: 1fr; } }
@@ -750,11 +798,11 @@ export default function AdSetDetailPage() {
               <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-2" onClick={() => setShowKPISelector(!showKPISelector)}><IconGear /> <span className="fw-semibold">Customize KPIs</span></button>
               {showKPISelector && (
                 <div className="position-absolute end-0 mt-1 bg-white border rounded-3 shadow-lg p-3" style={{ zIndex: 1050, minWidth: 260 }}>
-                  <h6 className="fw-bold small mb-2">Select KPIs to pin (max 5)</h6>
+                  <h6 className="fw-bold small mb-2">Select KPIs to display</h6>
                   <div className="d-flex flex-column gap-1">
                     {availableAdSetKPIs.map((kpi) => {
                       const isPinned = pinnedKPIs.includes(kpi.key);
-                      return (<label key={kpi.key} className={`d-flex align-items-center gap-2 px-2 py-1 rounded-2 cursor-pointer ${isPinned ? 'bg-primary-subtle' : 'bg-transparent'}`} style={{ cursor: 'pointer' }}><input type="checkbox" className="form-check-input m-0" checked={isPinned} onChange={() => toggleKPI(kpi.key)} disabled={!isPinned && pinnedKPIs.length >= 5} /><span className="small">{kpi.label}</span></label>);
+                      return (<label key={kpi.key} className={`d-flex align-items-center gap-2 px-2 py-1 rounded-2 cursor-pointer ${isPinned ? 'bg-primary-subtle' : 'bg-transparent'}`} style={{ cursor: 'pointer' }}><input type="checkbox" className="form-check-input m-0" checked={isPinned} onChange={() => toggleKPI(kpi.key)} /><span className="small">{kpi.label}</span></label>);
                     })}
                   </div>
                   <button className="btn btn-sm btn-primary w-100 mt-2" onClick={() => setShowKPISelector(false)}>Done</button>
@@ -763,12 +811,12 @@ export default function AdSetDetailPage() {
             </div>
           </div>
           <div className="kpi-grid-5">
-            {pinnedKPIs.slice(0, 5).map((key) => {
+            {pinnedKPIs.map((key) => {
               const kpiDef = availableAdSetKPIs.find((k) => k.key === key);
               const kpiData = kpiDataMap[key];
               if (!kpiDef || !kpiData) return null;
               const isPositive = kpiData.change >= 0;
-              const isCostKPI = ['cpa', 'spend'].includes(key);
+              const isCostKPI = ['cpa', 'spend', 'cpc', 'cpm'].includes(key);
               const isGood = isCostKPI ? !isPositive : isPositive;
               return (
                 <div key={key}>

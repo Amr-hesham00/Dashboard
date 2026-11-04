@@ -8,4 +8,5 @@ public interface IAdRepo : IGenericRepo<Ad>
     /// returns all ads of the specified AdSet within the date range
     /// </returns>
     Task<IEnumerable<Ad>> GetByAdSetIdAsync(int adSetId, DateOnly start, DateOnly end);
+    Task<List<Ad>> GetTrackedByPlatformIdAsync(int platformId);
 }

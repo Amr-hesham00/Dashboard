@@ -8,4 +8,5 @@ public interface ICampaignRepo : IGenericRepo<Campaign>
     /// returns campaigns for a given client and platform within the specified date range
     /// </summary>
     public Task<IEnumerable<Campaign>> GetByPlatformAsync(int clientId, int platformid, DateOnly startDate, DateOnly endDate);
+    public Task<List<Campaign>> GetTrackedByPlatformIdAsync(int platformId);
 }

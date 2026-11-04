@@ -3,8 +3,9 @@ using Dashboard.Application.DTOs;
 namespace Dashboard.Application.Interfaces.Services;
 
 /// <summary>
-/// Service interface for discovering accessible Google Ads customer accounts
-/// and linking selected advertiser accounts to Dashboard Clients.
+/// Service interface for discovering accessible Google Ads customer accounts,
+/// linking selected advertiser accounts to Dashboard Clients, and synchronizing
+/// Google Ads account hierarchy and daily performance metrics.
 /// </summary>
 public interface IGoogleAdsService
 {
@@ -40,5 +41,22 @@ public interface IGoogleAdsService
     Task<DisconnectGoogleAdsClientResultDto> DisconnectClientAccountAsync(
         string userId,
         int clientId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Synchronizes one specified Google Ads platform belonging to one specified Dashboard client.
+    /// Handles initial 30-day import, reconnection from the last successful sync date,
+    /// normal incremental sync, and weekly 30-day backfill when due.
+    /// </summary>
+    Task<PlatformSyncResultDto> SynchronizePlatformAsync(
+        int clientId,
+        int platformId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Synchronizes one specified Google Ads platform by platform ID.
+    /// </summary>
+    Task<PlatformSyncResultDto> SynchronizePlatformAsync(
+        int platformId,
         CancellationToken cancellationToken = default);
 }

@@ -30,6 +30,15 @@ public class PlatformConfig : IEntityTypeConfiguration<Platform>
         builder.Property(p => p.ManagerAccountId)
                .HasMaxLength(64);
 
+        builder.Property(p => p.TimeZone)
+               .HasMaxLength(100);
+
+        builder.Property(p => p.LastSyncStatus)
+               .HasMaxLength(50);
+
+        builder.Property(p => p.LastSyncError)
+               .HasMaxLength(1000);
+
         builder.HasIndex(p => new { p.PlatformType, p.ExternalAccountId });
 
         // Clients has many Platforms

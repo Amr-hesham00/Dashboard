@@ -17,7 +17,12 @@ public class PlatformDTO
     public string? ExternalAccountId { get; set; }
     public string? AccountName { get; set; }
     public string? ManagerAccountId { get; set; }
+    public string? TimeZone { get; set; }
     public int? OAuthConnectionId { get; set; }
+    public DateTimeOffset? LastSyncedAt { get; set; }
+    public DateTimeOffset? LastBackfillAt { get; set; }
+    public string? LastSyncStatus { get; set; }
+    public string? LastSyncError { get; set; }
 
     // Calculated Performance Metrics (Backend)
     public decimal Spend { get; set; }

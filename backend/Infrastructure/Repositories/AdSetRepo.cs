@@ -35,4 +35,11 @@ public class AdSetRepo : GenericRepo<AdSet>, IAdSetRepo
             .Where(x => x.Campaign.Platform.ClientId == clientId)
             .ToListAsync();
     }
+
+    public async Task<List<AdSet>> GetTrackedByPlatformIdAsync(int platformId)
+    {
+        return await dbset
+            .Where(x => x.Campaign.PlatformId == platformId)
+            .ToListAsync();
+    }
 }

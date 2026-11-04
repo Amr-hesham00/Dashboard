@@ -41,5 +41,10 @@ public class CampaignRepo : GenericRepo<Campaign>, ICampaignRepo
             .ToListAsync();
     }
 
-
+    public async Task<List<Campaign>> GetTrackedByPlatformIdAsync(int platformId)
+    {
+        return await dbset
+            .Where(x => x.PlatformId == platformId)
+            .ToListAsync();
+    }
 }

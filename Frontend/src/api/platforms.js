@@ -73,3 +73,27 @@ export async function getPlatformCurrenciesApi() {
   return ['USD', 'EUR', 'EGP', 'GBP', 'CAD', 'AUD', 'AED', 'SAR'];
 }
 
+
+
+/**
+ * Refreshes / synchronizes only the specified Platform without affecting other platforms.
+ */
+export async function refreshPlatformApi(platformId, clientId = null) {
+  const url = clientId 
+    ? `${API_BASE_URL}/Platform/${Number(platformId)}/refresh?clientId=${Number(clientId)}`
+    : `${API_BASE_URL}/Platform/${Number(platformId)}/refresh`;
+  const response = await apiFetch(url, {
+    method: 'POST',
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || 'Failed to refresh platform data.');
+    error.status = response.status;
+    error.errorCode = data.errorCode;
+    error.inProgress = response.status === 409 || data.errorCode === 'sync_already_in_progress';
+    throw error;
+  }
+
+  return data;
+}

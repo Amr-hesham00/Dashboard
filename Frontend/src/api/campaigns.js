@@ -118,6 +118,7 @@ export async function getCampaignByIdApi(id, startDate, endDate) {
           conversions: data.conversions,
           cpa: data.cpa,
           roas: data.roas,
+          ctr: data.ctr,
           cpc: data.cpc,
           cpm: data.cpm,
           conversionRate: data.conversionRate,

@@ -214,6 +214,66 @@ public class GoogleAdsController : ControllerBase
     //------------------------------------------------------------------ 
 
     /// <summary>
+    /// Synchronizes one specified Google Ads platform belonging to the specified Dashboard client.
+    /// </summary>
+    [HttpPost("clients/{clientId:int}/platforms/{platformId:int}/sync")]
+    [HttpPost("clients/{clientId:int}/platforms/{platformId:int}/refresh")]
+    public async Task<IActionResult> SynchronizePlatform(
+        [FromRoute] int clientId,
+        [FromRoute] int platformId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_googleAdsService is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Google Ads service is not available." });
+        }
+
+        var result = await _googleAdsService.SynchronizePlatformAsync(clientId, platformId, cancellationToken);
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                GoogleOAuthErrorCodes.PlatformNotFound => NotFound(result),
+                GoogleOAuthErrorCodes.UnauthorizedClient => StatusCode(StatusCodes.Status403Forbidden, result),
+                GoogleOAuthErrorCodes.SyncAlreadyInProgress => Conflict(result),
+                _ => BadRequest(result)
+            };
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Synchronizes only the specified Google Ads Platform ID.
+    /// </summary>
+    [HttpPost("platforms/{platformId:int}/refresh")]
+    public async Task<IActionResult> RefreshPlatform(
+        [FromRoute] int platformId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_googleAdsService is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Google Ads service is not available." });
+        }
+
+        var result = await _googleAdsService.SynchronizePlatformAsync(platformId, cancellationToken);
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                GoogleOAuthErrorCodes.PlatformNotFound => NotFound(result),
+                GoogleOAuthErrorCodes.UnauthorizedClient => StatusCode(StatusCodes.Status403Forbidden, result),
+                GoogleOAuthErrorCodes.SyncAlreadyInProgress => Conflict(result),
+                _ => BadRequest(result)
+            };
+        }
+
+        return Ok(result);
+    }
+
+    //------------------------------------------------------------------ 
+
+    /// <summary>
     /// Disconnects (deactivates) only the specified Dashboard Client's Google Ads account association.
     /// Does NOT revoke the user's Google OAuth tokens, does NOT delete the user's OAuthConnection,
     /// and does NOT affect any other Dashboard Client's Google Ads association.

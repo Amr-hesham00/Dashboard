@@ -163,9 +163,13 @@ const PERF_CHART_METRICS = {
   revenue: { label: 'Revenue', color: '#00a76f', type: 'currency' },
   roas: { label: 'ROAS', color: '#0d9488', type: 'ratio' },
   conversions: { label: 'Conversions', color: '#8b5cf6', type: 'number' },
-  cpa: { label: 'CPA', color: '#f59e0b', type: 'currency' },
-  cpm: { label: 'CPM', color: '#ea580c', type: 'currency' },
+  impressions: { label: 'Impressions', color: '#3b82f6', type: 'number' },
+  clicks: { label: 'Clicks', color: '#8b5cf6', type: 'number' },
   ctr: { label: 'CTR', color: '#06b6d4', type: 'percent' },
+  cpc: { label: 'CPC', color: '#10b981', type: 'currency' },
+  cpm: { label: 'CPM', color: '#ea580c', type: 'currency' },
+  cpa: { label: 'CPA', color: '#f59e0b', type: 'currency' },
+  conversionRate: { label: 'Conv. Rate', color: '#ec4899', type: 'percent' },
 };
 
 // ─── Main Component ─────────────────────────────────────────────────
@@ -196,12 +200,14 @@ export default function CampaignDetailPage() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.slice(0, 5);
+          const isOldDefault = parsed.length === 5 && ['spend', 'revenue', 'roas', 'ctr', 'conversions'].every((k) => parsed.includes(k));
+          if (isOldDefault) return defaultCampaignPinnedKPIs;
+          return parsed;
         }
       }
-      return defaultCampaignPinnedKPIs.slice(0, 5);
+      return defaultCampaignPinnedKPIs;
     } catch {
-      return defaultCampaignPinnedKPIs.slice(0, 5);
+      return defaultCampaignPinnedKPIs;
     }
   });
   const [showKPISelector, setShowKPISelector] = useState(false);
@@ -225,7 +231,6 @@ export default function CampaignDetailPage() {
   const toggleKPI = (key) => {
     setPinnedKPIs((prev) => {
       if (prev.includes(key)) return prev.filter((k) => k !== key);
-      if (prev.length >= 5) return prev;
       return [...prev, key];
     });
   };
@@ -366,23 +371,39 @@ export default function CampaignDetailPage() {
         ctr: Number(p.ctr) || 0,
         impressions: Number(p.impressions) || 0,
         clicks: Number(p.clicks) || 0,
+        cpc: Number(p.cpc) || 0,
+        cpm: Number(p.cpm) || 0,
+        conversionRate: Number(p.conversionRate) || 0,
       };
     })
     : [];
 
-  // Compute campaign metrics scaled to selected period
-  const cSpend = timeSeries.length ? timeSeries.reduce((s, d) => s + d.spend, 0) : (Number(campaign?.spend) || 0);
-  const cRevenue = timeSeries.length ? timeSeries.reduce((s, d) => s + d.revenue, 0) : (Number(campaign?.revenue) || 0);
-  const cRoas = cSpend > 0 ? cRevenue / cSpend : 0;
-  const cImpressions = timeSeries.length ? timeSeries.reduce((s, d) => s + d.impressions, 0) : (Number(campaign?.impressions) || 0);
-  const cClicks = timeSeries.length ? timeSeries.reduce((s, d) => s + d.clicks, 0) : (Number(campaign?.clicks) || 0);
-  const cCtr = cImpressions > 0 ? (cClicks / cImpressions) * 100 : 0;
-  const cConversions = timeSeries.length ? timeSeries.reduce((s, d) => s + d.conversions, 0) : (Number(campaign?.conversions) || 0);
-  const cCpa = cConversions > 0 ? cSpend / cConversions : 0;
-  const cCpc = cClicks > 0 ? cSpend / cClicks : 0;
-  const cAov = cConversions > 0 ? cRevenue / cConversions : 0;
-  const cCpm = cImpressions > 0 ? (cSpend / cImpressions) * 1000 : 0;
-  const cConversionRate = cClicks > 0 ? (cConversions / cClicks) * 100 : 0;
+  // Compute campaign metrics scaled to selected period with multi-tier fallback
+  const sumAdSetsSpend = adSets.reduce((s, a) => s + (Number(a.spend) || 0), 0);
+  const sumAdSetsRev = adSets.reduce((s, a) => s + (Number(a.revenue) || 0), 0);
+  const sumAdSetsImp = adSets.reduce((s, a) => s + (Number(a.impressions) || 0), 0);
+  const sumAdSetsClicks = adSets.reduce((s, a) => s + (Number(a.clicks) || 0), 0);
+  const sumAdSetsConv = adSets.reduce((s, a) => s + (Number(a.conversions) || 0), 0);
+
+  const rawTsSpend = timeSeries.reduce((s, d) => s + (Number(d.spend) || 0), 0);
+  const rawTsRevenue = timeSeries.reduce((s, d) => s + (Number(d.revenue) || 0), 0);
+  const rawTsImp = timeSeries.reduce((s, d) => s + (Number(d.impressions) || 0), 0);
+  const rawTsClicks = timeSeries.reduce((s, d) => s + (Number(d.clicks) || 0), 0);
+  const rawTsConv = timeSeries.reduce((s, d) => s + (Number(d.conversions) || 0), 0);
+
+  const cSpend = rawTsSpend > 0 ? rawTsSpend : ((Number(campaign?.spend) || 0) || sumAdSetsSpend);
+  const cRevenue = rawTsRevenue > 0 ? rawTsRevenue : ((Number(campaign?.revenue) || 0) || sumAdSetsRev);
+  const cImpressions = rawTsImp > 0 ? rawTsImp : ((Number(campaign?.impressions) || 0) || sumAdSetsImp);
+  const cClicks = rawTsClicks > 0 ? rawTsClicks : ((Number(campaign?.clicks) || 0) || sumAdSetsClicks);
+  const cConversions = rawTsConv > 0 ? rawTsConv : ((Number(campaign?.conversions) || 0) || sumAdSetsConv);
+
+  const cRoas = cSpend > 0 ? (cRevenue / cSpend) : (Number(campaign?.roas) || 0);
+  const cCtr = cImpressions > 0 ? ((cClicks / cImpressions) * 100) : (Number(campaign?.ctr) || 0);
+  const cCpa = cConversions > 0 ? (cSpend / cConversions) : (Number(campaign?.cpa) || 0);
+  const cCpc = cClicks > 0 ? (cSpend / cClicks) : (Number(campaign?.cpc) || 0);
+  const cAov = cConversions > 0 ? (cRevenue / cConversions) : (Number(campaign?.aov) || 0);
+  const cCpm = cImpressions > 0 ? ((cSpend / cImpressions) * 1000) : (Number(campaign?.cpm) || 0);
+  const cConversionRate = cClicks > 0 ? ((cConversions / cClicks) * 100) : (Number(campaign?.conversionRate) || 0);
   const resolvedClientId = client?.id || initialClientId || campaign?.clientId || null;
 
   // KPI data map (value + simulated change)
@@ -604,7 +625,7 @@ export default function CampaignDetailPage() {
         <style>{`
           .kpi-card { transition: transform 0.18s ease, box-shadow 0.18s ease; }
           .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1) !important; }
-          .kpi-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem; }
+          .kpi-grid-5 { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 1rem; }
           @media (max-width: 1200px) { .kpi-grid-5 { grid-template-columns: repeat(3, 1fr); } }
           @media (max-width: 768px) { .kpi-grid-5 { grid-template-columns: repeat(2, 1fr); } }
           @media (max-width: 480px) { .kpi-grid-5 { grid-template-columns: 1fr; } }
@@ -729,13 +750,13 @@ export default function CampaignDetailPage() {
               </button>
               {showKPISelector && (
                 <div className="position-absolute end-0 mt-1 bg-white border rounded-3 shadow-lg p-3" style={{ zIndex: 1050, minWidth: 260 }}>
-                  <h6 className="fw-bold small mb-2">Select KPIs to pin (max 5)</h6>
+                  <h6 className="fw-bold small mb-2">Select KPIs to pin</h6>
                   <div className="d-flex flex-column gap-1">
                     {availableCampaignKPIs.map((kpi) => {
                       const isPinned = pinnedKPIs.includes(kpi.key);
                       return (
                         <label key={kpi.key} className={`d-flex align-items-center gap-2 px-2 py-1 rounded-2 cursor-pointer ${isPinned ? 'bg-primary-subtle' : 'bg-transparent'}`} style={{ cursor: 'pointer' }}>
-                          <input type="checkbox" className="form-check-input m-0" checked={isPinned} onChange={() => toggleKPI(kpi.key)} disabled={!isPinned && pinnedKPIs.length >= 5} />
+                          <input type="checkbox" className="form-check-input m-0" checked={isPinned} onChange={() => toggleKPI(kpi.key)}  />
                           <span className="small">{kpi.label}</span>
                         </label>
                       );
@@ -748,7 +769,7 @@ export default function CampaignDetailPage() {
           </div>
 
           <div className="kpi-grid-5">
-            {pinnedKPIs.slice(0, 5).map((key) => {
+            {pinnedKPIs.map((key) => {
               const kpiDef = availableCampaignKPIs.find((k) => k.key === key);
               const kpiData = kpiDataMap[key];
               if (!kpiDef || !kpiData) return null;

@@ -47,4 +47,11 @@ public class AdDailyMetricsRepo : GenericRepo<AdDailyMetrics>, IAdDailyMetricsRe
             .OrderByDescending(x => x.Date)
             .ToListAsync();
     }
+
+    public async Task<List<AdDailyMetrics>> GetTrackedByPlatformAndDateRangeAsync(int platformId, DateOnly startDate, DateOnly endDate)
+    {
+        return await dbset
+            .Where(x => x.Ad.Adset.Campaign.PlatformId == platformId && x.Date >= startDate && x.Date <= endDate)
+            .ToListAsync();
+    }
 }

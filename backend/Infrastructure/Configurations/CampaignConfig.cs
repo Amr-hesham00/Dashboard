@@ -18,6 +18,10 @@ public class CampaignConfig : IEntityTypeConfiguration<Campaign>
         builder.Property(c => c.ExternalId)
                .HasMaxLength(100);
 
+        builder.HasIndex(c => new { c.PlatformId, c.ExternalId })
+               .IsUnique()
+               .HasFilter("[ExternalId] IS NOT NULL");
+
         builder.Property(c => c.Currency)
                .HasConversion<string>();
 

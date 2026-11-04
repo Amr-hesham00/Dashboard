@@ -14,6 +14,7 @@ public class PlatformRepo : GenericRepo<Platform>, IPlatformRepo
     {
         return await dbset
             .Include(p => p.Client)
+            .Include(p => p.OAuthConnection)
             .FirstOrDefaultAsync(p => p.ClientId == clientId && p.PlatformType == platformType);
     }
 
@@ -32,6 +33,34 @@ public class PlatformRepo : GenericRepo<Platform>, IPlatformRepo
         return await dbset
             .Include(p => p.Client)
             .Where(p => p.OAuthConnectionId == oauthConnectionId)
+            .ToListAsync();
+    }
+
+    public async Task<Platform?> GetByIdWithDetailsAsync(int platformId)
+    {
+        return await dbset
+            .Include(p => p.Client)
+            .Include(p => p.OAuthConnection)
+            .FirstOrDefaultAsync(p => p.Id == platformId);
+    }
+
+    public async Task<List<Platform>> GetByClientIdAsync(int clientId)
+    {
+        return await dbset
+            .Include(p => p.Client)
+            .Include(p => p.OAuthConnection)
+            .Where(p => p.ClientId == clientId)
+            .ToListAsync();
+    }
+
+    public async Task<List<Platform>> GetConnectedByTypeAsync(PlatformType platformType)
+    {
+        return await dbset
+            .Include(p => p.Client)
+            .Include(p => p.OAuthConnection)
+            .Where(p => p.PlatformType == platformType &&
+                        p.Status == PlatformStatus.Connected &&
+                        p.ExternalAccountId != null)
             .ToListAsync();
     }
 }

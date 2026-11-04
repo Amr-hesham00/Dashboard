@@ -17,6 +17,7 @@ const IconCheck = () => (
 );
 
 export const PRESET_DATE_RANGES = [
+  'Today',
   'Last 7 Days',
   'Last 30 Days',
   'This Month',
@@ -35,6 +36,16 @@ export function getPresetDates(preset, customNow) {
   };
 
   const endDate = formatYMD(today);
+
+  if (preset === 'Today') {
+    return {
+      label: 'Today',
+      startDate: endDate,
+      endDate,
+      days: 1,
+      isCustom: false,
+    };
+  }
 
   if (preset === 'Last 7 Days') {
     const start = new Date(today);

@@ -23,15 +23,17 @@ public class AdDTO
     public double Spend { get; set; }
     public double Revenue { get; set; }
 
-    //derived metrics
+    // derived metrics
     public double CTR { get; set; }
     public double CPC { get; set; }
     public double CPA { get; set; }
     public double ROAS { get; set; }
+    public double CPM { get; set; }
+    public double ConversionRate { get; set; }
 
     public int AdSetId { get; set; }
-
 }
+
 public class AdSetPageDTO
 {
     // AdSet & Parent Hierarchy
@@ -58,6 +60,11 @@ public class AdSetPageDTO
     public double CTR { get; set; }
     public double CPA { get; set; }
     public double ROAS { get; set; }
+    public int Impressions { get; set; }
+    public int Clicks { get; set; }
+    public double CPC { get; set; }
+    public double CPM { get; set; }
+    public double ConversionRate { get; set; }
 
     public int AdId { get; set; }
 
@@ -69,7 +76,6 @@ public class AdSetPageDTO
 
     public IEnumerable<SearchTermRow> SearchTermRows { get; set; }
     = Array.Empty<SearchTermRow>();
-
 }
 
 public class ChartPoint
@@ -81,7 +87,11 @@ public class ChartPoint
     public double ROAS { get; set; }
     public double CPA { get; set; }
     public double CTR { get; set; }
-
+    public int Impressions { get; set; }
+    public int Clicks { get; set; }
+    public double CPC { get; set; }
+    public double CPM { get; set; }
+    public double ConversionRate { get; set; }
 }
 
 public class TableRow
@@ -96,6 +106,10 @@ public class TableRow
     public double CPA { get; set; }
     public double Revenue { get; set; }
     public double ROAS { get; set; }
+    public double CTR { get; set; }
+    public double CPC { get; set; }
+    public double CPM { get; set; }
+    public double ConversionRate { get; set; }
 }
 
 public class UpdateAdDTO
@@ -129,7 +143,6 @@ public class SearchTermRow
     public string Term { get; set; } = null!;
     public string? Keyword { get; set; }
     public string MatchType { get; set; } = null!;
-
 
     public int Impressions { get; set; }
     public int Clicks { get; set; }

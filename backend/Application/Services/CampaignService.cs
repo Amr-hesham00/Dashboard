@@ -182,7 +182,12 @@ public class CampaignService : ICampaignService
                 Conversions = daily.Conversions,
                 ROAS = Divide(daily.Revenue, daily.Spend),
                 CPA = Divide(daily.Spend, daily.Conversions),
-                CTR = Divide(daily.Clicks, daily.Impressions) * 100
+                CTR = Divide(daily.Clicks, daily.Impressions) * 100,
+                Impressions = (int)daily.Impressions,
+                Clicks = (int)daily.Clicks,
+                CPC = Divide(daily.Spend, daily.Clicks),
+                CPM = Divide(daily.Spend, daily.Impressions) * 1000,
+                ConversionRate = Divide(daily.Conversions, daily.Clicks) * 100
             });
         }
 

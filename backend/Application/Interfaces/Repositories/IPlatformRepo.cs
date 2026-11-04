@@ -7,4 +7,7 @@ public interface IPlatformRepo : IGenericRepo<Platform>
     Task<Platform?> GetByClientAndTypeAsync(int clientId, PlatformType platformType);
     Task<Platform?> GetByExternalAccountIdAsync(PlatformType platformType, string externalAccountId);
     Task<List<Platform>> GetByOAuthConnectionIdAsync(int oauthConnectionId);
+    Task<Platform?> GetByIdWithDetailsAsync(int platformId);
+    Task<List<Platform>> GetByClientIdAsync(int clientId);
+    Task<List<Platform>> GetConnectedByTypeAsync(PlatformType platformType);
 }

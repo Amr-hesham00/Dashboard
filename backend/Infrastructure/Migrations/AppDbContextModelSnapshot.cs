@@ -71,7 +71,9 @@ namespace Dashboard.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AdSetId");
+                    b.HasIndex("AdSetId", "ExternalId")
+                        .IsUnique()
+                        .HasFilter("[ExternalId] IS NOT NULL");
 
                     b.ToTable("Ads", (string)null);
                 });
@@ -163,7 +165,9 @@ namespace Dashboard.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CampaignId");
+                    b.HasIndex("CampaignId", "ExternalId")
+                        .IsUnique()
+                        .HasFilter("[ExternalId] IS NOT NULL");
 
                     b.ToTable("AdSets", (string)null);
                 });
@@ -296,7 +300,9 @@ namespace Dashboard.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PlatformId");
+                    b.HasIndex("PlatformId", "ExternalId")
+                        .IsUnique()
+                        .HasFilter("[ExternalId] IS NOT NULL");
 
                     b.ToTable("Campaigns", (string)null);
                 });
@@ -511,6 +517,20 @@ namespace Dashboard.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<DateTimeOffset?>("LastBackfillAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("LastSyncError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("LastSyncStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTimeOffset?>("LastSyncedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<string>("ManagerAccountId")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
@@ -525,6 +545,10 @@ namespace Dashboard.Infrastructure.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("TimeZone")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 

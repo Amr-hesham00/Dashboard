@@ -12,6 +12,12 @@ public class Platform
     public string? ExternalAccountId { get; set; }
     public string? AccountName { get; set; }
     public string? ManagerAccountId { get; set; }
+    public string? TimeZone { get; set; }
+
+    public DateTimeOffset? LastSyncedAt { get; set; }
+    public DateTimeOffset? LastBackfillAt { get; set; }
+    public string? LastSyncStatus { get; set; }
+    public string? LastSyncError { get; set; }
 
     public int? OAuthConnectionId { get; set; }
     public OAuthConnection? OAuthConnection { get; set; }

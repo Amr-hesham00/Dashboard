@@ -126,3 +126,25 @@ export async function disconnectGoogleAdsApi() {
   invalidateClientsCache();
   return data;
 }
+
+
+/**
+ * Synchronizes one specified Google Ads platform belonging to a Dashboard Client.
+ * Retrieves account info, campaigns, ad groups, ads, and daily performance metrics.
+ */
+export async function syncGoogleAdsPlatformApi(clientId, platformId) {
+  const response = await apiFetch(`${API_BASE_URL}/google-ads/clients/${Number(clientId)}/platforms/${Number(platformId)}/sync`, {
+    method: 'POST',
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.message || 'Failed to synchronize Google Ads data.');
+    error.status = response.status;
+    error.errorCode = data.errorCode;
+    error.inProgress = response.status === 409 || data.errorCode === 'sync_already_in_progress';
+    throw error;
+  }
+
+  return data;
+}

@@ -10,6 +10,5 @@ public interface IAdDailyMetricsRepo : IGenericRepo<AdDailyMetrics>
     /// <returns>returns all metric records of the specified AdSet within the date range</returns>
     Task<IEnumerable<AdDailyMetrics>> GetByAdSetIdAsync(int adSetId, DateOnly startDate, DateOnly endDate);
     Task<AdDailyMetrics?> GetByAdIdAndDateAsync(int adId, DateOnly date);
-
-
+    Task<List<AdDailyMetrics>> GetTrackedByPlatformAndDateRangeAsync(int platformId, DateOnly startDate, DateOnly endDate);
 }

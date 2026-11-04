@@ -92,7 +92,12 @@ public class PlatformService : IPlatformService
             ExternalAccountId = platform.ExternalAccountId,
             AccountName = platform.AccountName,
             ManagerAccountId = platform.ManagerAccountId,
+            TimeZone = platform.TimeZone,
             OAuthConnectionId = platform.OAuthConnectionId,
+            LastSyncedAt = platform.LastSyncedAt,
+            LastBackfillAt = platform.LastBackfillAt,
+            LastSyncStatus = platform.LastSyncStatus,
+            LastSyncError = platform.LastSyncError,
             CampaignsCount = pCampaigns.Count
         };
     }

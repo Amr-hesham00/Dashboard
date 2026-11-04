@@ -11,10 +11,43 @@ namespace Dashboard.API.Controllers;
 public class PlatformController : ControllerBase
 {
     private readonly IPlatformService _platformService;
+    private readonly IGoogleAdsService? _googleAdsService;
 
-    public PlatformController(IPlatformService platformService)
+    public PlatformController(
+        IPlatformService platformService,
+        IGoogleAdsService? googleAdsService = null)
     {
         _platformService = platformService;
+        _googleAdsService = googleAdsService;
+    }
+
+    /// <summary>
+    /// Refresh Platform: Synchronizes only the specified Google Ads platform for its Dashboard client.
+    /// </summary>
+    [HttpPost("{id:int}/refresh")]
+    public async Task<IActionResult> RefreshPlatform(
+        int id,
+        [FromQuery] int? clientId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_googleAdsService is null)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Synchronization service is not available." });
+        }
+
+        var result = await _googleAdsService.SynchronizePlatformAsync(clientId ?? 0, id, cancellationToken);
+        if (!result.Success)
+        {
+            return result.ErrorCode switch
+            {
+                GoogleOAuthErrorCodes.PlatformNotFound => NotFound(result),
+                GoogleOAuthErrorCodes.UnauthorizedClient => StatusCode(StatusCodes.Status403Forbidden, result),
+                GoogleOAuthErrorCodes.SyncAlreadyInProgress => Conflict(result),
+                _ => BadRequest(result)
+            };
+        }
+
+        return Ok(result);
     }
 
     [HttpGet]

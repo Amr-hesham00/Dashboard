@@ -456,7 +456,7 @@ export const availableKPIs = [
 ];
 
 /** Default pinned KPI keys (5 cards) */
-export const defaultPinnedKPIs = ['spend', 'revenue', 'roas', 'ctr', 'conversions'];
+export const defaultPinnedKPIs = ['spend', 'revenue', 'roas', 'ctr', 'cpc', 'cpm', 'impressions', 'clicks', 'conversions', 'cpa', 'conversionRate'];
 
 /**
  * Per-client KPI values (keyed by client ID).
@@ -1763,7 +1763,7 @@ export const availableCampaignKPIs = [
   { key: 'conversionRate', label: 'Conversion Rate', format: 'percent', color: 'success' },
 ];
 
-export const defaultCampaignPinnedKPIs = ['spend', 'revenue', 'roas', 'ctr', 'conversions'];
+export const defaultCampaignPinnedKPIs = ['spend', 'revenue', 'roas', 'ctr', 'cpc', 'cpm', 'impressions', 'clicks', 'conversions', 'cpa', 'conversionRate'];
 
 // ─── Ad Set-Level KPI Definitions ────────────────────────────────────
 export const availableAdSetKPIs = [
@@ -1780,7 +1780,7 @@ export const availableAdSetKPIs = [
   { key: 'conversionRate', label: 'Conversion Rate', format: 'percent', color: 'success' },
 ];
 
-export const defaultAdSetPinnedKPIs = ['spend', 'revenue', 'roas', 'ctr', 'conversions'];
+export const defaultAdSetPinnedKPIs = ['spend', 'revenue', 'roas', 'ctr', 'conversions', 'cpc', 'cpm', 'impressions', 'clicks', 'conversionRate'];
 
 // ─── Time-Series Generator for Campaign Charts ──────────────────────
 export function generateCampaignTimeSeries(campaign, days = 30, customEndDate = null, customStartDate = null) {
@@ -1853,6 +1853,8 @@ export function generateCampaignTimeSeries(campaign, days = 30, customEndDate = 
       cpa: dayConv > 0 ? Number((daySpend / dayConv).toFixed(2)) : 0,
       ctr: dayImpr > 0 ? Number(((dayClicks / dayImpr) * 100).toFixed(2)) : 0,
       cpc: dayClicks > 0 ? Number((daySpend / dayClicks).toFixed(2)) : 0,
+      cpm: dayImpr > 0 ? Number(((daySpend / dayImpr) * 1000).toFixed(2)) : 0,
+      conversionRate: dayClicks > 0 ? Number(((dayConv / dayClicks) * 100).toFixed(2)) : 0,
       aov: dayConv > 0 ? Number((dayRevenue / dayConv).toFixed(2)) : 0,
       cpm: dayImpr > 0 ? Number(((daySpend / dayImpr) * 1000).toFixed(2)) : 0,
       conversionRate: dayClicks > 0 ? Number(((dayConv / dayClicks) * 100).toFixed(2)) : 0,
@@ -1930,6 +1932,8 @@ export function generateAdSetTimeSeries(adSet, days = 30, customEndDate = null, 
       reach: dayReach,
       frequency: dayReach > 0 ? Number((dayImpr / dayReach).toFixed(2)) : 1,
       cpc: dayClicks > 0 ? Number((daySpend / dayClicks).toFixed(2)) : 0,
+      cpm: dayImpr > 0 ? Number(((daySpend / dayImpr) * 1000).toFixed(2)) : 0,
+      conversionRate: dayClicks > 0 ? Number(((dayConv / dayClicks) * 100).toFixed(2)) : 0,
     });
   }
   return series;
@@ -2007,6 +2011,8 @@ export function generateClientTimeSeries(clientId, clientKPIs, days = 30, custom
       cpa: dayConv > 0 ? Number((daySpend / dayConv).toFixed(2)) : 0,
       ctr: dayImpr > 0 ? Number(((dayClicks / dayImpr) * 100).toFixed(2)) : 0,
       cpc: dayClicks > 0 ? Number((daySpend / dayClicks).toFixed(2)) : 0,
+      cpm: dayImpr > 0 ? Number(((daySpend / dayImpr) * 1000).toFixed(2)) : 0,
+      conversionRate: dayClicks > 0 ? Number(((dayConv / dayClicks) * 100).toFixed(2)) : 0,
     });
   }
   return series;
