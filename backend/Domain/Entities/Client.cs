@@ -4,6 +4,7 @@ namespace Dashboard.Domain.Entities;
 public class Client
 {
     public int Id { get; set; }
+    public string? ExternalId { get; set; }
     public string CompanyName { get; set; } = null!;
     public string? Logo { get; set; }
     public string Website { get; set; } = null!;

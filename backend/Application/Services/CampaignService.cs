@@ -312,6 +312,7 @@ public class CampaignService : ICampaignService
             Client = new ClientInfoDTO
             {
                 Id = client.Id,
+                ExternalId = client.ExternalId,
                 CompanyName = client.CompanyName,
                 Logo = client.Logo,
                 Website = client.Website,

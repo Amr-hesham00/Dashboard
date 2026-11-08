@@ -210,9 +210,23 @@ export default function ClientSwitcher({
                         }`}
                       style={{ fontSize: '0.875rem' }}
                     >
-                      <span className="text-truncate me-2" title={clientName}>
-                        {clientName}
-                      </span>
+                      <div className="d-flex align-items-center gap-1.5 text-truncate me-2" title={clientName}>
+                        <span className="text-truncate">{clientName}</span>
+                        {client.externalId && (
+                          <span
+                            className="badge font-monospace px-1 py-0.5 rounded flex-shrink-0"
+                            style={{
+                              fontSize: '0.68rem',
+                              backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                              color: '#cbd5e1',
+                              border: '1px solid rgba(255, 255, 255, 0.15)',
+                            }}
+                            title={`External ID: ${client.externalId}`}
+                          >
+                            {client.externalId}
+                          </span>
+                        )}
+                      </div>
                       {isSelected && (
                         <span className="text-success fw-bold ms-auto flex-shrink-0" style={{ fontSize: '0.95rem', color: '#10b981' }}>
                           ✓

@@ -12,6 +12,11 @@ public class ClientConfig : IEntityTypeConfiguration<Client>
 
         builder.HasKey(x => x.Id);
 
+        builder.Property(c => c.ExternalId)
+               .HasMaxLength(100);
+
+        builder.HasIndex(c => c.ExternalId);
+
         builder.Property(c => c.CompanyName)
                .IsRequired()
                .HasMaxLength(200);

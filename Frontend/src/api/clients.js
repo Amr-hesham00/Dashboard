@@ -47,6 +47,7 @@ export async function getClientLookupApi(forceRefresh = false) {
           id: c.clientId ?? c.id,
           name: c.companyName ?? c.name,
           companyName: c.companyName ?? c.name,
+          externalId: c.externalId ?? null,
         }))
         : [];
       clientLookupCache = result;

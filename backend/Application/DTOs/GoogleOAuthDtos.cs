@@ -190,6 +190,7 @@ public class GoogleAdsAccountAssociationDto
     public int PlatformId { get; set; }
     public int ClientId { get; set; }
     public string ClientName { get; set; } = null!;
+    public string? ExternalId { get; set; }
     public string CustomerId { get; set; } = null!;
     public string FormattedCustomerId { get; set; } = null!;
     public string AccountName { get; set; } = null!;
@@ -303,6 +304,7 @@ public class PlatformSyncResultDto
     public int PlatformId { get; set; }
     public int ClientId { get; set; }
     public string PlatformType { get; set; } = Dashboard.Domain.Enums.PlatformType.GoogleAds.ToString();
+    public string? ExternalId { get; set; }
     public string? CustomerId { get; set; }
     public string? Currency { get; set; }
     public string? TimeZone { get; set; }

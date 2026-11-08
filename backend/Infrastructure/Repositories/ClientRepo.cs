@@ -87,6 +87,7 @@ public class ClientRepo : GenericRepo<Client>, IClientRepo
             .Select(c => new ClientLookupDTO
             {
                 ClientId = c.Id,
+                ExternalId = c.ExternalId,
                 CompanyName = c.CompanyName
             })
             .ToListAsync();

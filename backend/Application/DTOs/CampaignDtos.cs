@@ -79,6 +79,7 @@ public class CampsTable
 public class ClientInfoDTO
 {
     public int Id { get; set; }
+    public string? ExternalId { get; set; }
     public string CompanyName { get; set; } = null!;
     public string? Logo { get; set; }
     public string Website { get; set; } = null!;

@@ -446,10 +446,15 @@ public class GoogleAdsDiscoveryAndSelectionTests
         Assert.Equal(client.Id, result.Association!.ClientId);
         Assert.Equal("1757564917", result.Association.CustomerId);
         Assert.Equal("175-756-4917", result.Association.FormattedCustomerId);
+        Assert.Equal("175-756-4917", result.Association.ExternalId);
         Assert.Equal("Alshiaka test client acc", result.Association.AccountName);
         Assert.Equal("3674643588", result.Association.LoginCustomerId);
         Assert.Equal("EGP", result.Association.Currency);
         Assert.Equal(conn.Id, result.Association.GoogleAdsConnectionId);
+
+        var persistedClient = await db.client.FindAsync(client.Id);
+        Assert.NotNull(persistedClient);
+        Assert.Equal("175-756-4917", persistedClient!.ExternalId);
 
         var googlePlatforms = await db.platform
             .Where(p => p.ClientId == client.Id && p.PlatformType == PlatformType.GoogleAds)

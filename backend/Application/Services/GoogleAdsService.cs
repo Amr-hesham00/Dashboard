@@ -131,6 +131,7 @@ public class GoogleAdsService : IGoogleAdsService
                     PlatformId = p.Id,
                     ClientId = p.ClientId,
                     ClientName = p.Client?.CompanyName ?? $"Client #{p.ClientId}",
+                    ExternalId = p.Client?.ExternalId ?? formattedCustomerId,
                     CustomerId = p.ExternalAccountId!,
                     FormattedCustomerId = formattedCustomerId,
                     AccountName = !string.IsNullOrWhiteSpace(p.AccountName)
@@ -394,6 +395,22 @@ public class GoogleAdsService : IGoogleAdsService
         platform.ManagerAccountId = matchedAccount.ManagerCustomerId;
         platform.OAuthConnectionId = connection.Id;
 
+        // Fetch and retain Google Ads Account ID as Client.ExternalId
+        var clientExternalId = !string.IsNullOrWhiteSpace(matchedAccount.FormattedCustomerId)
+            ? matchedAccount.FormattedCustomerId
+            : FormatCustomerId(matchedAccount.CustomerId);
+
+        if (platform.Client != null)
+        {
+            platform.Client.ExternalId = clientExternalId;
+        }
+        else
+        {
+            client.ExternalId = clientExternalId;
+            _unitOfWork.Client.Update(client);
+        }
+        client.ExternalId = clientExternalId;
+
         await _unitOfWork.Complete();
 
         _logger.LogInformation(
@@ -408,6 +425,7 @@ public class GoogleAdsService : IGoogleAdsService
             PlatformId = platform.Id,
             ClientId = client.Id,
             ClientName = client.CompanyName,
+            ExternalId = client.ExternalId,
             CustomerId = matchedAccount.CustomerId,
             FormattedCustomerId = matchedAccount.FormattedCustomerId,
             AccountName = matchedAccount.DescriptiveName,
@@ -673,6 +691,24 @@ public class GoogleAdsService : IGoogleAdsService
                 }
             }
 
+            // Retain external ID on client from Google Ads account
+            var effectiveCustomerId = accountDetails?.CustomerId ?? customerId;
+            var formattedExtId = FormatCustomerId(effectiveCustomerId);
+
+            if (platform.Client != null)
+            {
+                platform.Client.ExternalId = formattedExtId;
+            }
+            else
+            {
+                var client = await _unitOfWork.Client.GetById(platform.ClientId);
+                if (client is not null && client.ExternalId != formattedExtId)
+                {
+                    client.ExternalId = formattedExtId;
+                    _unitOfWork.Client.Update(client);
+                }
+            }
+
             // 5. Calculate date range (normal incremental sync + weekly 30-day backfill)
             var today = DateOnly.FromDateTime(now.UtcDateTime);
             bool isInitialImport = !platform.LastSyncedAt.HasValue;
@@ -773,6 +809,7 @@ public class GoogleAdsService : IGoogleAdsService
                 PlatformId = platform.Id,
                 ClientId = platform.ClientId,
                 PlatformType = platform.PlatformType.ToString(),
+                ExternalId = platform.Client?.ExternalId ?? formattedExtId,
                 CustomerId = customerId,
                 Currency = platform.Currency.ToString(),
                 TimeZone = platform.TimeZone,
@@ -810,7 +847,8 @@ public class GoogleAdsService : IGoogleAdsService
         DateOnly endDate,
         DateTimeOffset now)
     {
-        // A. Upsert Campaigns
+        // A. Upsert Campaigns        
+        // بيلف علي كل الكامبس اللي جات من جوجل و يشوف عندنا فالداتابيز لو موجودة بيحدث البيانات لو لا بيضيف سجل جديد و بعد كل دا بيحفظ كل التعديلات
         var existingCampaigns = await _unitOfWork.Campaign.GetTrackedByPlatformIdAsync(platform.Id)
                                 ?? new List<Campaign>();
         var campaignsByExtId = existingCampaigns
@@ -822,7 +860,6 @@ public class GoogleAdsService : IGoogleAdsService
         {
             c.Currency = platform.Currency;
         }
-
         int campaignsSynced = 0;
         foreach (var rec in incomingCampaigns.Where(r => !string.IsNullOrWhiteSpace(r.ExternalId)))
         {
@@ -859,7 +896,10 @@ public class GoogleAdsService : IGoogleAdsService
         }
         await _unitOfWork.Complete();
 
+
         // B. Upsert AdSets (Ad Groups)
+
+        // الخلاصة: الجزء B بيعمل نفس عملية الإضافة أو التحديث الخاصة بالحملات، لكن مع إضافة خطوة مهمة: التأكد من وجود الحملة الرئيسية، وربط كل مجموعة إعلانية بيها عن طريق رقم الحملة في قاعدة البيانات.
         var existingAdSets = await _unitOfWork.AdSet.GetTrackedByPlatformIdAsync(platform.Id)
                              ?? new List<AdSet>();
         var adSetsByExtId = existingAdSets

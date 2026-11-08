@@ -409,6 +409,7 @@ export default function ClientDetailsPage() {
   const [currencies, setCurrencies] = useState(['USD', 'EUR', 'EGP', 'AED', 'SAR', 'KWD', 'QAR']);
   const [formData, setFormData] = useState({
     companyName: '',
+    externalId: '',
     website: '',
     email: '',
     phone: '',
@@ -620,6 +621,7 @@ export default function ClientDetailsPage() {
           ...rawClientObj,
           id: rawClientObj?.id ?? rawClientObj?.clientId ?? clientIdToLoad,
           clientId: rawClientObj?.clientId ?? rawClientObj?.id ?? clientIdToLoad,
+          externalId: rawClientObj?.externalId ?? null,
           companyName: rawClientObj?.companyName || rawClientObj?.name || '',
           platforms: clientData.platforms || rawClientObj?.platforms || [],
         };
@@ -698,6 +700,7 @@ export default function ClientDetailsPage() {
           ...rawClientObj,
           id: rawClientObj?.id ?? rawClientObj?.clientId ?? id,
           clientId: rawClientObj?.clientId ?? rawClientObj?.id ?? id,
+          externalId: rawClientObj?.externalId ?? null,
           companyName: rawClientObj?.companyName || rawClientObj?.name || '',
           spend: overviewData?.spend ?? rawClientObj?.spend ?? 0,
           revenue: overviewData?.revenue ?? rawClientObj?.revenue ?? 0,
@@ -731,7 +734,7 @@ export default function ClientDetailsPage() {
           }
           if (Array.isArray(overviewData.points)) mappedPoints = overviewData.points;
           if (Array.isArray(overviewData.platformRow)) mappedPlatformRows = overviewData.platformRow;
-          
+
           if (overviewData.target) {
             normTarget = normalizeTargetSettings(overviewData.target, currencies);
           } else {
@@ -1849,6 +1852,7 @@ export default function ClientDetailsPage() {
 
     setFormData({
       companyName: client.companyName || '',
+      externalId: client.externalId || '',
       website: client.website || '',
       email: client.email || '',
       phone: client.phone || '',
@@ -2237,6 +2241,11 @@ export default function ClientDetailsPage() {
             <div className="d-flex flex-column gap-2">
               <div className="d-flex align-items-center gap-3 flex-wrap">
                 <h1 className="h3 mb-0 fw-bold text-body-emphasis me-1">{client.companyName}</h1>
+                {client.externalId && (
+                  <span className="badge bg-light text-secondary border font-monospace px-2 py-1" style={{ fontSize: '0.8rem' }} title={`External ID: ${client.externalId}`}>
+                    {client.externalId}
+                  </span>
+                )}
                 {getStatusBadge(client.status)}
                 <button
                   className="btn btn-sm btn-outline-secondary rounded-2 d-inline-flex align-items-center gap-1.5 px-2.5 py-1 no-print ms-1"
@@ -3469,6 +3478,19 @@ export default function ClientDetailsPage() {
                         onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                         placeholder="e.g. Acme Corp"
                         required
+                      />
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>
+                        External ID <span className="text-secondary fw-normal small">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control rounded-3"
+                        value={formData.externalId || ''}
+                        onChange={(e) => setFormData({ ...formData, externalId: e.target.value })}
+                        placeholder="e.g. CLI-10024"
                       />
                     </div>
 

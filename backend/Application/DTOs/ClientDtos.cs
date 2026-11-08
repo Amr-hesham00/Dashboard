@@ -8,6 +8,7 @@ namespace Dashboard.Application.DTOs;
 public class ClientDTO
 {
     public int ClientId { get; set; }
+    public string? ExternalId { get; set; }
     public string CompanyName { get; set; } = null!;
     public string? Logo { get; set; }
     public BusinessModel Model { get; set; }
@@ -84,6 +85,7 @@ public class AssociateClientsDTO
 public class ManagerClientsTable
 {
     public int ClientId { get; set; }
+    public string? ExternalId { get; set; }
     public string CompanyName { get; set; } = null!;
     public string? Logo { get; set; }
     public string? Website { get; set; }
@@ -110,6 +112,8 @@ public class ManagerClientsTable
 public class CreateClientDTO
 {
     public int ClientId { get; set; }
+
+    public string? ExternalId { get; set; }
 
     [Required]
     public string CompanyName { get; set; } = null!;
@@ -146,6 +150,8 @@ public class CreateClientDTO
 public class UpdateClientDTO
 {
     public int? ClientId { get; set; }
+
+    public string? ExternalId { get; set; }
 
     [Required]
     public string CompanyName { get; set; } = null!;
@@ -185,5 +191,6 @@ public class UpdateClientDTO
 public class ClientLookupDTO
 {
     public int ClientId { get; set; }
+    public string? ExternalId { get; set; }
     public string CompanyName { get; set; } = null!;
 }

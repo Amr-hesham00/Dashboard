@@ -251,6 +251,7 @@ export default function ClientsPage() {
   // Form state
   const [formData, setFormData] = useState({
     companyName: '',
+    externalId: '',
     website: '',
     email: '',
     phone: '',
@@ -569,6 +570,7 @@ export default function ClientsPage() {
     if (logoInputRef.current) logoInputRef.current.value = '';
     setFormData({
       companyName: '',
+      externalId: '',
       website: '',
       email: '',
       phone: '',
@@ -610,6 +612,7 @@ export default function ClientsPage() {
 
     setFormData({
       companyName: client.companyName || '',
+      externalId: client.externalId || '',
       website: client.website || '',
       email: client.email || '',
       phone: client.phone || '',
@@ -667,6 +670,7 @@ export default function ClientsPage() {
     try {
       const payload = {
         companyName: formData.companyName.trim(),
+        externalId: formData.externalId?.trim() || null,
         website: formattedWebsite || 'https://example.com',
         email: formData.email.trim(),
         phone: fullPhone,
@@ -795,7 +799,7 @@ export default function ClientsPage() {
       accountName: chosenAccount?.descriptiveName || `Google Ads Account (${selectedGoogleCustomerId})`,
       existingAccountId:
         existingAccountId &&
-        existingAccountId.replace(/-/g, '') !== String(selectedGoogleCustomerId).replace(/-/g, '')
+          existingAccountId.replace(/-/g, '') !== String(selectedGoogleCustomerId).replace(/-/g, '')
           ? existingAccountId
           : null,
     });
@@ -991,10 +995,16 @@ export default function ClientsPage() {
   };
 
   const filteredClients = clients.filter((c) => {
+    const qRaw = searchQuery.toLowerCase().trim();
+    const qDigits = qRaw.replace(/\D/g, '');
+    const extDigits = (c.externalId || '').replace(/\D/g, '');
+
     const matchesSearch =
-      c.companyName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.country?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.companyName?.toLowerCase().includes(qRaw) ||
+      c.externalId?.toLowerCase().includes(qRaw) ||
+      (qDigits.length >= 3 && extDigits.includes(qDigits)) ||
+      c.email?.toLowerCase().includes(qRaw) ||
+      c.country?.toLowerCase().includes(qRaw) ||
       c.phone?.includes(searchQuery);
 
     const clientStatusStr = typeof c.status === 'number' ? statuses[c.status] : String(c.status);
@@ -1325,7 +1335,14 @@ export default function ClientsPage() {
                               fontSize="0.9rem"
                             />
                             <div>
-                              <h6 className="mb-0 fs-6 fw-semibold text-body-emphasis">{client.companyName}</h6>
+                              <div className="d-flex align-items-center gap-2">
+                                <h6 className="mb-0 fs-6 fw-semibold text-body-emphasis">{client.companyName}</h6>
+                                {client.externalId && (
+                                  <span className="badge bg-light text-secondary border font-monospace" style={{ fontSize: '0.70rem', padding: '0.15rem 0.45rem' }} title={`External ID: ${client.externalId}`}>
+                                    {client.externalId}
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-secondary small mt-0.5 opacity-75" style={{ fontSize: '0.75rem', fontWeight: 500, letterSpacing: '0.03em' }}>
                                 {(() => {
                                   const isLead =
@@ -1640,6 +1657,19 @@ export default function ClientsPage() {
                           onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                           placeholder="e.g. Acme Corp"
                           required
+                        />
+                      </div>
+
+                      <div className="col-md-6">
+                        <label className="form-label fw-semibold text-body mb-1.5 d-block" style={{ fontSize: '0.86rem' }}>
+                          External ID <span className="text-secondary fw-normal small">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control rounded-3"
+                          value={formData.externalId}
+                          onChange={(e) => setFormData({ ...formData, externalId: e.target.value })}
+                          placeholder="e.g. CLI-10024"
                         />
                       </div>
 
@@ -2169,11 +2199,10 @@ export default function ClientsPage() {
                             <div
                               key={acc.customerId}
                               onClick={() => setSelectedGoogleCustomerId(acc.customerId)}
-                              className={`border rounded-4 d-flex align-items-center justify-content-between gap-3 transition-all ${
-                                isSelected
+                              className={`border rounded-4 d-flex align-items-center justify-content-between gap-3 transition-all ${isSelected
                                   ? 'border-primary bg-primary-subtle bg-opacity-10'
                                   : 'bg-body'
-                              }`}
+                                }`}
                               style={{ cursor: 'pointer', padding: '1rem 1.25rem' }}
                             >
                               <div className="d-flex align-items-center gap-3 min-w-0">

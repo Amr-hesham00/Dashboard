@@ -397,11 +397,16 @@ public class GoogleAdsDataSyncTests
 
         // Assert
         Assert.True(syncResult.Success);
+        Assert.Equal("175-756-4917", syncResult.ExternalId);
         Assert.True(syncResult.IsInitialImport);
         Assert.Equal("SAR", syncResult.Currency);
         Assert.Equal("Asia/Riyadh", syncResult.TimeZone);
         Assert.Equal(today.AddDays(-30), syncResult.SyncedFromDate);
         Assert.Equal(today, syncResult.SyncedToDate);
+
+        var refreshedClient = await db.client.FindAsync(client.Id);
+        Assert.NotNull(refreshedClient);
+        Assert.Equal("175-756-4917", refreshedClient!.ExternalId);
 
         // Verify exact 30-day initial query window in a single request
         var singleQuery = Assert.Single(adsService.RecordedMetricQueries);

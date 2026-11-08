@@ -24,6 +24,7 @@ public class ClientService : IClientService
         return clients.Select(c => new ClientDTO
         {
             ClientId = c.Id,
+            ExternalId = c.ExternalId,
             CompanyName = c.CompanyName,
             Logo = c.Logo,
             Model = c.BusinessModel,
@@ -123,9 +124,19 @@ public class ClientService : IClientService
             ? Math.Round((roas * 100.0) / targetRoas, 1) : 0;
         int targetConversions = client.Target?.TargetConversions ?? 0;
 
+        var googlePlatform = client.Platforms?.FirstOrDefault(p =>
+            p.PlatformType == PlatformType.GoogleAds &&
+            p.Status == PlatformStatus.Connected &&
+            !string.IsNullOrEmpty(p.ExternalAccountId));
+
+        var effectiveExternalId = !string.IsNullOrWhiteSpace(client.ExternalId)
+            ? client.ExternalId
+            : (googlePlatform != null ? GoogleAdsService.FormatCustomerId(googlePlatform.ExternalAccountId!) : null);
+
         return new ClientDTO
         {
             ClientId = client.Id,
+            ExternalId = effectiveExternalId,
             CompanyName = client.CompanyName,
             Logo = client.Logo,
             Model = client.BusinessModel,
@@ -156,6 +167,7 @@ public class ClientService : IClientService
     {
         var client = new Client
         {
+            ExternalId = string.IsNullOrWhiteSpace(dto.ExternalId) ? null : dto.ExternalId.Trim(),
             CompanyName = dto.CompanyName,
             Logo = dto.Logo,
             Website = dto.Website,
@@ -176,6 +188,7 @@ public class ClientService : IClientService
         return (true, "Client created successfully.", new CreateClientDTO
         {
             ClientId = client.Id,
+            ExternalId = client.ExternalId,
             CompanyName = dto.CompanyName,
             Logo = dto.Logo,
             Website = dto.Website,
@@ -198,6 +211,7 @@ public class ClientService : IClientService
             return (false, "Client not found.");
         }
 
+        client.ExternalId = string.IsNullOrWhiteSpace(dto.ExternalId) ? null : dto.ExternalId.Trim();
         client.CompanyName = dto.CompanyName;
         client.Logo = dto.Logo;
         client.Website = dto.Website;
@@ -404,9 +418,19 @@ public class ClientService : IClientService
                 : 0;
             int targetConversions = client.Target?.TargetConversions ?? 0;
 
+            var googlePlatform = client.Platforms?.FirstOrDefault(p =>
+                p.PlatformType == PlatformType.GoogleAds &&
+                p.Status == PlatformStatus.Connected &&
+                !string.IsNullOrEmpty(p.ExternalAccountId));
+
+            var effectiveExternalId = !string.IsNullOrWhiteSpace(client.ExternalId)
+                ? client.ExternalId
+                : (googlePlatform != null ? GoogleAdsService.FormatCustomerId(googlePlatform.ExternalAccountId!) : null);
+
             rows.Add(new ManagerClientsTable
             {
                 ClientId = client.Id,
+                ExternalId = effectiveExternalId,
                 CompanyName = client.CompanyName,
                 Logo = client.Logo,
                 Website = client.Website,
