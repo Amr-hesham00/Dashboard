@@ -1365,6 +1365,11 @@ export default function CampaignsPage() {
                             >
                               {camp.name}
                             </Link>
+                            {(camp.channelType === 'PERFORMANCE_MAX' || camp.channelType === 'PerformanceMax') && (
+                              <span className="badge bg-info-subtle text-info-emphasis border border-info-subtle ms-2 px-1.5 py-0.5" style={{ fontSize: '0.68rem' }}>
+                                PMax
+                              </span>
+                            )}
                           </td>
 
                           {/* 2. Client Name */}

@@ -67,8 +67,39 @@ public class AdController : ControllerBase
         var ads = await _adService.GetByAdSetIdAsync(adSetId, start, end);
         if (ads == null)
         {
-            return NotFound(new { message = $"AdSet with ID '{adSetId}' not found." });
+            // Fallback: Check if it's an Asset Group ID
+            ads = await _adService.GetByAssetGroupIdAsync(adSetId, start, end);
+            if (ads == null)
+            {
+                return NotFound(new { message = $"AdSet or AssetGroup with ID '{adSetId}' not found." });
+            }
         }
         return Ok(ads);
+    }
+
+    [HttpGet("assetgroup/{assetGroupId:int}")]
+    public async Task<IActionResult> GetByAssetGroup(int assetGroupId, [FromQuery] DateOnly start, [FromQuery] DateOnly end)
+    {
+        if (assetGroupId <= 0)
+        {
+            return BadRequest(new { message = "AssetGroup ID must be a positive integer." });
+        }
+
+        if (start == default && end == default)
+        {
+            end = DateOnly.FromDateTime(DateTime.UtcNow);
+            start = end.AddDays(-30);
+        }
+        else if (end < start)
+        {
+            return BadRequest(new { message = "End date must be on or after start date." });
+        }
+
+        var assetGroup = await _adService.GetByAssetGroupIdAsync(assetGroupId, start, end);
+        if (assetGroup == null)
+        {
+            return NotFound(new { message = $"AssetGroup with ID '{assetGroupId}' not found." });
+        }
+        return Ok(assetGroup);
     }
 }

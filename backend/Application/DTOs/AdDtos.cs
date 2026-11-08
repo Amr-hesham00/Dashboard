@@ -50,6 +50,9 @@ public class AdSetPageDTO
     public string ClientName { get; set; } = string.Empty;
     public string? PlatformType { get; set; }
     public string? Currency { get; set; }
+    public string? ChannelType { get; set; }
+    public bool IsPerformanceMax { get; set; }
+    public bool IsAssetGroup { get; set; }
     public DateOnly? StartDate { get; set; }
     public DateOnly? EndDate { get; set; }
 

@@ -31,11 +31,19 @@ public class CampaignConfig : IEntityTypeConfiguration<Campaign>
         builder.Property(c => c.Status)
                .HasConversion<string>();
 
+        builder.Property(c => c.ChannelType)
+               .HasMaxLength(50);
+
         // Platforms has many Campaigns
         builder.HasOne(c => c.Platform)
                .WithMany(p => p.Campaigns)
                .HasForeignKey(c => c.PlatformId)
                .OnDelete(DeleteBehavior.Cascade);
 
+        // Campaigns has many AssetGroups
+        builder.HasMany(c => c.AssetGroups)
+               .WithOne(ag => ag.Campaign)
+               .HasForeignKey(ag => ag.CampaignId)
+               .OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -26,6 +26,8 @@ public class CampaignRepo : GenericRepo<Campaign>, ICampaignRepo
             .Include(x => x.AdSets)
                 .ThenInclude(x => x.Ads)
                 .ThenInclude(x => x.DailyMetrics.Where(metric => metric.Date >= startDate && metric.Date <= endDate))
+            .Include(x => x.AssetGroups)
+                .ThenInclude(ag => ag.DailyMetrics.Where(metric => metric.Date >= startDate && metric.Date <= endDate))
             .Where(x => x.Platform.ClientId == clientId && x.Platform.Id == platformid)
             .ToListAsync();
     }
@@ -37,6 +39,8 @@ public class CampaignRepo : GenericRepo<Campaign>, ICampaignRepo
             .Include(x => x.AdSets)
                 .ThenInclude(x => x.Ads)
                 .ThenInclude(x => x.DailyMetrics.Where(metric => metric.Date >= startDate && metric.Date <= endDate))
+            .Include(x => x.AssetGroups)
+                .ThenInclude(ag => ag.DailyMetrics.Where(metric => metric.Date >= startDate && metric.Date <= endDate))
             .Where(x => x.Platform.ClientId == clientId)
             .ToListAsync();
     }

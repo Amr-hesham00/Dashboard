@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import ApexCharts from 'apexcharts';
 import DashboardLayout from './DashboardLayout';
-import { getAdSetPageDataApi } from '../api/ads';
+import { getAdSetPageDataApi, getAssetGroupPageDataApi } from '../api/ads';
 import { getClientByIdApi } from '../api/clients';
 import {
   availableAdSetKPIs,
@@ -157,11 +157,15 @@ const PERF_CHART_METRICS = {
 
 // ─── Main Component ─────────────────────────────────────────────────
 export default function AdSetDetailPage() {
-  const { clientId: paramClientId, campaignId: paramCampaignId, adSetId: paramAdSetId, AdsetId, adsetId } = useParams();
+  const { clientId: paramClientId, campaignId: paramCampaignId, adSetId: paramAdSetId, AdsetId, adsetId, assetGroupId, AssetGroupId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const adSetId = adsetId || AdsetId || paramAdSetId;
+  const adSetId = assetGroupId || AssetGroupId || adsetId || AdsetId || paramAdSetId;
+  const isPMaxRoute = Boolean(assetGroupId || AssetGroupId) ||
+    location.pathname.toLowerCase().includes('assetgroup') ||
+    Boolean(location.state?.isPerformanceMax) ||
+    Boolean(location.state?.isAssetGroup);
   const initialCampaignId = paramCampaignId || location.state?.campaignId;
   const initialClientId = paramClientId || location.state?.clientId;
 
@@ -260,11 +264,17 @@ export default function AdSetDetailPage() {
         setLoading(true);
         setError(null);
 
-        // Single unified API request to get all ad set page data
-        const pageDataRes = await getAdSetPageDataApi(adSetId, periodConfig.startDate, periodConfig.endDate);
+        // Single unified API request to get all ad set / asset group page data
+        let pageDataRes = null;
+        if (isPMaxRoute) {
+          pageDataRes = await getAssetGroupPageDataApi(adSetId, periodConfig.startDate, periodConfig.endDate);
+        }
+        if (!pageDataRes) {
+          pageDataRes = await getAdSetPageDataApi(adSetId, periodConfig.startDate, periodConfig.endDate);
+        }
 
         if (!pageDataRes) {
-          throw new Error(`Ad Set '${adSetId}' not found.`);
+          throw new Error(isPMaxRoute ? `Asset Group '${adSetId}' not found.` : `Ad Set '${adSetId}' not found.`);
         }
 
         const platformTypeStr = String(pageDataRes.platformType || '');
@@ -295,6 +305,8 @@ export default function AdSetDetailPage() {
           name: resolvedClientName || 'Client',
         } : null;
 
+        const isPerformanceMax = Boolean(pageDataRes.isPerformanceMax || pageDataRes.isAssetGroup || isPMaxRoute);
+
         const finalCampaign = finalCampaignId ? {
           id: finalCampaignId,
           name: pageDataRes.campaignName || 'Campaign',
@@ -308,7 +320,7 @@ export default function AdSetDetailPage() {
 
         const finalAdSet = {
           id: pageDataRes.adSetId || Number(adSetId),
-          name: pageDataRes.adSetName || `Ad Set ${adSetId}`,
+          name: pageDataRes.adSetName || (isPerformanceMax ? `Asset Group ${adSetId}` : `Ad Set ${adSetId}`),
           status: pageDataRes.adSetStatus || 'Active',
           audienceType: pageDataRes.audienceType,
           ageRange: pageDataRes.ageRange,
@@ -319,6 +331,9 @@ export default function AdSetDetailPage() {
           currency: pageDataRes.currency || 'USD',
           campaignId: pageDataRes.campaignId,
           clientId: pageDataRes.clientId,
+          channelType: pageDataRes.channelType,
+          isPerformanceMax,
+          isAssetGroup: isPerformanceMax,
           spend: pageDataRes.spend,
           revenue: pageDataRes.revenue,
           conversions: pageDataRes.conversions,
@@ -504,6 +519,7 @@ export default function AdSetDetailPage() {
 
   const resolvedCampaignId = campaign?.id || initialCampaignId || adSet?.campaignId || null;
   const resolvedClientId = client?.id || initialClientId || adSet?.clientId || null;
+  const isAssetGroup = Boolean(adSet?.isAssetGroup || adSet?.isPerformanceMax || isPMaxRoute);
 
   // Loading/Error
   if (loading) {
@@ -669,7 +685,7 @@ export default function AdSetDetailPage() {
   return (
     <DashboardLayout
       pageTitle={clientName}
-      title={`${adSet.name} - Ad Set Details | Dasher`}
+      title={`${adSet.name} - ${isAssetGroup ? 'Asset Group' : 'Ad Set'} Details | Dasher`}
       clientSwitcher={{ currentClientId: resolvedClientId, currentClientName: clientName }}
     >
       <div className="w-100 py-3">
@@ -709,8 +725,8 @@ export default function AdSetDetailPage() {
                   </Link>
                 </li>
               ) : null}
-              <li className="breadcrumb-item active text-success fw-semibold" aria-current="page" title={adSet?.name || 'Ad Set'}>
-                Adsets
+              <li className="breadcrumb-item active text-success fw-semibold" aria-current="page" title={adSet?.name || (isAssetGroup ? 'Asset Group' : 'Ad Set')}>
+                {isAssetGroup ? 'Asset Groups' : 'Adsets'}
               </li>
             </ol>
           </nav>
@@ -725,9 +741,6 @@ export default function AdSetDetailPage() {
 
             <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={() => window.print()}>
               <IconPdf /> <span className="d-none d-md-inline">Export PDF</span>
-            </button>
-            <button className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleRefresh} disabled={refreshing}>
-              <IconRefresh spinning={refreshing} /> <span className="d-none d-md-inline">{refreshing ? 'Refreshing...' : 'Refresh'}</span>
             </button>
           </div>
         </div>
@@ -765,26 +778,11 @@ export default function AdSetDetailPage() {
               {renderPlatformLogo(platformKey, 26)}
             </div>
 
-            {/* Ad Set Name & Details */}
+            {/* Ad Set / Asset Group Name & Details */}
             <div className="d-flex flex-column gap-1.5">
               <div className="d-flex align-items-center gap-2 flex-wrap">
                 <h1 className="h3 mb-0 fw-bold text-body-emphasis me-1">{adSet.name}</h1>
                 <span className={`badge rounded-pill border px-2.5 py-1 fw-bold small ${asStatus === 'Active' ? 'bg-success-subtle text-success-emphasis border-success-subtle' : asStatus === 'Paused' ? 'bg-warning-subtle text-warning-emphasis border-warning-subtle' : 'bg-secondary-subtle text-secondary border-secondary-subtle'}`}>{asStatus}</span>
-              </div>
-
-              {/* Subheader Metadata Spans (Platform, Budget, Date Range) */}
-              <div className="d-flex align-items-center gap-2 text-secondary small flex-wrap" style={{ fontSize: '0.80rem' }}>
-                <span className="fw-medium text-body-secondary">
-                  {platformLabel}
-                </span>
-                <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
-                <span className="fw-semibold text-body-secondary">
-                  Budget: {currSymbol}{asDailyBudget.toLocaleString()}/day
-                </span>
-                <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
-                <span className="d-inline-flex align-items-center gap-1.5 text-body-secondary">
-                  <IconCalendar /> {campaignLifetime}
-                </span>
               </div>
             </div>
           </div>
@@ -793,7 +791,10 @@ export default function AdSetDetailPage() {
         {/* ─── 3. KPI Cards ─── */}
         <div className="mb-4">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <span className="d-inline-flex align-items-center gap-1.5 text-secondary small fw-semibold"><IconCalendar /> <span>{periodConfig.label}</span></span>
+            <span className="badge date-range-badge px-2.5 py-1.5 d-inline-flex align-items-center gap-1.5 shadow-2xs rounded-2">
+              <span className="text-primary d-inline-flex align-items-center"><IconCalendar /></span>
+              <span>{periodConfig.label}</span>
+            </span>
             <div className="position-relative no-print kpi-selector-container">
               <button className="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-2" onClick={() => setShowKPISelector(!showKPISelector)}><IconGear /> <span className="fw-semibold">Customize KPIs</span></button>
               {showKPISelector && (
@@ -839,7 +840,7 @@ export default function AdSetDetailPage() {
         <div className="card border-0 shadow-sm rounded-3 mb-4">
           <div className="card-header bg-transparent border-bottom p-4">
             <div className="d-flex justify-content-between align-items-center mb-2">
-              <div><h5 className="mb-1 fw-bold">Performance Over Time</h5><small className="text-secondary">Ad set trend by selected metric</small></div>
+              <div><h5 className="mb-1 fw-bold">Performance Over Time</h5><small className="text-secondary">{isAssetGroup ? 'Asset group trend by selected metric' : 'Ad set trend by selected metric'}</small></div>
               <span className="badge px-2.5 py-1.5 rounded-pill fw-semibold shadow-xs" style={{ fontSize: '0.8rem', backgroundColor: 'rgba(28, 37, 46, 0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', color: '#f8fafc', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
                 {monthBadgeText}
               </span>
@@ -858,8 +859,9 @@ export default function AdSetDetailPage() {
 
 
 
-        {/* ─── 5. Ads Performance Table ─── */}
-        <div className="card border-0 shadow-sm rounded-3">
+        {/* ─── 5. Ads Performance Table (Standard Ad Sets only) ─── */}
+        {!isAssetGroup && (
+          <div className="card border-0 shadow-sm rounded-3">
           <div className="card-header bg-transparent border-bottom p-4">
             <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
               <div><h5 className="mb-1 fw-bold">Ads Performance</h5><div className="text-secondary small">Click an ad to view creative details and metrics</div></div>
@@ -936,9 +938,10 @@ export default function AdSetDetailPage() {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Search Terms Analysis (Google Ads Only) */}
-        {isGoogle && (
+        {/* Search Terms Analysis (Google Ads Only - Search Campaigns) */}
+        {isGoogle && !isAssetGroup && (
           <div className="card border-0 shadow-sm rounded-3 mt-4">
             <div className="card-header bg-transparent border-bottom p-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
               <div className="d-flex align-items-center gap-2">

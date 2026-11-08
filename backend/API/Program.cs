@@ -34,6 +34,8 @@ builder.Services.AddScoped<IAdDailyMetricsRepo, AdDailyMetricsRepo>();
 builder.Services.AddScoped<ISearchTermRepo, SearchTermRepo>();
 builder.Services.AddScoped<IExchangeRateRepo, ExchangeRateRepo>();
 builder.Services.AddScoped<IOAuthConnectionRepo, OAuthConnectionRepo>();
+builder.Services.AddScoped<IAssetGroupRepo, AssetGroupRepo>();
+builder.Services.AddScoped<IDailyAssetGroupMetricsRepo, DailyAssetGroupMetricsRepo>();
 #endregion
 //-----------------------------------Services------------------------------------
 #region Services

@@ -40,6 +40,7 @@ public class ClientPageDTO : PageDTO
 public class PlatformPageDTO : PageDTO
 {
     public Currency Currency { get; set; }
+    public DateTimeOffset? LastSyncedAt { get; set; }
 
     // camps table
     public IEnumerable<CampsTable> CampRow { get; set; }
@@ -74,6 +75,7 @@ public class CampsTable
     public int CampaignId { get; set; }
     public int PlatformId { get; set; }
     public PlatformType Platform { get; set; }
+    public string? ChannelType { get; set; }
 }
 
 public class ClientInfoDTO

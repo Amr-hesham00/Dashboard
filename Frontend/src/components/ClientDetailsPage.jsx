@@ -7,6 +7,7 @@ import {
   getClientByIdApi,
   getUsersApi,
   updateClientApi,
+  updateClientReportingCurrencyApi,
   getClientStatusesApi,
   getClientCurrenciesApi,
   getClientTargetsApi,
@@ -166,6 +167,50 @@ function getPlatformLogo(platformKey, size = 20) {
     default:
       return null;
   }
+}
+
+// ─── Last Sync Time Formatting Helpers ──────────────────────────────
+function formatAccurateLastSync(dateVal) {
+  if (!dateVal) return 'Never';
+  const date = new Date(dateVal);
+  if (isNaN(date.getTime())) {
+    return String(dateVal);
+  }
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+
+  if (diffSec < 0) return 'Just now';
+  if (diffSec < 45) return 'Just now';
+  if (diffSec < 90) return '1m ago';
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) {
+    return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  if (diffDays < 7) {
+    return `${diffDays}d ago`;
+  }
+
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getExactSyncDateTime(dateVal) {
+  if (!dateVal) return null;
+  const date = new Date(dateVal);
+  if (isNaN(date.getTime())) return String(dateVal);
+  return date.toLocaleString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 // ─── Currency Helpers ──────────────────────────────────────────────
@@ -397,6 +442,22 @@ export default function ClientDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // ─── Reporting Currency Dropdown State ───────────────────────────
+  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
+  const [updatingCurrency, setUpdatingCurrency] = useState(false);
+  const currencyMenuRef = useRef(null);
+
+  useEffect(() => {
+    if (!showCurrencyMenu) return;
+    const handleOutsideClick = (e) => {
+      if (currencyMenuRef.current && !currencyMenuRef.current.contains(e.target)) {
+        setShowCurrencyMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showCurrencyMenu]);
+
   // ─── Edit Client Modal State ─────────────────────────────────────
   const [showEditModal, setShowEditModal] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -563,21 +624,33 @@ export default function ClientDetailsPage() {
 
   // ─── Platform Connection State ──────────────────────────────────
   const getDefaultPlatforms = () => ({
-    meta: { connected: true, accountId: 'act_948291048', lastSync: '10m ago', lastSyncDate: 'Aug 18, 2026, 04:30 PM' },
-    google: { connected: true, accountId: '839-201-9482', lastSync: '25m ago', lastSyncDate: 'Aug 18, 2026, 04:15 PM' },
-    snapchat: { connected: true, accountId: 'org_snap_88291', lastSync: '1h ago', lastSyncDate: 'Aug 18, 2026, 03:40 PM' },
-    tiktok: { connected: true, accountId: 'tt_adv_7194819', lastSync: '40m ago', lastSyncDate: 'Aug 18, 2026, 04:00 PM' },
+    meta: { connected: true, accountId: 'act_948291048', lastSync: null, lastSyncedAt: null },
+    google: { connected: true, accountId: '839-201-9482', lastSync: null, lastSyncedAt: null },
+    snapchat: { connected: true, accountId: 'org_snap_88291', lastSync: null, lastSyncedAt: null },
+    tiktok: { connected: true, accountId: 'tt_adv_7194819', lastSync: null, lastSyncedAt: null },
   });
 
   const overviewSyncStorageKey = `client_overview_sync_${id}`;
   const [overviewLastSync, setOverviewLastSync] = useState(() => {
     try {
       const saved = localStorage.getItem(overviewSyncStorageKey);
-      return saved ? JSON.parse(saved) : { lastSync: '10m ago', lastSyncDate: 'Aug 18, 2026, 04:30 PM' };
+      return saved ? JSON.parse(saved) : { lastSync: 'Just now', lastSyncedAt: new Date().toISOString() };
     } catch {
-      return { lastSync: '10m ago', lastSyncDate: 'Aug 18, 2026, 04:30 PM' };
+      return { lastSync: 'Just now', lastSyncedAt: new Date().toISOString() };
     }
   });
+
+  const [, setOverviewSyncTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setOverviewSyncTick((t) => t + 1);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const overviewRawTimestamp = overviewLastSync?.lastSyncedAt || overviewLastSync?.lastSyncDate || overviewLastSync?.lastSync;
+  const overviewSyncDisplay = formatAccurateLastSync(overviewRawTimestamp);
+  const overviewSyncTooltip = getExactSyncDateTime(overviewRawTimestamp);
 
   const platformsStorageKey = `client_platforms_${id}`;
   const [platformsState, setPlatformsState] = useState(() => {
@@ -630,6 +703,26 @@ export default function ClientDetailsPage() {
           ...normalized,
           platforms: normalized.platforms || prev?.platforms || [],
         }));
+
+        if (Array.isArray(normalized.platforms)) {
+          setPlatformsState((prev) => {
+            const next = { ...prev };
+            normalized.platforms.forEach((p) => {
+              const k = mapPlatformTypeToKey(p.platformType || p.key, p.platformName);
+              if (k) {
+                const current = next[k] || {};
+                next[k] = {
+                  ...current,
+                  connected: p.connected !== undefined ? p.connected : (p.status === 'Connected'),
+                  accountId: p.accountId || current.accountId,
+                  lastSyncedAt: p.lastSyncedAt || current.lastSyncedAt || null,
+                  lastSyncDate: p.lastSyncedAt ? new Date(p.lastSyncedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : current.lastSyncDate,
+                };
+              }
+            });
+            return next;
+          });
+        }
 
         const found = usersList?.find((u) => String(u.id) === String(normalized?.managerId));
         setManager(found || (normalized?.managerId ? { id: normalized.managerId, userName: normalized.managerName || 'Account Manager', email: '', firstName: '', lastName: '' } : null));
@@ -898,10 +991,12 @@ export default function ClientDetailsPage() {
           : [];
 
         const currencyName = getCurrencyName(pData.currency);
+        const effectiveLastSyncedAt = pData.lastSyncedAt || platformRecord?.lastSyncedAt || null;
 
         const structuredData = {
           currency: currencyName,
           platformId,
+          lastSyncedAt: effectiveLastSyncedAt,
           connected: platformRecord?.connected ?? (platformRecord?.status === 'Connected'),
           campaigns: mappedCampaigns,
           kpis: {
@@ -918,6 +1013,22 @@ export default function ClientDetailsPage() {
             conversionRate: Number(pData.conversionRate) || 0,
           },
         };
+
+        if (effectiveLastSyncedAt) {
+          setPlatformsState((prev) => {
+            const current = prev[platformKey] || {};
+            const updated = {
+              ...prev,
+              [platformKey]: {
+                ...current,
+                lastSyncedAt: effectiveLastSyncedAt,
+                lastSyncDate: new Date(effectiveLastSyncedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+              },
+            };
+            try { localStorage.setItem(platformsStorageKey, JSON.stringify(updated)); } catch { }
+            return updated;
+          });
+        }
 
         tabDataCacheRef.current[cacheKey] = structuredData;
         setPlatformTabState((prev) => ({
@@ -959,6 +1070,7 @@ export default function ClientDetailsPage() {
   const handleRefreshPlatform = async (platformKey) => {
     setPlatformRefreshing((prev) => ({ ...prev, [platformKey]: true }));
     try {
+      let syncTimeIso = null;
       if (platformKey === 'google') {
         let currentClient = clientRef.current;
         let platformRecord = currentClient?.platforms?.find((p) => {
@@ -971,12 +1083,16 @@ export default function ClientDetailsPage() {
           if (row) platformId = row.platformId;
         }
         if (platformId) {
-          await syncGoogleAdsPlatformApi(id, platformId);
+          const syncRes = await syncGoogleAdsPlatformApi(id, platformId);
+          if (syncRes?.lastSyncedAt) {
+            syncTimeIso = syncRes.lastSyncedAt;
+          }
         }
       }
       await loadPlatformData(platformKey, true);
+      const syncTimestamp = syncTimeIso || new Date().toISOString();
       const now = 'Just now';
-      const nowDate = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const nowDate = new Date(syncTimestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
       setPlatformsState((prev) => {
         const current = prev[platformKey] || {};
         const updated = {
@@ -984,6 +1100,7 @@ export default function ClientDetailsPage() {
           [platformKey]: {
             ...current,
             connected: true,
+            lastSyncedAt: syncTimestamp,
             lastSync: now,
             lastSyncDate: nowDate,
           },
@@ -1007,6 +1124,7 @@ export default function ClientDetailsPage() {
   };
 
   const handleReconnectPlatform = (platformKey) => {
+    const syncTimestamp = new Date().toISOString();
     setPlatformsState((prev) => {
       const current = prev[platformKey] || {};
       const updated = {
@@ -1014,8 +1132,9 @@ export default function ClientDetailsPage() {
         [platformKey]: {
           ...current,
           connected: true,
+          lastSyncedAt: syncTimestamp,
           lastSync: 'Just now',
-          lastSyncDate: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          lastSyncDate: new Date(syncTimestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
         },
       };
       try {
@@ -1908,12 +2027,19 @@ export default function ClientDetailsPage() {
         managerId: formData.managerId || client.managerId || '',
         logoFile: logoFile || null,
       };
+      const selectedCurrName = currencies[Number(formData.currency)] || 'USD';
       const updated = await updateClientApi(client.id, payload);
-      setClient((prev) => ({ ...(prev || {}), ...(updated || payload) }));
+      setClient((prev) => ({
+        ...(prev || {}),
+        ...(updated || payload),
+        currency: selectedCurrName,
+        unitCurrency: selectedCurrName,
+      }));
       setShowEditModal(false);
       setToastMsg('Client details updated successfully!');
       setTimeout(() => setToastMsg(''), 3000);
       tabDataCacheRef.current = {};
+      invalidateClientsCache();
       await loadSharedClientInfo(id);
       if (activeTab === 'overview') {
         await loadOverviewData(true);
@@ -1927,19 +2053,63 @@ export default function ClientDetailsPage() {
     }
   };
 
+  const handleReportingCurrencyChange = async (targetCurrency) => {
+    if (!client?.id || updatingCurrency) return;
+    const currName = getCurrencyName(targetCurrency);
+
+    const currentName = getCurrencyName(client.currency);
+    if (currName.toUpperCase() === currentName.toUpperCase()) {
+      setShowCurrencyMenu(false);
+      return;
+    }
+
+    try {
+      setUpdatingCurrency(true);
+      setShowCurrencyMenu(false);
+
+      await updateClientReportingCurrencyApi(client.id, currName);
+
+      setClient((prev) => ({
+        ...(prev || {}),
+        currency: currName,
+        unitCurrency: currName,
+      }));
+
+      tabDataCacheRef.current = {};
+      invalidateClientsCache();
+
+      setToastMsg(`Reporting currency changed to ${currName} (${getCurrencySymbol(currName).trim()})`);
+      setTimeout(() => setToastMsg(''), 3500);
+
+      await loadSharedClientInfo(id);
+      if (activeTab === 'overview') {
+        await loadOverviewData(true);
+      } else if (['meta', 'google', 'snapchat', 'tiktok'].includes(activeTab)) {
+        await loadPlatformData(activeTab, true);
+      }
+    } catch (err) {
+      console.error('Failed to change reporting currency:', err);
+      setToastMsg(err.message || 'Failed to change reporting currency.');
+      setTimeout(() => setToastMsg(''), 3500);
+    } finally {
+      setUpdatingCurrency(false);
+    }
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     tabDataCacheRef.current = {};
     const now = 'Just now';
-    const nowDate = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const updatedOverview = { lastSync: now, lastSyncDate: nowDate };
+    const syncTimestamp = new Date().toISOString();
+    const nowDate = new Date(syncTimestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const updatedOverview = { lastSync: now, lastSyncDate: nowDate, lastSyncedAt: syncTimestamp };
     setOverviewLastSync(updatedOverview);
     try { localStorage.setItem(overviewSyncStorageKey, JSON.stringify(updatedOverview)); } catch { }
 
     setPlatformsState((prev) => {
       const updated = {};
       Object.keys(prev).forEach((k) => {
-        updated[k] = { ...prev[k], lastSync: now, lastSyncDate: nowDate };
+        updated[k] = { ...prev[k], lastSync: now, lastSyncDate: nowDate, lastSyncedAt: syncTimestamp };
       });
       try { localStorage.setItem(platformsStorageKey, JSON.stringify(updated)); } catch { }
       return updated;
@@ -2060,6 +2230,25 @@ export default function ClientDetailsPage() {
   const dynamicClientName = client?.companyName || client?.name || 'Client';
   const clientReportingCurrency = getCurrencyName(client?.currency);
   const clientCurrSymbol = getCurrencySymbol(clientReportingCurrency);
+
+  const rawCustomerId =
+    client?.externalId ||
+    client?.customerId ||
+    client?.platforms?.find((p) => p.key === 'google' || p.platformType === 0 || p.platformType === 'Google Ads' || p.platformType === 'GoogleAds')?.accountId ||
+    client?.platforms?.find((p) => p.accountId)?.accountId ||
+    null;
+
+  const formatCustomerId = (val) => {
+    if (!val) return '';
+    const clean = String(val).trim();
+    const digits = clean.replace(/\D/g, '');
+    if (digits.length === 10) {
+      return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+    }
+    return clean;
+  };
+
+  const clientCustomerId = formatCustomerId(rawCustomerId);
 
   return (
     <DashboardLayout
@@ -2207,6 +2396,70 @@ export default function ClientDetailsPage() {
             <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleExportPDF}>
               <IconPdf /> <span className="d-none d-md-inline">Export PDF</span>
             </button>
+
+            {/* Reporting Currency Dropdown Menu */}
+            <div className="position-relative no-print currency-dropdown-container" ref={currencyMenuRef}>
+              <button
+                className="btn btn-sm d-inline-flex align-items-center gap-1.5 px-3 py-1.5 rounded-2 shadow-sm border border-secondary-subtle bg-body text-body-emphasis fw-bold"
+                type="button"
+                onClick={() => setShowCurrencyMenu(!showCurrencyMenu)}
+                disabled={updatingCurrency}
+                title="Change Client Reporting Currency"
+                style={{ fontSize: '0.86rem' }}
+              >
+                {updatingCurrency && (
+                  <span className="spinner-border spinner-border-sm me-1 text-primary" role="status" aria-hidden="true" style={{ width: '0.85rem', height: '0.85rem' }} />
+                )}
+                <span className="fw-bold text-body-emphasis" style={{ letterSpacing: '0.03em' }}>
+                  {clientReportingCurrency}
+                </span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="ms-0.5 text-body-emphasis opacity-75"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {showCurrencyMenu && (
+                <div
+                  className="dropdown-menu show position-absolute end-0 mt-1 shadow-lg border border-secondary-subtle p-1.5 bg-body rounded-3"
+                  style={{ zIndex: 1060, minWidth: 155 }}
+                >
+                  <div className="px-3 py-1.5 text-uppercase fw-bolder text-body-emphasis border-bottom mb-1" style={{ fontSize: '0.72rem', letterSpacing: '0.06em' }}>
+                    Reporting Currency
+                  </div>
+                  {currencies.map((curr) => {
+                    const isSelected = clientReportingCurrency.toUpperCase() === curr.toUpperCase();
+                    return (
+                      <button
+                        key={curr}
+                        type="button"
+                        className={`dropdown-item px-3 py-2 rounded-2 d-flex align-items-center justify-content-between my-0.5 ${
+                          isSelected
+                            ? 'bg-primary text-white fw-bold shadow-xs'
+                            : 'text-body-emphasis fw-semibold'
+                        }`}
+                        style={{ fontSize: '0.88rem' }}
+                        onClick={() => handleReportingCurrencyChange(curr)}
+                      >
+                        <span className="fw-bold" style={{ letterSpacing: '0.03em' }}>{curr}</span>
+                        {isSelected && <span className="fw-bold ms-2">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <button className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleRefresh} disabled={refreshing}>
               <IconRefresh spinning={refreshing} /> <span className="d-none d-md-inline">{refreshing ? 'Refreshing...' : 'Refresh all'}</span>
             </button>
@@ -2238,14 +2491,9 @@ export default function ClientDetailsPage() {
             />
 
             {/* Client Name & Header Action */}
-            <div className="d-flex flex-column gap-2">
+            <div className="d-flex flex-column gap-1.5">
               <div className="d-flex align-items-center gap-3 flex-wrap">
                 <h1 className="h3 mb-0 fw-bold text-body-emphasis me-1">{client.companyName}</h1>
-                {client.externalId && (
-                  <span className="badge bg-light text-secondary border font-monospace px-2 py-1" style={{ fontSize: '0.8rem' }} title={`External ID: ${client.externalId}`}>
-                    {client.externalId}
-                  </span>
-                )}
                 {getStatusBadge(client.status)}
                 <button
                   className="btn btn-sm btn-outline-secondary rounded-2 d-inline-flex align-items-center gap-1.5 px-2.5 py-1 no-print ms-1"
@@ -2259,45 +2507,14 @@ export default function ClientDetailsPage() {
                 </button>
               </div>
 
-              {/* Subheader Metadata Spans (Email, Currency, Website) */}
-              <div className="d-flex align-items-center gap-3 text-secondary small flex-wrap" style={{ fontSize: '0.80rem' }}>
-                {client.email && (
-                  <a
-                    href={`mailto:${client.email}`}
-                    className="text-body-secondary text-decoration-none d-inline-flex align-items-center gap-2"
-                    title="Email Client"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-body-tertiary flex-shrink-0"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
-                    <span>{client.email}</span>
-                  </a>
-                )}
-
-                {(client.currency != null && client.currency !== '') ? (
-                  <>
-                    {client.email && <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>}
-                    <span className="badge bg-body-tertiary text-body-secondary border rounded-2 px-2.5 py-0.5 fw-semibold" style={{ fontSize: '0.74rem' }}>
-                      {getCurrencyName(client.currency)}
-                    </span>
-                  </>
-                ) : null}
-
-                {client.website && (
-                  <>
-                    <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
-                    <a
-                      href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary text-decoration-none d-inline-flex align-items-center gap-2 fw-medium"
-                      title="Open Website"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
-                      <span>{client.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="ms-0.5 flex-shrink-0" style={{ opacity: 0.7 }}><line x1="7" y1="17" x2="17" y2="7" /><polyline points="7 7 17 7 17 17" /></svg>
-                    </a>
-                  </>
-                )}
-              </div>
+              {/* Subheader Metadata (Client Customer ID) */}
+              {clientCustomerId && (
+                <div className="d-flex align-items-center gap-2 text-secondary small" style={{ fontSize: '0.80rem' }}>
+                  <span className="font-monospace text-body-secondary fw-semibold" title={`Customer ID: ${clientCustomerId}`}>
+                    {clientCustomerId}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2578,19 +2795,16 @@ export default function ClientDetailsPage() {
             <div>
               <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                 <div className="d-flex align-items-center gap-2 flex-wrap">
-                  <span className="d-inline-flex align-items-center gap-1.5 text-secondary small fw-semibold">
-                    <IconCalendar /> <span>{dateRange}</span>
-                  </span>
-                  <span className="text-body-tertiary opacity-75 d-none d-sm-inline">&bull;</span>
                   <span
                     className="badge bg-body-tertiary text-secondary border px-2.5 py-1 small d-inline-flex align-items-center gap-1.5 shadow-2xs"
+                    title={overviewSyncTooltip ? `Last synced: ${overviewSyncTooltip}` : undefined}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                       <path stroke="none" d="M0 0h24v24H0z" fill="none" />
                       <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
                       <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
                     </svg>
-                    <span>Last synced: <strong className="text-body-emphasis">{overviewLastSync?.lastSync || 'Just now'}</strong></span>
+                    <span>Last synced: <strong className="text-body-emphasis">{overviewSyncDisplay}</strong></span>
                   </span>
                 </div>
                 <div className="position-relative no-print kpi-selector-container">
@@ -3952,6 +4166,15 @@ function PlatformTabContent({ platform, platformKey, isLoading, errorMessage, co
   const [showKPISelector, setShowKPISelector] = useState(false);
   const [pinnedKPIs, setPinnedKPIs] = useState(() => defaultPinnedMap[platformKey] || ['spend', 'revenue', 'roas', 'ctr', 'conversions']);
 
+  // Periodic ticker to recalculate accurate relative last-sync time
+  const [, setSyncTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSyncTick((t) => t + 1);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Click outside handler for platform KPI selector dropdown
   useEffect(() => {
     if (!showKPISelector) return;
@@ -4140,6 +4363,10 @@ function PlatformTabContent({ platform, platformKey, isLoading, errorMessage, co
     }
   };
 
+  const rawSyncTimestamp = platform?.lastSyncedAt || connectionState?.lastSyncedAt || connectionState?.lastSyncDate || connectionState?.lastSync;
+  const accurateLastSyncText = formatAccurateLastSync(rawSyncTimestamp);
+  const exactSyncTooltip = getExactSyncDateTime(rawSyncTimestamp);
+
   return (
     <div>
       {/* Simple, Friendly Disconnection Notice */}
@@ -4186,21 +4413,16 @@ function PlatformTabContent({ platform, platformKey, isLoading, errorMessage, co
       <div className="mb-4">
         <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
           <div className="d-flex align-items-center gap-2 flex-wrap">
-            <span className="d-inline-flex align-items-center gap-1.5 text-secondary small fw-semibold">
-              <IconCalendar /> <span>{dateRange || 'Last 30 Days'}</span>
-            </span>
-            <span className="text-body-tertiary opacity-75 d-none d-sm-inline">&bull;</span>
-            <span className="badge bg-body-tertiary text-secondary border px-2.5 py-1 small d-inline-flex align-items-center gap-1.5 shadow-2xs">
+            <span
+              className="badge bg-body-tertiary text-secondary border px-2.5 py-1 small d-inline-flex align-items-center gap-1.5 shadow-2xs"
+              title={exactSyncTooltip ? `Last synced: ${exactSyncTooltip}` : undefined}
+            >
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                 <path stroke="none" d="M0 0h24v24H0z" fill="none" />
                 <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4" />
                 <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4" />
               </svg>
-              <span>Last synced: <strong className="text-body-emphasis">{connectionState?.lastSync || 'Just now'}</strong></span>
-            </span>
-            <span className="text-body-tertiary opacity-75 d-none d-sm-inline">&bull;</span>
-            <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-2.5 py-1 small d-inline-flex align-items-center gap-1.5 shadow-2xs">
-              <span>Currency: <strong className="text-primary-emphasis">{getCurrencyName(platformCurrency)} ({currSymbol.trim()})</strong></span>
+              <span>Last synced: <strong className="text-body-emphasis">{accurateLastSyncText}</strong></span>
             </span>
           </div>
           <div className="d-flex align-items-center gap-2 no-print">

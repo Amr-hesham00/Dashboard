@@ -405,6 +405,7 @@ export default function CampaignDetailPage() {
   const cCpm = cImpressions > 0 ? ((cSpend / cImpressions) * 1000) : (Number(campaign?.cpm) || 0);
   const cConversionRate = cClicks > 0 ? ((cConversions / cClicks) * 100) : (Number(campaign?.conversionRate) || 0);
   const resolvedClientId = client?.id || initialClientId || campaign?.clientId || null;
+  const isPMax = Boolean(campaign?.isPerformanceMax || campaign?.channelType === 'PERFORMANCE_MAX');
 
   // KPI data map (value + simulated change)
   const kpiDataMap = {
@@ -676,9 +677,6 @@ export default function CampaignDetailPage() {
             <button className="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={() => window.print()}>
               <IconPdf /> <span className="d-none d-md-inline">Export PDF</span>
             </button>
-            <button className="btn btn-primary btn-sm d-inline-flex align-items-center gap-2 px-3" onClick={handleRefresh} disabled={refreshing}>
-              <IconRefresh spinning={refreshing} /> <span className="d-none d-md-inline">{refreshing ? 'Refreshing...' : 'Refresh'}</span>
-            </button>
           </div>
         </div>
 
@@ -721,17 +719,6 @@ export default function CampaignDetailPage() {
                   {campStatus}
                 </span>
               </div>
-
-              {/* Subheader Metadata Spans (Platform, Date Range) */}
-              <div className="d-flex align-items-center gap-2 text-secondary small flex-wrap" style={{ fontSize: '0.80rem' }}>
-                <span className="fw-medium text-body-secondary">
-                  {platformLabel}
-                </span>
-                <span className="text-body-tertiary opacity-75 mx-1">&bull;</span>
-                <span className="d-inline-flex align-items-center gap-1.5 text-body-secondary">
-                  <IconCalendar /> {campaignLifetime}
-                </span>
-              </div>
             </div>
           </div>
         </div>
@@ -740,8 +727,9 @@ export default function CampaignDetailPage() {
         <div className="mb-4">
           <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
             <div className="d-flex align-items-center gap-2 flex-wrap">
-              <span className="d-inline-flex align-items-center gap-1.5 text-secondary small fw-semibold">
-                <IconCalendar /> <span>{periodConfig.label}</span>
+              <span className="badge date-range-badge px-2.5 py-1.5 d-inline-flex align-items-center gap-1.5 shadow-2xs rounded-2">
+                <span className="text-primary d-inline-flex align-items-center"><IconCalendar /></span>
+                <span>{periodConfig.label}</span>
               </span>
             </div>
             <div className="position-relative no-print kpi-selector-container">
@@ -829,18 +817,29 @@ export default function CampaignDetailPage() {
           </div>
         </div>
 
-        {/* ─── 5. Ad Sets Performance Table ─── */}
+        {/* ─── 5. Ad Sets / Asset Groups Performance Table ─── */}
         <div className="card border-0 shadow-sm rounded-3">
           <div className="card-header bg-transparent border-bottom p-4">
             <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
               <div>
-                <h5 className="mb-1 fw-bold">Ad Sets Performance</h5>
-                <div className="text-secondary small">Select an ad set to drill down into its targeting and ads</div>
+                <h5 className="mb-1 fw-bold">{isPMax ? 'Asset Groups Performance' : 'Ad Sets Performance'}</h5>
+                <div className="text-secondary small">
+                  {isPMax
+                    ? 'Asset groups and performance metrics for this Performance Max campaign'
+                    : 'Select an ad set to drill down into its targeting and ads'}
+                </div>
               </div>
             </div>
             <div className="d-flex align-items-center gap-2 flex-wrap pt-3 mt-2 border-top">
               <div className="position-relative flex-grow-1" style={{ minWidth: 200, maxWidth: 360 }}>
-                <input type="text" className="form-control form-control-sm ps-4 rounded-2" placeholder="Filter ad sets by name or audience..." value={adSetSearch} onChange={(e) => setAdSetSearch(e.target.value)} style={{ fontSize: '0.82rem' }} />
+                <input
+                  type="text"
+                  className="form-control form-control-sm ps-4 rounded-2"
+                  placeholder={isPMax ? "Filter asset groups by name..." : "Filter ad sets by name or audience..."}
+                  value={adSetSearch}
+                  onChange={(e) => setAdSetSearch(e.target.value)}
+                  style={{ fontSize: '0.82rem' }}
+                />
                 <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="position-absolute start-0 top-50 translate-middle-y ms-2 text-secondary"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
               </div>
               <div className="ms-auto d-flex align-items-center gap-2">
@@ -858,7 +857,7 @@ export default function CampaignDetailPage() {
               <table className="table align-middle mb-0 table-hover w-100">
                 <thead className="table-light bg-body-tertiary">
                   <tr>
-                    <th className="ps-4 text-body fw-bold" style={{ minWidth: 260 }}>Ad Set</th>
+                    <th className="ps-4 text-body fw-bold" style={{ minWidth: 260 }}>{isPMax ? 'Asset Group' : 'Ad Set'}</th>
                     <th className="text-body fw-bold text-center" style={{ width: 80 }}>Status</th>
                     {renderAdSetSortTH('spend', 'Spend', 'end', 100)}
                     {renderAdSetSortTH('impressions', 'Impressions', 'end', 110)}
@@ -872,14 +871,28 @@ export default function CampaignDetailPage() {
                 </thead>
                 <tbody>
                   {filteredAdSets.length === 0 ? (
-                    <tr><td colSpan="10" className="text-center py-4 text-secondary small">No ad sets match your criteria.</td></tr>
+                    <tr>
+                      <td colSpan="10" className="text-center py-4 text-secondary small">
+                        {isPMax ? 'No asset groups match your criteria.' : 'No ad sets match your criteria.'}
+                      </td>
+                    </tr>
                   ) : (
                     filteredAdSets.map((as) => (
-                      <tr key={as.id} className="adset-clickable-row" onClick={() => navigate(`/Adsets/${as.id}`, { state: { clientId: resolvedClientId, campaignId } })} title={`Open ${as.name} details`}>
+                      <tr
+                        key={as.id}
+                        className="adset-clickable-row"
+                        onClick={() => navigate(isPMax ? `/Assetgroups/${as.id}` : `/Adsets/${as.id}`, { state: { clientId: resolvedClientId, campaignId, isPerformanceMax: isPMax, isAssetGroup: isPMax } })}
+                        title={isPMax ? `Open ${as.name} asset group details` : `Open ${as.name} details`}
+                        style={{ cursor: 'pointer' }}
+                      >
                         <td className="ps-4">
                           <div className="d-flex flex-column">
                             <span className="fw-bold text-primary text-truncate" style={{ maxWidth: 350, fontSize: '0.9rem' }}>{as.name}</span>
-                            <span className="text-secondary small" style={{ fontSize: '0.74rem' }}>{as.audienceType || 'Lookalike'} &bull; {as.ageRange || '25-54'} &bull; {as.gender || 'All'}</span>
+                            {!isPMax ? (
+                              <span className="text-secondary small" style={{ fontSize: '0.74rem' }}>{as.audienceType || 'Lookalike'} &bull; {as.ageRange || '25-54'} &bull; {as.gender || 'All'}</span>
+                            ) : (
+                              <span className="text-secondary small" style={{ fontSize: '0.74rem' }}>Performance Max Asset Group</span>
+                            )}
                           </div>
                         </td>
                         <td className="text-center">

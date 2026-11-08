@@ -105,8 +105,14 @@ public class GoogleAdsDataSyncTests
         public Func<string, IReadOnlyList<GoogleAdsAdRecordDto>> QueryAdsFunc { get; set; } =
             _ => Array.Empty<GoogleAdsAdRecordDto>();
 
+        public Func<string, IReadOnlyList<GoogleAdsAssetGroupRecordDto>> QueryAssetGroupsFunc { get; set; } =
+            _ => Array.Empty<GoogleAdsAssetGroupRecordDto>();
+
         public Func<string, DateOnly, DateOnly, Task<IReadOnlyList<GoogleAdsDailyMetricRecordDto>>> QueryDailyMetricsFunc { get; set; } =
             (_, _, _) => Task.FromResult<IReadOnlyList<GoogleAdsDailyMetricRecordDto>>(Array.Empty<GoogleAdsDailyMetricRecordDto>());
+
+        public Func<string, DateOnly, DateOnly, Task<IReadOnlyList<GoogleAdsDailyAssetGroupMetricRecordDto>>> QueryDailyAssetGroupMetricsFunc { get; set; } =
+            (_, _, _) => Task.FromResult<IReadOnlyList<GoogleAdsDailyAssetGroupMetricRecordDto>>(Array.Empty<GoogleAdsDailyAssetGroupMetricRecordDto>());
 
         public List<(string CustomerId, DateOnly StartDate, DateOnly EndDate)> RecordedMetricQueries { get; } = new();
 
@@ -165,6 +171,14 @@ public class GoogleAdsDataSyncTests
             CancellationToken cancellationToken) =>
             Task.FromResult(QueryAdsFunc(customerId));
 
+        protected override Task<IReadOnlyList<GoogleAdsAssetGroupRecordDto>> QueryAssetGroupsAsync(
+            string refreshToken,
+            string? accessToken,
+            string customerId,
+            string? loginCustomerId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(QueryAssetGroupsFunc(customerId));
+
         protected override async Task<IReadOnlyList<GoogleAdsDailyMetricRecordDto>> QueryDailyMetricsAsync(
             string refreshToken,
             string? accessToken,
@@ -176,6 +190,18 @@ public class GoogleAdsDataSyncTests
         {
             RecordedMetricQueries.Add((customerId, startDate, endDate));
             return await QueryDailyMetricsFunc(customerId, startDate, endDate);
+        }
+
+        protected override async Task<IReadOnlyList<GoogleAdsDailyAssetGroupMetricRecordDto>> QueryDailyAssetGroupMetricsAsync(
+            string refreshToken,
+            string? accessToken,
+            string customerId,
+            string? loginCustomerId,
+            DateOnly startDate,
+            DateOnly endDate,
+            CancellationToken cancellationToken)
+        {
+            return await QueryDailyAssetGroupMetricsFunc(customerId, startDate, endDate);
         }
     }
 

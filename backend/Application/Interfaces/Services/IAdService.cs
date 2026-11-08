@@ -9,4 +9,5 @@ public interface IAdService
     Task<(bool Success, string Message)> UpdateAdAsync(int id, UpdateAdDTO dto);
     Task<IEnumerable<AdDTO>?> GetByClientIdAsync(int clientId);
     Task<AdSetPageDTO?> GetByAdSetIdAsync(int adSetId, DateOnly start, DateOnly end);
+    Task<AdSetPageDTO?> GetByAssetGroupIdAsync(int assetGroupId, DateOnly start, DateOnly end);
 }

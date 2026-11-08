@@ -15,7 +15,8 @@ public class Campaign
 
     public int PlatformId { get; set; }
     public Platform Platform { get; set; }
-    public ICollection<AdSet> AdSets { get; set; }
-
+    public string? ChannelType { get; set; }
+    public ICollection<AdSet> AdSets { get; set; } = new List<AdSet>();
+    public ICollection<AssetGroup> AssetGroups { get; set; } = new List<AssetGroup>();
 }
 

@@ -395,6 +395,139 @@
     .apexcharts-legend {
       display: none !important;
     }
+
+    /* ─── Period Selector & Date Items High-Brightness & Prominence ─── */
+    .period-dropdown-menu {
+      border-radius: 12px !important;
+      padding: 8px !important;
+      backdrop-filter: blur(14px) !important;
+      -webkit-backdrop-filter: blur(14px) !important;
+    }
+
+    [data-bs-theme="dark"] .period-dropdown-menu {
+      background: #1c252e !important;
+      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65) !important;
+    }
+
+    [data-bs-theme="light"] .period-dropdown-menu {
+      background: #ffffff !important;
+      border: 1px solid rgba(15, 23, 42, 0.12) !important;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .date-item-btn {
+      padding: 9px 12px !important;
+      border-radius: 8px !important;
+      border: 1px solid transparent !important;
+      background: transparent;
+      transition: all 0.15s ease !important;
+      cursor: pointer !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      width: 100% !important;
+      margin-bottom: 3px !important;
+    }
+
+    .date-item-btn .date-item-title {
+      font-size: 0.88rem !important;
+      font-weight: 700 !important;
+      line-height: 1.25 !important;
+      letter-spacing: 0.01em !important;
+    }
+
+    .date-item-btn .date-item-subtitle {
+      font-size: 0.77rem !important;
+      font-weight: 600 !important;
+      line-height: 1.3 !important;
+      margin-top: 2px !important;
+    }
+
+    /* Light theme inactive date item */
+    [data-bs-theme="light"] .date-item-btn:not(.active) .date-item-title {
+      color: #0f172a !important;
+    }
+    [data-bs-theme="light"] .date-item-btn:not(.active) .date-item-subtitle {
+      color: #475569 !important;
+    }
+    [data-bs-theme="light"] .date-item-btn:not(.active):hover {
+      background-color: rgba(0, 167, 111, 0.08) !important;
+      border-color: rgba(0, 167, 111, 0.25) !important;
+    }
+
+    /* Dark theme inactive date item - MAXIMUM BRIGHTNESS & CLARITY */
+    [data-bs-theme="dark"] .date-item-btn:not(.active) .date-item-title {
+      color: #f8fafc !important; /* Pure brilliant white */
+    }
+    [data-bs-theme="dark"] .date-item-btn:not(.active) .date-item-subtitle {
+      color: #cbd5e1 !important; /* Bright crisp silver-slate (85% luminosity) */
+    }
+    [data-bs-theme="dark"] .date-item-btn:not(.active):hover {
+      background-color: rgba(255, 255, 255, 0.12) !important;
+      border-color: rgba(255, 255, 255, 0.25) !important;
+    }
+    [data-bs-theme="dark"] .date-item-btn:not(.active):hover .date-item-title {
+      color: #ffffff !important;
+    }
+    [data-bs-theme="dark"] .date-item-btn:not(.active):hover .date-item-subtitle {
+      color: #e2e8f0 !important;
+    }
+
+    /* Active date item (both themes) */
+    .date-item-btn.active {
+      background: linear-gradient(135deg, #00a76f, #059669) !important;
+      border-color: rgba(0, 167, 111, 0.5) !important;
+      box-shadow: 0 4px 14px rgba(0, 167, 111, 0.38) !important;
+    }
+    .date-item-btn.active .date-item-title {
+      color: #ffffff !important;
+    }
+    .date-item-btn.active .date-item-subtitle {
+      color: rgba(255, 255, 255, 0.95) !important;
+    }
+
+    /* Period selector trigger button high brightness */
+    .period-selector-btn {
+      font-weight: 600 !important;
+      transition: all 0.18s ease !important;
+    }
+    [data-bs-theme="dark"] .period-selector-btn {
+      background: #1c252e !important;
+      border: 1px solid rgba(255, 255, 255, 0.22) !important;
+      color: #f8fafc !important;
+    }
+    [data-bs-theme="dark"] .period-selector-btn:hover {
+      border-color: #00a76f !important;
+      color: #ffffff !important;
+      box-shadow: 0 0 0 2px rgba(0, 167, 111, 0.25) !important;
+    }
+    [data-bs-theme="light"] .period-selector-btn {
+      background: #ffffff !important;
+      border: 1px solid #cbd5e1 !important;
+      color: #0f172a !important;
+    }
+    [data-bs-theme="light"] .period-selector-btn:hover {
+      border-color: #00a76f !important;
+      box-shadow: 0 0 0 2px rgba(0, 167, 111, 0.15) !important;
+    }
+
+    /* Date range badge in page headers - high brightness */
+    .date-range-badge {
+      font-weight: 600 !important;
+      font-size: 0.84rem !important;
+      letter-spacing: 0.01em;
+    }
+    [data-bs-theme="dark"] .date-range-badge {
+      background: rgba(255, 255, 255, 0.08) !important;
+      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      color: #f8fafc !important;
+    }
+    [data-bs-theme="light"] .date-range-badge {
+      background: #f1f5f9 !important;
+      border: 1px solid #cbd5e1 !important;
+      color: #0f172a !important;
+    }
   </style>
   <script src="/assets/js/vendors/color-modes.js"></script>
   <script src="/vendor/simplebar/dist/simplebar.min.js"></script>

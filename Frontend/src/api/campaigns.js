@@ -123,6 +123,8 @@ export async function getCampaignByIdApi(id, startDate, endDate) {
           cpm: data.cpm,
           conversionRate: data.conversionRate,
           aov: data.aov,
+          channelType: data.channelType,
+          isPerformanceMax: Boolean(data.isPerformanceMax || data.channelType === 'PERFORMANCE_MAX'),
           points: data.points,
           adsetRows: data.adsetRows,
         };

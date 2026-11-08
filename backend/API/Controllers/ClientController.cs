@@ -197,6 +197,28 @@ public class ClientController : ControllerBase
         return Ok(new { message });
     }
 
+    /// <summary>
+    /// Update a client's reporting currency specifically.
+    /// </summary>
+    [HttpPut("{id}/reporting-currency")]
+    [HttpPatch("{id}/reporting-currency")]
+    public async Task<IActionResult> UpdateReportingCurrency([FromRoute] int id, [FromBody] UpdateReportingCurrencyDTO dto)
+    {
+        if (id <= 0)
+            return BadRequest(new { message = "Client ID must be a positive integer." });
+
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var (success, message, currency) = await _clientService.UpdateReportingCurrencyAsync(id, dto.Currency);
+        if (!success)
+        {
+            return BadRequest(new { message });
+        }
+
+        return Ok(new { message, currency });
+    }
+
 
     /// <summary>
     /// Delete a client by Client ID.

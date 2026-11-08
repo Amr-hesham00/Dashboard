@@ -65,7 +65,25 @@ public class AdSetService : IAdSetService
         if (campaign is null)
             return null;
 
+        bool isPMax = string.Equals(campaign.ChannelType, "PERFORMANCE_MAX", StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(campaign.ChannelType, "PerformanceMax", StringComparison.OrdinalIgnoreCase);
+
+        if (isPMax)
+        {
+            var assetGroups = await _unitOfWork.AssetGroup.GetByCampaignIdAsync(campaignId, startDate, endDate);
+            return MapAssetGroupsToDTO(campaign, assetGroups, startDate, endDate);
+        }
+
         var adSets = await _unitOfWork.AdSet.GetByCampaignIdAsync(campaignId, startDate, endDate);
+
+        if (!adSets.Any())
+        {
+            var assetGroups = await _unitOfWork.AssetGroup.GetByCampaignIdAsync(campaignId, startDate, endDate);
+            if (assetGroups.Any())
+            {
+                return MapAssetGroupsToDTO(campaign, assetGroups, startDate, endDate);
+            }
+        }
 
         return MapToDTO(campaign, adSets, startDate, endDate);
     }
@@ -162,6 +180,7 @@ public class AdSetService : IAdSetService
             CampPlatform = campaign.Platform?.PlatformType.ToString() ?? "",
             Currency = campaign.Platform?.Currency ?? campaign.Currency,
             CurrencyName = (campaign.Platform?.Currency ?? campaign.Currency).ToString(),
+            ChannelType = campaign.ChannelType,
 
             Spend = total.Spend,
             Revenue = total.Revenue,
@@ -205,6 +224,123 @@ public class AdSetService : IAdSetService
         }
 
         return total;
+    }
+
+    public static (double Spend, double Revenue, int Impressions, int Clicks, int Conversions) SumMetrics(IEnumerable<DailyAssetGroupMetrics> metrics)
+    {
+        var total = (
+            Spend: 0.0,
+            Revenue: 0.0,
+            Impressions: 0,
+            Clicks: 0,
+            Conversions: 0
+        );
+
+        foreach (var metric in metrics)
+        {
+            total.Spend += metric.Spend;
+            total.Revenue += metric.Revenue;
+            total.Impressions += metric.Impressions;
+            total.Clicks += metric.Clicks;
+            total.Conversions += metric.Conversions;
+        }
+
+        return total;
+    }
+
+    private static CampPageDTO MapAssetGroupsToDTO(
+       Campaign campaign,
+       IEnumerable<AssetGroup> assetGroups,
+       DateOnly startDate,
+       DateOnly endDate)
+    {
+        var groupList = assetGroups.ToList();
+
+        var metrics = groupList
+            .SelectMany(ag => ag.DailyMetrics)
+            .ToList();
+
+        var total = SumMetrics(metrics);
+        var byDate = metrics.ToLookup(metric => metric.Date);
+
+        var points = new List<ChartPoint>();
+        int dayCount = endDate.DayNumber - startDate.DayNumber + 1;
+
+        for (int i = 0; i < dayCount; i++)
+        {
+            var date = startDate.AddDays(i);
+            var daily = SumMetrics(byDate[date]);
+
+            points.Add(new ChartPoint
+            {
+                Date = date,
+                Spend = daily.Spend,
+                Revenue = daily.Revenue,
+                Conversions = daily.Conversions,
+                ROAS = Divide(daily.Revenue, daily.Spend),
+                CPA = Divide(daily.Spend, daily.Conversions),
+                CTR = Divide(daily.Clicks, daily.Impressions) * 100,
+                Impressions = (int)daily.Impressions,
+                Clicks = (int)daily.Clicks,
+                CPC = Divide(daily.Spend, daily.Clicks),
+                CPM = Divide(daily.Spend, daily.Impressions) * 1000,
+                ConversionRate = Divide(daily.Conversions, daily.Clicks) * 100
+            });
+        }
+
+        var rows = new List<TableRow>();
+
+        foreach (var ag in groupList)
+        {
+            var agTotal = SumMetrics(ag.DailyMetrics);
+
+            rows.Add(new TableRow
+            {
+                Id = ag.Id,
+                Name = ag.Name,
+                Status = ag.Status,
+                Spend = agTotal.Spend,
+                Revenue = agTotal.Revenue,
+                Impressions = agTotal.Impressions,
+                Clicks = agTotal.Clicks,
+                Conversions = agTotal.Conversions,
+                CPA = Divide(agTotal.Spend, agTotal.Conversions),
+                ROAS = Divide(agTotal.Revenue, agTotal.Spend),
+                CTR = Divide(agTotal.Clicks, agTotal.Impressions) * 100,
+                CPC = Divide(agTotal.Spend, agTotal.Clicks),
+                CPM = Divide(agTotal.Spend, agTotal.Impressions) * 1000,
+                ConversionRate = Divide(agTotal.Conversions, agTotal.Clicks) * 100
+            });
+        }
+
+        return new CampPageDTO
+        {
+            ClientId = campaign.Platform?.ClientId ?? 0,
+            ClientName = campaign.Platform?.Client?.CompanyName ?? "",
+            CampName = campaign.Name,
+            Status = campaign.Status.ToString(),
+            CampPlatform = campaign.Platform?.PlatformType.ToString() ?? "",
+            Currency = campaign.Platform?.Currency ?? campaign.Currency,
+            CurrencyName = (campaign.Platform?.Currency ?? campaign.Currency).ToString(),
+            ChannelType = campaign.ChannelType ?? "PERFORMANCE_MAX",
+
+            Spend = total.Spend,
+            Revenue = total.Revenue,
+            Impressions = total.Impressions,
+            Clicks = total.Clicks,
+            Conversions = total.Conversions,
+
+            CPA = Divide(total.Spend, total.Conversions),
+            ROAS = Divide(total.Revenue, total.Spend),
+            CTR = Divide(total.Clicks, total.Impressions) * 100,
+            CPC = Divide(total.Spend, total.Clicks),
+            CPM = Divide(total.Spend, total.Impressions) * 1000,
+            ConversionRate = Divide(total.Conversions, total.Clicks) * 100,
+            AOV = Divide(total.Revenue, total.Conversions),
+
+            Points = points,
+            AdsetRows = rows
+        };
     }
 
     public static double Divide(double numerator, double denominator)

@@ -258,8 +258,32 @@ public class GoogleAdsCampaignRecordDto
     public string Name { get; set; } = null!;
     public CampaignStatus Status { get; set; } = CampaignStatus.Active;
     public CampaignObjective Objective { get; set; } = CampaignObjective.Traffic;
+    public string? ChannelType { get; set; }
+    public bool IsPerformanceMax =>
+        string.Equals(ChannelType, "PERFORMANCE_MAX", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(ChannelType, "PerformanceMax", StringComparison.OrdinalIgnoreCase);
     public DateTimeOffset? StartDate { get; set; }
     public DateTimeOffset? EndDate { get; set; }
+}
+
+public class GoogleAdsAssetGroupRecordDto
+{
+    public string ExternalId { get; set; } = null!;
+    public string CampaignExternalId { get; set; } = null!;
+    public string Name { get; set; } = null!;
+    public AdSetStatus Status { get; set; } = AdSetStatus.Active;
+}
+
+public class GoogleAdsDailyAssetGroupMetricRecordDto
+{
+    public string AssetGroupExternalId { get; set; } = null!;
+    public string? CampaignExternalId { get; set; }
+    public DateOnly Date { get; set; }
+    public long Impressions { get; set; }
+    public long Clicks { get; set; }
+    public long CostMicros { get; set; }
+    public double Conversions { get; set; }
+    public double ConversionsValue { get; set; }
 }
 
 public class GoogleAdsAdGroupRecordDto
@@ -315,6 +339,7 @@ public class PlatformSyncResultDto
     public int CampaignsSynced { get; set; }
     public int AdSetsSynced { get; set; }
     public int AdsSynced { get; set; }
+    public int AssetGroupsSynced { get; set; }
     public int DailyMetricsUpserted { get; set; }
     public DateOnly? SyncedFromDate { get; set; }
     public DateOnly? SyncedToDate { get; set; }

@@ -76,7 +76,8 @@ public class ClientService : IClientService
                     AccountId = platform.ExternalAccountId,
                     AccountName = platform.AccountName,
                     ManagerAccountId = platform.ManagerAccountId,
-                    OAuthConnectionId = platform.OAuthConnectionId
+                    OAuthConnectionId = platform.OAuthConnectionId,
+                    LastSyncedAt = platform.LastSyncedAt
                 });
 
                 if (platform.Campaigns == null) continue;
@@ -86,17 +87,42 @@ public class ClientService : IClientService
                     if (campaign.Status == CampaignStatus.Active)
                         clientActiveCampaigns++;
 
-                    if (campaign.AdSets == null) continue;
-
-                    foreach (var adSet in campaign.AdSets)
+                    if (campaign.AdSets != null)
                     {
-                        if (adSet.Ads == null) continue;
-
-                        foreach (var ad in adSet.Ads)
+                        foreach (var adSet in campaign.AdSets)
                         {
-                            if (ad.DailyMetrics == null) continue;
+                            if (adSet.Ads == null) continue;
 
-                            foreach (var metric in ad.DailyMetrics)
+                            foreach (var ad in adSet.Ads)
+                            {
+                                if (ad.DailyMetrics == null) continue;
+
+                                foreach (var metric in ad.DailyMetrics)
+                                {
+                                    clientImpressions += metric.Impressions;
+                                    clientClicks += metric.Clicks;
+                                    clientConversions += metric.Conversions;
+
+                                    double crossRate = 1.0;
+                                    if (_exchangeRateService != null && platform.Currency != client.UnitCurrency)
+                                    {
+                                        crossRate = await GetCrossRateAsync(platform.Currency, client.UnitCurrency, rateCache);
+                                    }
+
+                                    clientSpend += metric.Spend * crossRate;
+                                    clientRevenue += metric.Revenue * crossRate;
+                                }
+                            }
+                        }
+                    }
+
+                    if (campaign.AssetGroups != null)
+                    {
+                        foreach (var ag in campaign.AssetGroups)
+                        {
+                            if (ag.DailyMetrics == null) continue;
+
+                            foreach (var metric in ag.DailyMetrics)
                             {
                                 clientImpressions += metric.Impressions;
                                 clientClicks += metric.Clicks;
@@ -231,6 +257,21 @@ public class ClientService : IClientService
         await _unitOfWork.Complete();
 
         return (true, "Client updated successfully.");
+    }
+
+    public async Task<(bool Success, string Message, string? Currency)> UpdateReportingCurrencyAsync(int clientId, Currency currency)
+    {
+        var client = await _unitOfWork.Client.GetById(clientId);
+        if (client == null)
+        {
+            return (false, "Client not found.", null);
+        }
+
+        client.UnitCurrency = currency;
+        _unitOfWork.Client.Update(client);
+        await _unitOfWork.Complete();
+
+        return (true, "Client reporting currency updated successfully.", currency.ToString());
     }
 
     public async Task<(bool Success, string Message)> DeleteClientAsync(int id)
@@ -368,7 +409,8 @@ public class ClientService : IClientService
                         AccountId = platform.ExternalAccountId,
                         AccountName = platform.AccountName,
                         ManagerAccountId = platform.ManagerAccountId,
-                        OAuthConnectionId = platform.OAuthConnectionId
+                        OAuthConnectionId = platform.OAuthConnectionId,
+                        LastSyncedAt = platform.LastSyncedAt
                     });
 
                     if (platform.Campaigns == null) continue;
@@ -380,17 +422,40 @@ public class ClientService : IClientService
                             clientActiveCampaigns++;
                         }
 
-                        if (campaign.AdSets == null) continue;
-
-                        foreach (var adSet in campaign.AdSets)
+                        if (campaign.AdSets != null)
                         {
-                            if (adSet.Ads == null) continue;
-
-                            foreach (var ad in adSet.Ads)
+                            foreach (var adSet in campaign.AdSets)
                             {
-                                if (ad.DailyMetrics == null) continue;
+                                if (adSet.Ads == null) continue;
 
-                                foreach (var metric in ad.DailyMetrics)
+                                foreach (var ad in adSet.Ads)
+                                {
+                                    if (ad.DailyMetrics == null) continue;
+
+                                    foreach (var metric in ad.DailyMetrics)
+                                    {
+                                        clientConversions += metric.Conversions;
+
+                                        double crossRate = 1.0;
+                                        if (_exchangeRateService != null && platform.Currency != client.UnitCurrency)
+                                        {
+                                            crossRate = await GetCrossRateAsync(platform.Currency, client.UnitCurrency, rateCache);
+                                        }
+
+                                        clientSpend += metric.Spend * crossRate;
+                                        clientRevenue += metric.Revenue * crossRate;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (campaign.AssetGroups != null)
+                        {
+                            foreach (var ag in campaign.AssetGroups)
+                            {
+                                if (ag.DailyMetrics == null) continue;
+
+                                foreach (var metric in ag.DailyMetrics)
                                 {
                                     clientConversions += metric.Conversions;
 

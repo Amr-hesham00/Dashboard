@@ -85,6 +85,14 @@ public class GoogleAdsService : IGoogleAdsService
             campaign.id
         FROM ad_group_ad";
 
+    private const string AssetGroupsQuery = @"
+        SELECT
+            asset_group.id,
+            asset_group.name,
+            asset_group.status,
+            campaign.id
+        FROM asset_group";
+
     private readonly IGoogleOAuthService _googleOAuthService;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IConfiguration _configuration;
@@ -637,6 +645,7 @@ public class GoogleAdsService : IGoogleAdsService
             IReadOnlyList<GoogleAdsCampaignRecordDto> campaignRecords;
             IReadOnlyList<GoogleAdsAdGroupRecordDto> adGroupRecords;
             IReadOnlyList<GoogleAdsAdRecordDto> adRecords;
+            IReadOnlyList<GoogleAdsAssetGroupRecordDto> assetGroupRecords = Array.Empty<GoogleAdsAssetGroupRecordDto>();
 
             try
             {
@@ -663,6 +672,16 @@ public class GoogleAdsService : IGoogleAdsService
                     customerId,
                     "QueryAds",
                     cancellationToken) ?? Array.Empty<GoogleAdsAdRecordDto>();
+
+                bool hasPMax = campaignRecords.Any(c => c.IsPerformanceMax);
+                if (hasPMax)
+                {
+                    assetGroupRecords = await ExecuteWithRetryAsync(
+                        ct => QueryAssetGroupsAsync(credentials.RefreshToken, credentials.AccessToken, customerId, loginCustomerId, ct),
+                        customerId,
+                        "QueryAssetGroups",
+                        cancellationToken) ?? Array.Empty<GoogleAdsAssetGroupRecordDto>();
+                }
             }
             catch (Exception ex) when (ex is GoogleAdsException or RpcException or InvalidOperationException or HttpRequestException)
             {
@@ -735,6 +754,9 @@ public class GoogleAdsService : IGoogleAdsService
 
             // 6. Retrieve daily performance metrics in 30-day chunks
             var metricRows = new List<GoogleAdsDailyMetricRecordDto>();
+            var assetGroupMetricRows = new List<GoogleAdsDailyAssetGroupMetricRecordDto>();
+            bool hasPMaxCampaigns = campaignRecords.Any(c => c.IsPerformanceMax);
+
             try
             {
                 var cursor = startDate;
@@ -754,6 +776,20 @@ public class GoogleAdsService : IGoogleAdsService
                         metricRows.AddRange(chunk);
                     }
 
+                    if (hasPMaxCampaigns)
+                    {
+                        var agChunk = await ExecuteWithRetryAsync(
+                            ct => QueryDailyAssetGroupMetricsAsync(credentials.RefreshToken, credentials.AccessToken, customerId, loginCustomerId, cursor, chunkEnd, ct),
+                            customerId,
+                            $"QueryDailyAssetGroupMetrics[{cursor:yyyy-MM-dd}..{chunkEnd:yyyy-MM-dd}]",
+                            cancellationToken);
+
+                        if (agChunk is { Count: > 0 })
+                        {
+                            assetGroupMetricRows.AddRange(agChunk);
+                        }
+                    }
+
                     cursor = chunkEnd.AddDays(1);
                 }
             }
@@ -766,14 +802,16 @@ public class GoogleAdsService : IGoogleAdsService
                     $"Failed to retrieve Google Ads daily metrics ({errorCode}).");
             }
 
-            // 7. Persist Campaign -> AdSet -> Ad hierarchy and daily performance metrics
-            var (campaignsSyncedCount, adSetsSyncedCount, adsSyncedCount, metricsUpsertedCount) =
+            // 7. Persist Campaign -> AdSet -> Ad and Performance Max Campaign -> AssetGroup hierarchies and daily performance metrics
+            var (campaignsSyncedCount, adSetsSyncedCount, adsSyncedCount, assetGroupsSyncedCount, metricsUpsertedCount) =
                 await PersistGoogleAdsDataAsync(
                     platform,
                     campaignRecords,
                     adGroupRecords,
                     adRecords,
+                    assetGroupRecords,
                     metricRows,
+                    assetGroupMetricRows,
                     startDate,
                     today,
                     now);
@@ -791,12 +829,13 @@ public class GoogleAdsService : IGoogleAdsService
             await _unitOfWork.Complete();
 
             _logger.LogInformation(
-                "Successfully synchronized Google Ads Platform {PlatformId} for Client {ClientId}: Campaigns={Campaigns}, AdSets={AdSets}, Ads={Ads}, Metrics={Metrics}, Dates={Start}..{End}, Initial={Initial}, Backfill={Backfill}.",
+                "Successfully synchronized Google Ads Platform {PlatformId} for Client {ClientId}: Campaigns={Campaigns}, AdSets={AdSets}, Ads={Ads}, AssetGroups={AssetGroups}, Metrics={Metrics}, Dates={Start}..{End}, Initial={Initial}, Backfill={Backfill}.",
                 platform.Id,
                 platform.ClientId,
                 campaignsSyncedCount,
                 adSetsSyncedCount,
                 adsSyncedCount,
+                assetGroupsSyncedCount,
                 metricsUpsertedCount,
                 startDate,
                 today,
@@ -819,6 +858,7 @@ public class GoogleAdsService : IGoogleAdsService
                 CampaignsSynced = campaignsSyncedCount,
                 AdSetsSynced = adSetsSyncedCount,
                 AdsSynced = adsSyncedCount,
+                AssetGroupsSynced = assetGroupsSyncedCount,
                 DailyMetricsUpserted = metricsUpsertedCount,
                 SyncedFromDate = startDate,
                 SyncedToDate = today,
@@ -836,19 +876,22 @@ public class GoogleAdsService : IGoogleAdsService
     /// <summary>
     /// Direct database persistence: updates existing records, inserts new discoveries,
     /// preserves original currency without USD conversion, and avoids duplicate metrics.
+    /// Supports mutually exclusive hierarchies: Search (Campaign -> AdSet -> Ad -> DailyAdMetrics)
+    /// and Performance Max (Campaign -> AssetGroup -> DailyAssetGroupMetrics).
     /// </summary>
-    private async Task<(int Campaigns, int AdSets, int Ads, int Metrics)> PersistGoogleAdsDataAsync(
+    private async Task<(int Campaigns, int AdSets, int Ads, int AssetGroups, int Metrics)> PersistGoogleAdsDataAsync(
         Platform platform,
         IReadOnlyList<GoogleAdsCampaignRecordDto> incomingCampaigns,
         IReadOnlyList<GoogleAdsAdGroupRecordDto> incomingAdGroups,
         IReadOnlyList<GoogleAdsAdRecordDto> incomingAds,
+        IReadOnlyList<GoogleAdsAssetGroupRecordDto> incomingAssetGroups,
         IReadOnlyList<GoogleAdsDailyMetricRecordDto> incomingMetrics,
+        IReadOnlyList<GoogleAdsDailyAssetGroupMetricRecordDto> incomingAssetGroupMetrics,
         DateOnly startDate,
         DateOnly endDate,
         DateTimeOffset now)
     {
-        // A. Upsert Campaigns        
-        // بيلف علي كل الكامبس اللي جات من جوجل و يشوف عندنا فالداتابيز لو موجودة بيحدث البيانات لو لا بيضيف سجل جديد و بعد كل دا بيحفظ كل التعديلات
+        // A. Upsert Campaigns
         var existingCampaigns = await _unitOfWork.Campaign.GetTrackedByPlatformIdAsync(platform.Id)
                                 ?? new List<Campaign>();
         var campaignsByExtId = existingCampaigns
@@ -871,6 +914,10 @@ public class GoogleAdsService : IGoogleAdsService
                 camp.Name = name;
                 camp.Status = rec.Status;
                 camp.Objective = rec.Objective;
+                if (!string.IsNullOrWhiteSpace(rec.ChannelType))
+                {
+                    camp.ChannelType = rec.ChannelType;
+                }
                 camp.Currency = platform.Currency;
                 if (rec.StartDate.HasValue) camp.StartDate = rec.StartDate.Value;
                 camp.EndDate = rec.EndDate;
@@ -884,6 +931,7 @@ public class GoogleAdsService : IGoogleAdsService
                     Name = name,
                     Status = rec.Status,
                     Objective = rec.Objective,
+                    ChannelType = rec.ChannelType,
                     Currency = platform.Currency,
                     StartDate = rec.StartDate ?? now,
                     EndDate = rec.EndDate,
@@ -897,9 +945,7 @@ public class GoogleAdsService : IGoogleAdsService
         await _unitOfWork.Complete();
 
 
-        // B. Upsert AdSets (Ad Groups)
-
-        // الخلاصة: الجزء B بيعمل نفس عملية الإضافة أو التحديث الخاصة بالحملات، لكن مع إضافة خطوة مهمة: التأكد من وجود الحملة الرئيسية، وربط كل مجموعة إعلانية بيها عن طريق رقم الحملة في قاعدة البيانات.
+        // B. Upsert AdSets (Ad Groups) - Search hierarchy only
         var existingAdSets = await _unitOfWork.AdSet.GetTrackedByPlatformIdAsync(platform.Id)
                              ?? new List<AdSet>();
         var adSetsByExtId = existingAdSets
@@ -913,6 +959,11 @@ public class GoogleAdsService : IGoogleAdsService
             var extId = rec.ExternalId.Trim();
             var campExtId = rec.CampaignExternalId.Trim();
             if (!campaignsByExtId.TryGetValue(campExtId, out var parentCamp))
+                continue;
+
+            // MUTUAL EXCLUSIVITY RULE: Never create AdSets under a Performance Max campaign
+            if (string.Equals(parentCamp.ChannelType, "PERFORMANCE_MAX", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(parentCamp.ChannelType, "PerformanceMax", StringComparison.OrdinalIgnoreCase))
                 continue;
 
             var name = Truncate(string.IsNullOrWhiteSpace(rec.Name) ? $"Ad Group #{extId}" : rec.Name.Trim(), 200);
@@ -946,7 +997,7 @@ public class GoogleAdsService : IGoogleAdsService
         }
         await _unitOfWork.Complete();
 
-        // C. Upsert Ads
+        // C. Upsert Ads - Search hierarchy only
         var existingAds = await _unitOfWork.Ad.GetTrackedByPlatformIdAsync(platform.Id)
                           ?? new List<Ad>();
         var adsByExtId = existingAds
@@ -997,11 +1048,18 @@ public class GoogleAdsService : IGoogleAdsService
         }
         await _unitOfWork.Complete();
 
-        // D. Upsert Daily Performance Metrics in Original Account Currency without duplicates
+        // D. Upsert Daily Performance Metrics for Ads in Original Account Currency without duplicates
         int metricsUpserted = 0;
         if (incomingMetrics.Count > 0)
         {
-            var existingMetrics = await _unitOfWork.AdDailyMetrics.GetTrackedByPlatformAndDateRangeAsync(platform.Id, startDate, endDate)
+            var queryStart = startDate;
+            var queryEnd = endDate;
+            var minMetricDate = incomingMetrics.Min(m => m.Date);
+            var maxMetricDate = incomingMetrics.Max(m => m.Date);
+            if (minMetricDate < queryStart) queryStart = minMetricDate;
+            if (maxMetricDate > queryEnd) queryEnd = maxMetricDate;
+
+            var existingMetrics = await _unitOfWork.AdDailyMetrics.GetTrackedByPlatformAndDateRangeAsync(platform.Id, queryStart, queryEnd)
                                   ?? new List<AdDailyMetrics>();
             var metricsByAdAndDate = existingMetrics.ToDictionary(m => (m.AdId, m.Date), m => m);
 
@@ -1049,7 +1107,111 @@ public class GoogleAdsService : IGoogleAdsService
             await _unitOfWork.Complete();
         }
 
-        return (campaignsSynced, adSetsSynced, adsSynced, metricsUpserted);
+        // E. Upsert AssetGroups - Performance Max hierarchy only
+        var existingAssetGroups = await _unitOfWork.AssetGroup.GetTrackedByPlatformIdAsync(platform.Id)
+                                  ?? new List<AssetGroup>();
+        var assetGroupsByExtId = existingAssetGroups
+            .Where(a => !string.IsNullOrEmpty(a.ExternalId))
+            .GroupBy(a => a.ExternalId!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        int assetGroupsSynced = 0;
+        foreach (var rec in incomingAssetGroups.Where(r => !string.IsNullOrWhiteSpace(r.ExternalId) && !string.IsNullOrWhiteSpace(r.CampaignExternalId)))
+        {
+            var extId = rec.ExternalId.Trim();
+            var campExtId = rec.CampaignExternalId.Trim();
+            if (!campaignsByExtId.TryGetValue(campExtId, out var parentCamp))
+                continue;
+
+            // MUTUAL EXCLUSIVITY RULE: Never create AssetGroups under non-Performance Max campaigns
+            if (!string.Equals(parentCamp.ChannelType, "PERFORMANCE_MAX", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(parentCamp.ChannelType, "PerformanceMax", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var name = Truncate(string.IsNullOrWhiteSpace(rec.Name) ? $"Asset Group #{extId}" : rec.Name.Trim(), 200);
+
+            if (assetGroupsByExtId.TryGetValue(extId, out var assetGroup))
+            {
+                assetGroup.CampaignId = parentCamp.Id;
+                assetGroup.Name = name;
+                assetGroup.Status = rec.Status;
+            }
+            else
+            {
+                assetGroup = new AssetGroup
+                {
+                    CampaignId = parentCamp.Id,
+                    ExternalId = extId,
+                    Name = name,
+                    Status = rec.Status,
+                    StartDate = parentCamp.StartDate != default ? parentCamp.StartDate : now,
+                    EndDate = parentCamp.EndDate
+                };
+                await _unitOfWork.AssetGroup.Create(assetGroup);
+                assetGroupsByExtId[extId] = assetGroup;
+            }
+            assetGroupsSynced++;
+        }
+        await _unitOfWork.Complete();
+
+        // F. Upsert Daily Performance Metrics for AssetGroups in Original Account Currency without duplicates
+        if (incomingAssetGroupMetrics.Count > 0)
+        {
+            var queryStart = startDate;
+            var queryEnd = endDate;
+            var minAgDate = incomingAssetGroupMetrics.Min(m => m.Date);
+            var maxAgDate = incomingAssetGroupMetrics.Max(m => m.Date);
+            if (minAgDate < queryStart) queryStart = minAgDate;
+            if (maxAgDate > queryEnd) queryEnd = maxAgDate;
+
+            var existingAgMetrics = await _unitOfWork.DailyAssetGroupMetrics.GetTrackedByPlatformAndDateRangeAsync(platform.Id, queryStart, queryEnd)
+                                    ?? new List<DailyAssetGroupMetrics>();
+            var agMetricsByGroupAndDate = existingAgMetrics.ToDictionary(m => (m.AssetGroupId, m.Date), m => m);
+
+            foreach (var rec in incomingAssetGroupMetrics)
+            {
+                if (string.IsNullOrWhiteSpace(rec.AssetGroupExternalId))
+                    continue;
+
+                if (!assetGroupsByExtId.TryGetValue(rec.AssetGroupExternalId.Trim(), out var ag) || ag.Id <= 0)
+                    continue;
+
+                var spend = ConvertMicrosToCurrency(rec.CostMicros);
+                var revenue = Math.Round(Math.Max(0.0, rec.ConversionsValue), 6);
+                var impressions = (int)Math.Clamp(rec.Impressions, 0, int.MaxValue);
+                var clicks = (int)Math.Clamp(rec.Clicks, 0, int.MaxValue);
+                var conversions = (int)Math.Clamp((long)Math.Round(rec.Conversions), 0, int.MaxValue);
+
+                if (agMetricsByGroupAndDate.TryGetValue((ag.Id, rec.Date), out var existingAgMetric))
+                {
+                    existingAgMetric.Impressions = impressions;
+                    existingAgMetric.Clicks = clicks;
+                    existingAgMetric.Conversions = conversions;
+                    existingAgMetric.Spend = spend;
+                    existingAgMetric.Revenue = revenue;
+                }
+                else
+                {
+                    var newMetric = new DailyAssetGroupMetrics
+                    {
+                        AssetGroupId = ag.Id,
+                        Date = rec.Date,
+                        Impressions = impressions,
+                        Clicks = clicks,
+                        Conversions = conversions,
+                        Spend = spend,
+                        Revenue = revenue
+                    };
+                    await _unitOfWork.DailyAssetGroupMetrics.Create(newMetric);
+                    agMetricsByGroupAndDate[(ag.Id, rec.Date)] = newMetric;
+                }
+
+                metricsUpserted++;
+            }
+            await _unitOfWork.Complete();
+        }
+
+        return (campaignsSynced, adSetsSynced, adsSynced, assetGroupsSynced, metricsUpserted);
     }
 
     /// <summary>
@@ -1182,6 +1344,7 @@ public class GoogleAdsService : IGoogleAdsService
                 Name = !string.IsNullOrWhiteSpace(c.Name) ? c.Name : $"Campaign #{extId}",
                 Status = MapCampaignStatus(c.Status),
                 Objective = MapCampaignObjective(c.AdvertisingChannelType),
+                ChannelType = c.AdvertisingChannelType.ToString(),
                 StartDate = ParseGoogleAdsDateTime(c.StartDateTime),
                 EndDate = ParseGoogleAdsDateTime(c.EndDateTime)
             });
@@ -1352,6 +1515,106 @@ public class GoogleAdsService : IGoogleAdsService
         WHERE segments.date BETWEEN '{startDate:yyyy-MM-dd}' AND '{endDate:yyyy-MM-dd}'";
     }
 
+    protected virtual Task<IReadOnlyList<GoogleAdsAssetGroupRecordDto>> QueryAssetGroupsAsync(
+        string refreshToken,
+        string? accessToken,
+        string customerId,
+        string? loginCustomerId,
+        CancellationToken cancellationToken)
+    {
+        var client = CreateGoogleAdsClient(refreshToken, loginCustomerId);
+        var googleAdsService = client.GetService(Google.Ads.GoogleAds.Services.V26.GoogleAdsService);
+        var response = googleAdsService.Search(customerId, AssetGroupsQuery);
+
+        var results = new List<GoogleAdsAssetGroupRecordDto>();
+        foreach (var row in response)
+        {
+            var ag = row.AssetGroup;
+            if (ag is null || ag.Id <= 0)
+                continue;
+
+            var campaignExtId = row.Campaign is { Id: > 0 }
+                ? row.Campaign.Id.ToString(CultureInfo.InvariantCulture)
+                : ExtractTrailingResourceId(ag.Campaign);
+
+            if (string.IsNullOrEmpty(campaignExtId))
+                continue;
+
+            var extId = ag.Id.ToString(CultureInfo.InvariantCulture);
+            results.Add(new GoogleAdsAssetGroupRecordDto
+            {
+                ExternalId = extId,
+                CampaignExternalId = campaignExtId,
+                Name = !string.IsNullOrWhiteSpace(ag.Name) ? ag.Name : $"Asset Group #{extId}",
+                Status = MapAssetGroupStatus(ag.Status)
+            });
+        }
+
+        return Task.FromResult<IReadOnlyList<GoogleAdsAssetGroupRecordDto>>(results);
+    }
+
+    protected virtual Task<IReadOnlyList<GoogleAdsDailyAssetGroupMetricRecordDto>> QueryDailyAssetGroupMetricsAsync(
+        string refreshToken,
+        string? accessToken,
+        string customerId,
+        string? loginCustomerId,
+        DateOnly startDate,
+        DateOnly endDate,
+        CancellationToken cancellationToken)
+    {
+        var client = CreateGoogleAdsClient(refreshToken, loginCustomerId);
+        var googleAdsService = client.GetService(Google.Ads.GoogleAds.Services.V26.GoogleAdsService);
+        var gaql = BuildDailyAssetGroupMetricsQuery(startDate, endDate);
+        var response = googleAdsService.Search(customerId, gaql);
+
+        var results = new List<GoogleAdsDailyAssetGroupMetricRecordDto>();
+        foreach (var row in response)
+        {
+            var ag = row.AssetGroup;
+            var segments = row.Segments;
+            var metrics = row.Metrics;
+            if (ag is null || ag.Id <= 0 || segments is null || metrics is null)
+                continue;
+
+            if (!DateOnly.TryParseExact(segments.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var reportDate))
+                continue;
+
+            var campaignExtId = row.Campaign is { Id: > 0 }
+                ? row.Campaign.Id.ToString(CultureInfo.InvariantCulture)
+                : ExtractTrailingResourceId(ag.Campaign);
+
+            results.Add(new GoogleAdsDailyAssetGroupMetricRecordDto
+            {
+                AssetGroupExternalId = ag.Id.ToString(CultureInfo.InvariantCulture),
+                CampaignExternalId = campaignExtId,
+                Date = reportDate,
+                Impressions = metrics.Impressions,
+                Clicks = metrics.Clicks,
+                CostMicros = metrics.CostMicros,
+                Conversions = metrics.Conversions,
+                ConversionsValue = metrics.ConversionsValue
+            });
+        }
+
+        return Task.FromResult<IReadOnlyList<GoogleAdsDailyAssetGroupMetricRecordDto>>(results);
+    }
+
+    public static string BuildDailyAssetGroupMetricsQuery(DateOnly startDate, DateOnly endDate)
+    {
+        return $@"
+        SELECT
+            asset_group.id,
+            campaign.id,
+            segments.date,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.conversions_value
+        FROM asset_group
+        WHERE segments.date BETWEEN '{startDate:yyyy-MM-dd}' AND '{endDate:yyyy-MM-dd}'";
+    }
+
     // ─── Retry & Error Classification Helpers ────────────────────────────────────────
 
     private async Task<T> ExecuteWithRetryAsync<T>(
@@ -1498,6 +1761,17 @@ public class GoogleAdsService : IGoogleAdsService
             AdGroupStatusEnum.Types.AdGroupStatus.Enabled => AdSetStatus.Active,
             AdGroupStatusEnum.Types.AdGroupStatus.Paused => AdSetStatus.Paused,
             AdGroupStatusEnum.Types.AdGroupStatus.Removed => AdSetStatus.Completed,
+            _ => AdSetStatus.Paused
+        };
+    }
+
+    private static AdSetStatus MapAssetGroupStatus(AssetGroupStatusEnum.Types.AssetGroupStatus status)
+    {
+        return status switch
+        {
+            AssetGroupStatusEnum.Types.AssetGroupStatus.Enabled => AdSetStatus.Active,
+            AssetGroupStatusEnum.Types.AssetGroupStatus.Paused => AdSetStatus.Paused,
+            AssetGroupStatusEnum.Types.AssetGroupStatus.Removed => AdSetStatus.Completed,
             _ => AdSetStatus.Paused
         };
     }

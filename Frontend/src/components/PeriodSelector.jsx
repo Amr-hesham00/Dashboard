@@ -24,9 +24,36 @@ export const PRESET_DATE_RANGES = [
   'This Year',
 ];
 
+export function formatPresetSublabel(preset, customNow) {
+  const dates = getPresetDates(preset, customNow);
+  if (!dates.startDate || !dates.endDate) return '';
+  const startObj = new Date(dates.startDate + 'T00:00:00');
+  const endObj = new Date(dates.endDate + 'T00:00:00');
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const formatShort = (d, includeYear = false) => {
+    const day = d.getDate();
+    const month = monthNames[d.getMonth()];
+    const year = d.getFullYear();
+    return includeYear ? `${day} ${month} ${year}` : `${day} ${month}`;
+  };
+
+  if (dates.startDate === dates.endDate) {
+    return formatShort(startObj, true);
+  }
+
+  const sameYear = startObj.getFullYear() === endObj.getFullYear();
+  if (sameYear) {
+    return `${formatShort(startObj)} – ${formatShort(endObj, true)}`;
+  }
+  return `${formatShort(startObj, true)} – ${formatShort(endObj, true)}`;
+}
+
 export function getPresetDates(preset, customNow) {
   const now = customNow || new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
 
   const formatYMD = (d) => {
     const y = d.getFullYear();
@@ -35,61 +62,71 @@ export function getPresetDates(preset, customNow) {
     return `${y}-${m}-${day}`;
   };
 
-  const endDate = formatYMD(today);
+  const todayStr = formatYMD(today);
+  const yesterdayStr = formatYMD(yesterday);
 
   if (preset === 'Today') {
     return {
       label: 'Today',
-      startDate: endDate,
-      endDate,
+      startDate: todayStr,
+      endDate: todayStr,
       days: 1,
       isCustom: false,
     };
   }
 
   if (preset === 'Last 7 Days') {
-    const start = new Date(today);
-    start.setDate(today.getDate() - 6);
+    // 7 completed days ending yesterday (e.g. Nov 1 to Nov 7 when today is Nov 8)
+    const start = new Date(yesterday);
+    start.setDate(yesterday.getDate() - 6);
     return {
       label: 'Last 7 Days',
       startDate: formatYMD(start),
-      endDate,
+      endDate: yesterdayStr,
       days: 7,
       isCustom: false,
     };
   }
 
   if (preset === 'Last 30 Days') {
-    const start = new Date(today);
-    start.setDate(today.getDate() - 29);
+    // 30 completed days ending yesterday (e.g. Oct 9 to Nov 7 when today is Nov 8)
+    const start = new Date(yesterday);
+    start.setDate(yesterday.getDate() - 29);
     return {
       label: 'Last 30 Days',
       startDate: formatYMD(start),
-      endDate,
+      endDate: yesterdayStr,
       days: 30,
       isCustom: false,
     };
   }
 
   if (preset === 'This Month') {
+    // 1st of current month up to yesterday (or today if today is the 1st of the month)
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    const end = today.getDate() === 1 ? today : yesterday;
+    const diffMs = end.getTime() - start.getTime();
+    const days = Math.max(1, Math.round(diffMs / 86400000) + 1);
     return {
       label: 'This Month',
       startDate: formatYMD(start),
-      endDate,
-      days: Math.max(1, today.getDate()),
+      endDate: formatYMD(end),
+      days,
       isCustom: false,
     };
   }
 
   if (preset === 'This Year') {
+    // Jan 1st of current year up to yesterday (or today if Jan 1st)
     const start = new Date(today.getFullYear(), 0, 1);
-    const diffMs = today.getTime() - start.getTime();
+    const isJanFirst = today.getMonth() === 0 && today.getDate() === 1;
+    const end = isJanFirst ? today : yesterday;
+    const diffMs = end.getTime() - start.getTime();
     const days = Math.max(1, Math.round(diffMs / 86400000) + 1);
     return {
       label: 'This Year',
       startDate: formatYMD(start),
-      endDate,
+      endDate: formatYMD(end),
       days,
       isCustom: false,
     };
@@ -98,8 +135,8 @@ export function getPresetDates(preset, customNow) {
   return {
     label: preset,
     startDate: formatYMD(new Date(today.getFullYear(), today.getMonth(), 1)),
-    endDate,
-    days: Math.max(1, today.getDate()),
+    endDate: yesterdayStr,
+    days: Math.max(1, today.getDate() - 1),
     isCustom: false,
   };
 }
@@ -190,35 +227,61 @@ export default function PeriodSelector({
     <div className={`position-relative date-dropdown-container ${className}`} ref={containerRef}>
       <button
         type="button"
-        className={`btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2 px-3 ${isCustomActive ? 'border-primary text-primary fw-semibold' : ''}`}
+        className={`btn btn-sm d-inline-flex align-items-center gap-2 px-3 py-1.5 rounded-2 shadow-2xs period-selector-btn ${
+          isCustomActive ? 'border-primary text-primary fw-semibold' : ''
+        }`}
         onClick={() => setIsOpen(!isOpen)}
-        title="Select date period"
+        title={!isCustomActive && PRESET_DATE_RANGES.includes(value) ? `${value} (${formatPresetSublabel(value)})` : 'Select date period'}
       >
-        <IconCalendar />
+        <span className="text-primary d-inline-flex align-items-center">
+          <IconCalendar />
+        </span>
         <span className="d-none d-md-inline">{value}</span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="opacity-75">
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
 
       {isOpen && (
         <div
-          className="dropdown-menu show position-absolute end-0 mt-1 shadow-lg border p-2 bg-body rounded-3"
-          style={{ zIndex: 1060, minWidth: 280 }}
+          className="dropdown-menu show position-absolute end-0 mt-1 shadow-lg border p-2 rounded-3 period-dropdown-menu"
+          style={{ zIndex: 1060, minWidth: 310 }}
         >
+          {/* Header */}
+          <div className="px-2 pt-1 pb-2 mb-1 d-flex align-items-center justify-content-between border-bottom border-opacity-25">
+            <span className="text-uppercase fw-bold text-body-secondary" style={{ fontSize: '0.68rem', letterSpacing: '0.06em' }}>
+              Select Time Period
+            </span>
+            <span className="badge bg-primary-subtle text-primary border border-primary-subtle px-1.5 py-0.5 fw-semibold" style={{ fontSize: '0.66rem' }}>
+              {value}
+            </span>
+          </div>
+
           {/* Preset list */}
-          <div className="d-flex flex-column gap-0.5 mb-2">
+          <div className="d-flex flex-column mb-1">
             {PRESET_DATE_RANGES.map((preset) => {
               const isActive = value === preset && !isCustomActive;
+              const subtext = formatPresetSublabel(preset);
               return (
                 <button
                   key={preset}
                   type="button"
-                  className={`dropdown-item small px-2.5 py-1.5 rounded-2 d-flex align-items-center justify-content-between ${isActive ? 'fw-bold text-primary bg-primary-subtle' : ''}`}
+                  className={`date-item-btn ${isActive ? 'active' : ''}`}
                   onClick={() => handleSelectPreset(preset)}
                 >
-                  <span>{preset}</span>
-                  {isActive && <IconCheck />}
+                  <div className="d-flex flex-column text-start">
+                    <span className="date-item-title">{preset}</span>
+                    <span className="date-item-subtitle">{subtext}</span>
+                  </div>
+                  {isActive ? (
+                    <span className="badge bg-white text-primary rounded-circle p-1 d-inline-flex align-items-center justify-content-center shadow-xs">
+                      <IconCheck />
+                    </span>
+                  ) : (
+                    <span className="text-secondary opacity-50 pe-1" style={{ fontSize: '0.8rem' }}>
+                      ›
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -230,7 +293,11 @@ export default function PeriodSelector({
           <div className="p-1">
             <button
               type="button"
-              className={`btn btn-sm w-100 d-flex align-items-center justify-content-between px-2.5 py-1.5 rounded-2 border-0 ${isCustomActive || showCustom ? 'text-primary bg-primary-subtle fw-bold' : 'text-body-secondary'}`}
+              className={`btn btn-sm w-100 d-flex align-items-center justify-content-between px-2.5 py-1.5 rounded-2 border ${
+                isCustomActive || showCustom
+                  ? 'btn-primary text-white fw-bold shadow-xs'
+                  : 'bg-body-secondary text-body-emphasis fw-semibold border-secondary-subtle'
+              }`}
               onClick={() => setShowCustom(!showCustom)}
             >
               <span className="d-flex align-items-center gap-2 small">

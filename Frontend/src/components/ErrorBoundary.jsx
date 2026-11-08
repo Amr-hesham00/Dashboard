@@ -54,9 +54,17 @@ export default class ErrorBoundary extends React.Component {
               </div>
             </div>
             <h4 className="fw-bold mb-2 text-body-emphasis">Something went wrong</h4>
-            <p className="text-secondary small mb-4">
+            <p className="text-secondary small mb-3">
               {this.state.error?.message || 'An unexpected error occurred while rendering this page.'}
             </p>
+            {this.state.error?.stack && (
+              <details className="text-start mb-4">
+                <summary className="text-secondary small cursor-pointer" style={{ cursor: 'pointer' }}>Error details</summary>
+                <pre className="mt-2 p-3 bg-light rounded text-danger small text-start overflow-auto" style={{ maxHeight: 200, fontSize: '0.75rem' }}>
+                  {this.state.error.stack}
+                </pre>
+              </details>
+            )}
             <div className="d-flex align-items-center justify-content-center gap-2 flex-wrap">
               <button
                 type="button"

@@ -1,6 +1,7 @@
 using Dashboard.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace Dashboard.Application.DTOs;
 
@@ -61,6 +62,7 @@ public class ClientPlatformDTO
     public string? AccountName { get; set; }
     public string? ManagerAccountId { get; set; }
     public int? OAuthConnectionId { get; set; }
+    public DateTimeOffset? LastSyncedAt { get; set; }
 }
 
 public class AdminClientsDTO
@@ -193,4 +195,11 @@ public class ClientLookupDTO
     public int ClientId { get; set; }
     public string? ExternalId { get; set; }
     public string CompanyName { get; set; } = null!;
+}
+
+public class UpdateReportingCurrencyDTO
+{
+    [Required]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public Currency Currency { get; set; }
 }

@@ -192,6 +192,27 @@ export async function updateClientApi(id, clientDto) {
 }
 
 /**
+ * Update a client's reporting currency specifically.
+ */
+export async function updateClientReportingCurrencyApi(id, currency) {
+  const currencyPayload = typeof currency === 'number'
+    ? (CURRENCY_ENUM[currency] || 'USD')
+    : currency;
+
+  const response = await apiFetch(`${API_BASE_URL}/Client/${id}/reporting-currency`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currency: currencyPayload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(data, 'Failed to update reporting currency.'));
+  }
+  invalidateClientsCache();
+  return data;
+}
+
+/**
  * Delete a client by ID.
  */
 export async function deleteClientApi(id) {

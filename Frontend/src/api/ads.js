@@ -64,6 +64,22 @@ export async function getAdSetPageDataApi(adSetId, startDate, endDate) {
   return null;
 }
 
+export async function getAssetGroupPageDataApi(assetGroupId, startDate, endDate) {
+  try {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start', startDate);
+    if (endDate) params.append('end', endDate);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    const response = await apiFetch(`${API_BASE_URL}/Ad/assetgroup/${assetGroupId}${query}`);
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch {
+    // Fall through
+  }
+  return null;
+}
+
 export async function getAdsByClientIdApi(clientId) {
   try {
     const response = await apiFetch(`${API_BASE_URL}/Ad/Clients/${clientId}`);

@@ -24,6 +24,8 @@ public class AppDbContext : IdentityDbContext
     public DbSet<SearchTerm> SearchTerms { get; set; }
     public DbSet<ExchangeRate> ExchangeRates { get; set; }
     public DbSet<OAuthConnection> OAuthConnections { get; set; }
+    public DbSet<AssetGroup> AssetGroups { get; set; }
+    public DbSet<DailyAssetGroupMetrics> DailyAssetGroupMetrics { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

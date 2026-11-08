@@ -64,7 +64,10 @@ public class AdService : IAdService
         var adSet = await _unitOfWork.AdSet.GetById(adSetId);
 
         if (adSet is null)
-            return null;
+        {
+            // Fallback for Performance Max Asset Groups if navigated via adset URL
+            return await GetByAssetGroupIdAsync(adSetId, start, end);
+        }
 
         var ads = (await _unitOfWork.Ad
             .GetByAdSetIdAsync(adSetId, start, end));
@@ -75,6 +78,18 @@ public class AdService : IAdService
             .GetByAdSetIdAsync(adSetId, start, end);
 
         return MapToDTO(adSet, ads, metrics, searchTerms, start, end);
+    }
+
+    public async Task<AdSetPageDTO?> GetByAssetGroupIdAsync(
+        int assetGroupId,
+        DateOnly start,
+        DateOnly end)
+    {
+        var assetGroup = await _unitOfWork.AssetGroup.GetByIdWithMetricsAsync(assetGroupId, start, end);
+        if (assetGroup is null)
+            return null;
+
+        return MapAssetGroupToDTO(assetGroup, start, end);
     }
 
     public async Task<AdDTO?> GetAdByIdAsync(int id)
@@ -241,6 +256,9 @@ public class AdService : IAdService
             ClientName = adSet.Campaign?.Platform?.Client?.CompanyName ?? string.Empty,
             PlatformType = adSet.Campaign?.Platform?.PlatformType.ToString(),
             Currency = adSet.Campaign?.Currency.ToString(),
+            ChannelType = adSet.Campaign?.ChannelType ?? "SEARCH",
+            IsPerformanceMax = false,
+            IsAssetGroup = false,
             StartDate = DateOnly.FromDateTime(adSet.StartDate.DateTime),
             EndDate = adSet.EndDate.HasValue ? DateOnly.FromDateTime(adSet.EndDate.Value.DateTime) : null,
 
@@ -268,6 +286,85 @@ public class AdService : IAdService
             AdRow = adRows,
 
             SearchTermRows = searchTermRows,
+        };
+    }
+
+    private static AdSetPageDTO MapAssetGroupToDTO(
+        AssetGroup assetGroup,
+        DateOnly start,
+        DateOnly end)
+    {
+        var metrics = assetGroup.DailyMetrics?.ToList() ?? new List<DailyAssetGroupMetrics>();
+
+        var totalSpend = metrics.Sum(m => m.Spend);
+        var totalRevenue = metrics.Sum(m => m.Revenue);
+        var totalImpressions = metrics.Sum(m => m.Impressions);
+        var totalClicks = metrics.Sum(m => m.Clicks);
+        var totalConversions = metrics.Sum(m => m.Conversions);
+
+        var byDate = metrics.ToDictionary(m => m.Date, m => m);
+        var points = new List<ChartPoint>();
+
+        for (var date = start; date <= end; date = date.AddDays(1))
+        {
+            byDate.TryGetValue(date, out var daily);
+            var dailySpend = daily?.Spend ?? 0.0;
+            var dailyRevenue = daily?.Revenue ?? 0.0;
+            var dailyImpressions = daily?.Impressions ?? 0;
+            var dailyClicks = daily?.Clicks ?? 0;
+            var dailyConversions = daily?.Conversions ?? 0;
+
+            points.Add(new ChartPoint
+            {
+                Date = date,
+                Spend = dailySpend,
+                Revenue = dailyRevenue,
+                Impressions = dailyImpressions,
+                Clicks = dailyClicks,
+                Conversions = dailyConversions,
+                ROAS = dailySpend > 0 ? dailyRevenue / dailySpend : 0,
+                CPA = dailyConversions > 0 ? dailySpend / dailyConversions : 0,
+                CPC = dailyClicks > 0 ? dailySpend / dailyClicks : 0,
+                CPM = dailyImpressions > 0 ? (dailySpend / dailyImpressions) * 1000 : 0,
+                ConversionRate = dailyClicks > 0 ? (double)dailyConversions / dailyClicks * 100 : 0,
+                CTR = dailyImpressions > 0 ? (double)dailyClicks / dailyImpressions * 100 : 0
+            });
+        }
+
+        var channelType = assetGroup.Campaign?.ChannelType ?? "PERFORMANCE_MAX";
+
+        return new AdSetPageDTO
+        {
+            AdSetId = assetGroup.Id,
+            AdSetName = assetGroup.Name,
+            AdSetStatus = assetGroup.Status.ToString(),
+            CampaignId = assetGroup.CampaignId,
+            CampaignName = assetGroup.Campaign?.Name ?? string.Empty,
+            ClientId = assetGroup.Campaign?.Platform?.ClientId ?? 0,
+            ClientName = assetGroup.Campaign?.Platform?.Client?.CompanyName ?? string.Empty,
+            PlatformType = assetGroup.Campaign?.Platform?.PlatformType.ToString() ?? "GoogleAds",
+            Currency = (assetGroup.Campaign?.Platform?.Currency ?? assetGroup.Campaign?.Currency).ToString(),
+            StartDate = DateOnly.FromDateTime(assetGroup.StartDate.DateTime),
+            EndDate = assetGroup.EndDate.HasValue ? DateOnly.FromDateTime(assetGroup.EndDate.Value.DateTime) : null,
+            ChannelType = channelType,
+            IsPerformanceMax = true,
+            IsAssetGroup = true,
+
+            Spend = totalSpend,
+            Revenue = totalRevenue,
+            Impressions = totalImpressions,
+            Clicks = totalClicks,
+            Conversions = totalConversions,
+            CTR = totalImpressions > 0 ? (double)totalClicks / totalImpressions * 100 : 0,
+            CPA = totalConversions > 0 ? totalSpend / totalConversions : 0,
+            ROAS = totalSpend > 0 ? totalRevenue / totalSpend : 0,
+            CPC = totalClicks > 0 ? totalSpend / totalClicks : 0,
+            CPM = totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0,
+            ConversionRate = totalClicks > 0 ? (double)totalConversions / totalClicks * 100 : 0,
+
+            Points = points,
+            AdRow = Array.Empty<TableRow>(),
+            SearchTermRows = Array.Empty<SearchTermRow>()
         };
     }
     private static List<SearchTermRow> MapSearchTermRows(

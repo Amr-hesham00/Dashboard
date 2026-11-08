@@ -25,6 +25,10 @@ public class CampPageDTO
     public string CampPlatform { get; set; } = null!;
     public Currency Currency { get; set; }
     public string? CurrencyName { get; set; }
+    public string? ChannelType { get; set; }
+    public bool IsPerformanceMax =>
+        string.Equals(ChannelType, "PERFORMANCE_MAX", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(ChannelType, "PerformanceMax", StringComparison.OrdinalIgnoreCase);
 
     // KPIs
     public double Spend { set; get; }

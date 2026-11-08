@@ -19,6 +19,8 @@ public interface IUnitOfWork : IDisposable
     ISearchTermRepo SearchTerm { get; }
     IExchangeRateRepo ExchangeRate { get; }
     IOAuthConnectionRepo OAuthConnection { get; }
+    IAssetGroupRepo AssetGroup { get; }
+    IDailyAssetGroupMetricsRepo DailyAssetGroupMetrics { get; }
 
     Task Complete();
 }

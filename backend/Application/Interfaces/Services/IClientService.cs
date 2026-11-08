@@ -1,4 +1,5 @@
 using Dashboard.Application.DTOs;
+using Dashboard.Domain.Enums;
 
 namespace Dashboard.Application.Interfaces.Services;
 public interface IClientService
@@ -10,6 +11,7 @@ public interface IClientService
     Task<ClientDTO?> GetClientByIdAsync(int id);
     Task<(bool Success, string Message, CreateClientDTO? Client)> CreateClientAsync(CreateClientDTO dto);
     Task<(bool Success, string Message)> UpdateClientAsync(int id, UpdateClientDTO dto);
+    Task<(bool Success, string Message, string? Currency)> UpdateReportingCurrencyAsync(int clientId, Currency currency);
     Task<(bool Success, string Message)> DeleteClientAsync(int id);
     Task<IEnumerable<ClientLookupDTO>?> GetClientLookupAsync(string userId);
 }

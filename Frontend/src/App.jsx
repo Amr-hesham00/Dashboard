@@ -192,6 +192,24 @@ export default function App() {
             }
           />
 
+          {/* Performance Max Asset Group Detail routes - matching /Assetgroups/:assetGroupId and /assetgroups/:assetGroupId */}
+          <Route
+            path="/Assetgroups/:assetGroupId"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <AdSetDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/assetgroups/:assetGroupId"
+            element={
+              <ProtectedRoute nonAdminOnly>
+                <AdSetDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Backward compatibility for previous nested detail routes */}
           <Route
             path="/clients/:clientId/campaigns/:campaignId"

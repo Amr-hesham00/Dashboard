@@ -31,7 +31,9 @@ public class CampaignService : ICampaignService
         if (campaigns is null)
             return null;
 
-        return MapToPlatformPageDTO(campaigns);
+        var platform = await _unitOfWork.Platform.GetById(platformid);
+
+        return MapToPlatformPageDTO(campaigns, platform);
     }
 
     public async Task<ClientPageDTO?> GetForOverviewAsync(
@@ -96,9 +98,16 @@ public class CampaignService : ICampaignService
             double campSpend = 0;
             double campRevenue = 0;
 
-            var metrics = campaign.AdSets
-                .SelectMany(adSet => adSet.Ads)
-                .SelectMany(ad => ad.DailyMetrics);
+            var searchMetrics = (campaign.AdSets ?? Enumerable.Empty<AdSet>())
+                .SelectMany(adSet => adSet.Ads ?? Enumerable.Empty<Ad>())
+                .SelectMany(ad => ad.DailyMetrics ?? Enumerable.Empty<AdDailyMetrics>())
+                .Select(m => new { m.Date, m.Spend, m.Revenue, m.Impressions, m.Clicks, m.Conversions });
+
+            var pmaxMetrics = (campaign.AssetGroups ?? Enumerable.Empty<AssetGroup>())
+                .SelectMany(ag => ag.DailyMetrics ?? Enumerable.Empty<DailyAssetGroupMetrics>())
+                .Select(m => new { m.Date, m.Spend, m.Revenue, m.Impressions, m.Clicks, m.Conversions });
+
+            var metrics = searchMetrics.Concat(pmaxMetrics);
 
             foreach (var metric in metrics)
             {
@@ -158,6 +167,7 @@ public class CampaignService : ICampaignService
                 Platform = campaign.Platform != null ? campaign.Platform.PlatformType : default,
                 Status = campaign.Status,
                 Objective = campaign.Objective,
+                ChannelType = campaign.ChannelType,
                 StartDate = campaign.StartDate,
                 Spend = campSpend,
                 Revenue = campRevenue,
@@ -333,11 +343,12 @@ public class CampaignService : ICampaignService
         };
     }
 
-    private PlatformPageDTO? MapToPlatformPageDTO(IEnumerable<Campaign> campaigns)
+    private PlatformPageDTO? MapToPlatformPageDTO(IEnumerable<Campaign> campaigns, Platform? platform = null)
     {
         var campaignList = campaigns as IList<Campaign> ?? campaigns.ToList();
 
-        var platformCurrency = campaignList.FirstOrDefault(c => c.Platform != null)?.Platform.Currency ?? Currency.USD;
+        var platformCurrency = platform?.Currency ?? campaignList.FirstOrDefault(c => c.Platform != null)?.Platform.Currency ?? Currency.USD;
+        var lastSyncedAt = platform?.LastSyncedAt ?? campaignList.FirstOrDefault(c => c.Platform != null)?.Platform.LastSyncedAt;
 
         int totalImpressions = 0;
         int totalClicks = 0;
@@ -349,9 +360,16 @@ public class CampaignService : ICampaignService
 
         foreach (var campaign in campaignList)
         {
-            var campMetrics = (campaign.AdSets)
-                .SelectMany(adSet => adSet.Ads)
-                .SelectMany(ad => ad.DailyMetrics);
+            var searchMetrics = (campaign.AdSets ?? Enumerable.Empty<AdSet>())
+                .SelectMany(adSet => adSet.Ads ?? Enumerable.Empty<Ad>())
+                .SelectMany(ad => ad.DailyMetrics ?? Enumerable.Empty<AdDailyMetrics>())
+                .Select(m => new { m.Spend, m.Revenue, m.Impressions, m.Clicks, m.Conversions });
+
+            var pmaxMetrics = (campaign.AssetGroups ?? Enumerable.Empty<AssetGroup>())
+                .SelectMany(ag => ag.DailyMetrics ?? Enumerable.Empty<DailyAssetGroupMetrics>())
+                .Select(m => new { m.Spend, m.Revenue, m.Impressions, m.Clicks, m.Conversions });
+
+            var campMetrics = searchMetrics.Concat(pmaxMetrics);
 
             double campSpend = 0;
             double campRevenue = 0;
@@ -376,6 +394,7 @@ public class CampaignService : ICampaignService
                 Platform = campaign.Platform != null ? campaign.Platform.PlatformType : default,
                 Status = campaign.Status,
                 Objective = campaign.Objective,
+                ChannelType = campaign.ChannelType,
                 StartDate = campaign.StartDate,
                 Spend = campSpend,
                 Revenue = campRevenue,
@@ -386,6 +405,7 @@ public class CampaignService : ICampaignService
         return new PlatformPageDTO
         {
             Currency = platformCurrency,
+            LastSyncedAt = lastSyncedAt,
             Impressions = totalImpressions,
             Clicks = totalClicks,
             Conversions = totalConversions,
